@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aria Observability & Agent Tracing Dashboard</title>
+  <meta name="description" content="Monitoring and observability console for the Aria NL-to-SQL AI Agent architecture.">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Specific Modal Styles for Admin View */
+    .trace-modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .trace-modal-backdrop.open {
+      display: flex;
+    }
+    .trace-modal {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 680px;
+      max-height: 90vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .trace-modal-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .trace-modal-body {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      font-size: 13px;
+    }
+    .trace-detail-grid {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 8px 12px;
+      background: var(--bg-app);
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+    }
+    .trace-label {
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .trace-val {
+      color: var(--text-primary);
+      word-break: break-all;
+    }
+    .trace-guard-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .trace-guard-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+    .trace-guard-item.pass { color: var(--success-color); }
+    .trace-guard-item.fail { color: var(--danger-color); }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header Layer -->
+    <header class="app-header">
+      <div class="header-left">
+        <a href="index.html" class="header-action-btn" title="Return to Aria Natural Language Assistant">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+          <span>Back to Query Assistant</span>
+        </a>
+
+        <div class="brand-wrapper" style="margin-left: 8px;">
+          <div class="brand-icon" aria-hidden="true" style="background: #475569;">O</div>
+          <div class="brand-title">
+            <span>Aria Observability</span>
+            <span class="brand-badge" style="background: var(--success-bg); color: var(--success-color); border-color: var(--success-border);">Layer 8: Active</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <!-- System Health Badge -->
+        <div class="user-badge" title="Telemetry health check">
+          <div class="user-badge-dot" aria-hidden="true"></div>
+          <span>Agent Core: <strong>Operational</strong></span>
+        </div>
+
+        <!-- Light / Dark Theme Toggle -->
+        <button type="button" class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle color theme"></button>
+      </div>
+    </header>
+
+    <!-- Main Observability Workspace -->
+    <div class="admin-viewport">
+      <!-- Title row -->
+      <div class="admin-header-row">
+        <div class="admin-title-area">
+          <h1>Agent Tracing & System Metrics</h1>
+          <p>Real-time telemetry across Intent Understanding, Schema Retrieval, NL-to-SQL generation, and Security Gateways.</p>
+        </div>
+        <button type="button" class="header-action-btn" id="refreshTracesBtn">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          <span>Refresh Metrics</span>
+        </button>
+      </div>
+
+      <!-- KPI Summary Cards Grid -->
+      <div class="kpi-cards-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Avg Pipeline Latency</div>
+          <div class="kpi-value" id="kpiLatency">--</div>
+          <div class="kpi-meta">5-stage orchestration cycle</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Query Success Rate</div>
+          <div class="kpi-value" id="kpiSuccess">--</div>
+          <div class="kpi-meta">Includes clarified intents</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Total Queries Processed</div>
+          <div class="kpi-value" id="kpiQueries">--</div>
+          <div class="kpi-meta">Enterprise DW sessions</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Retries & Recovery</div>
+          <div class="kpi-value" id="kpiRetries">--</div>
+          <div class="kpi-meta">Max recovery retry limit: 2</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Schema Coverage</div>
+          <div class="kpi-value" id="kpiSchema">98 / 104</div>
+          <div class="kpi-meta">Tables indexed in metadata mart</div>
+        </div>
+      </div>
+
+      <!-- Recent Query Traces Table -->
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <div class="admin-card-title">Recent Query Traces (Live Session)</div>
+          <span style="font-size: 11px; color: var(--text-muted);">Auto-synchronized with client requests</span>
+        </div>
+
+        <div class="table-scroll-wrapper">
+          <table class="result-data-table">
+            <thead>
+              <tr>
+                <th>Request ID</th>
+                <th>Timestamp</th>
+                <th>Natural Language Question</th>
+                <th>Latency</th>
+                <th>Stages</th>
+                <th>Sources Used</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="tracesTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trace Inspection Modal -->
+  <div class="trace-modal-backdrop" id="traceModalBackdrop">
+    <div class="trace-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="trace-modal-header">
+        <div style="font-weight: 600;" id="modalTitle">Agent Execution Trace Inspection</div>
+        <button type="button" class="header-action-btn" id="closeModalBtn" style="padding: 2px 8px;">✕</button>
+      </div>
+      <div class="trace-modal-body" id="modalBody">
+        <!-- Dynamically populated -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="mock-data.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      // Theme toggle initialization
+      let currentTheme = localStorage.getItem('aria_theme') || 'light';
+      const themeBtn = document.getElementById('themeToggleBtn');
+
+      function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        currentTheme = theme;
+        localStorage.setItem('aria_theme', theme);
+        if (themeBtn) {
+          const isDark = theme === 'dark';
+          themeBtn.innerHTML = isDark
+            ? `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`
+            : `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+        }
+      }
+
+      if (themeBtn) {
+        themeBtn.addEventListener('click', () => {
+          applyTheme(currentTheme === 'light' ? 'dark' : 'light');
+        });
+      }
+      applyTheme(currentTheme);
+
+      // Render Observability Data
+      function loadObservabilityData() {
+        const store = window.AriaMock.getObservabilityStore();
+
+        // Update KPIs
+        document.getElementById('kpiLatency').textContent = (store.metrics.avgLatencyMs / 1000).toFixed(2) + 's';
+        document.getElementById('kpiSuccess').textContent = store.metrics.successRatePct.toFixed(1) + '%';
+        document.getElementById('kpiQueries').textContent = store.metrics.totalQueries;
+        document.getElementById('kpiRetries').textContent = store.metrics.retryCount;
+
+        // Populate Traces Table
+        const tbody = document.getElementById('tracesTableBody');
+        tbody.innerHTML = store.traces.map((trace) => {
+          let statusClass = 'success';
+          let statusLabel = 'SUCCESS';
+          if (trace.status === 'AMBIGUOUS' || trace.status === 'AMBIGUOUS_RESOLVED') {
+            statusClass = 'ambiguous';
+            statusLabel = 'CLARIFIED';
+          } else if (trace.status === 'ERROR_RECOVERY_FAILED') {
+            statusClass = 'error';
+            statusLabel = 'FAILED';
+          }
+
+          const tablesBadges = (trace.tablesUsed && trace.tablesUsed.length > 0)
+            ? trace.tablesUsed.map(t => `<span class="source-badge" style="font-size: 10px;">${t}</span>`).join(' ')
+            : '<span style="color: var(--text-muted); font-size: 11px;">None</span>';
+
+          return `
+            <tr>
+              <td style="font-family: var(--font-mono); font-size: 11px;">${trace.requestId}</td>
+              <td style="white-space: nowrap; font-size: 11px; color: var(--text-muted);">${trace.timestamp}</td>
+              <td style="font-weight: 500; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${trace.query}">
+                ${trace.query}
+              </td>
+              <td class="td-number">${(trace.latencyMs / 1000).toFixed(2)}s</td>
+              <td style="text-align: center;">${trace.stages}/5</td>
+              <td style="max-width: 200px; overflow: hidden;">${tablesBadges}</td>
+              <td><span class="badge-status ${statusClass}">${statusLabel}</span></td>
+              <td>
+                <button type="button" class="btn-copy-sql inspect-trace-btn" data-req-id="${trace.requestId}">Inspect</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        // Wire inspect buttons
+        tbody.querySelectorAll('.inspect-trace-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const reqId = btn.getAttribute('data-req-id');
+            const trace = store.traces.find(t => t.requestId === reqId);
+            if (trace) showTraceModal(trace);
+          });
+        });
+      }
+
+      // Trace Modal Logic
+      const modalBackdrop = document.getElementById('traceModalBackdrop');
+      const modalBody = document.getElementById('modalBody');
+      const closeModalBtn = document.getElementById('closeModalBtn');
+
+      function showTraceModal(trace) {
+        modalBody.innerHTML = `
+          <div class="trace-detail-grid">
+            <div class="trace-label">Request ID</div>
+            <div class="trace-val" style="font-family: var(--font-mono);">${trace.requestId}</div>
+
+            <div class="trace-label">User Query</div>
+            <div class="trace-val"><strong>${trace.query}</strong></div>
+
+            <div class="trace-label">Execution Time</div>
+            <div class="trace-val">${trace.latencyMs} ms</div>
+
+            <div class="trace-label">Pipeline Stages</div>
+            <div class="trace-val">${trace.stages} of 5 completed</div>
+
+            <div class="trace-label">Execution Status</div>
+            <div class="trace-val"><span class="badge-status ${trace.status.includes('ERROR') ? 'error' : 'success'}">${trace.status}</span></div>
+
+            <div class="trace-label">Schema Tables</div>
+            <div class="trace-val">${(trace.tablesUsed || []).join(', ') || 'No tables accessed'}</div>
+          </div>
+
+          <div>
+            <div style="font-weight: 600; margin-bottom: 6px;">Security & Governance Guardrails (Layer 3)</div>
+            <ul class="trace-guard-list">
+              <li class="trace-guard-item pass">✓ Authentication & Context Validation: Sales Manager (Role 04)</li>
+              <li class="trace-guard-item pass">✓ AST Enforcement: Read-Only SELECT check passed (DDL/DML blocked)</li>
+              <li class="trace-guard-item pass">✓ Data Protection Gateway: Customer PII masking policy active</li>
+              <li class="trace-guard-item pass">✓ Resource Budget: AST complexity score within allowed threshold</li>
+            </ul>
+          </div>
+        `;
+        modalBackdrop.classList.add('open');
+      }
+
+      closeModalBtn.addEventListener('click', () => {
+        modalBackdrop.classList.remove('open');
+      });
+
+      modalBackdrop.addEventListener('click', (e) => {
+        if (e.target === modalBackdrop) modalBackdrop.classList.remove('open');
+      });
+
+      document.getElementById('refreshTracesBtn').addEventListener('click', loadObservabilityData);
+
+      loadObservabilityData();
+    })();
+  </script>
+</body>
+</html>
