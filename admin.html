@@ -3,90 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aria Observability & Agent Tracing Dashboard</title>
-  <meta name="description" content="Monitoring and observability console for the Aria NL-to-SQL AI Agent architecture.">
+  <title>Aria Observability &amp; Telemetry Dashboard</title>
+  <meta name="description" content="Monitoring, tracing, audit logging, and security observability for the Aria AI Agent architecture.">
   <link rel="stylesheet" href="styles.css">
-  <style>
-    /* Specific Modal Styles for Admin View */
-    .trace-modal-backdrop {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.45);
-      z-index: 100;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-    .trace-modal-backdrop.open {
-      display: flex;
-    }
-    .trace-modal {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-lg);
-      width: 100%;
-      max-width: 680px;
-      max-height: 90vh;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-    }
-    .trace-modal-header {
-      padding: 14px 18px;
-      border-bottom: 1px solid var(--border-color);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .trace-modal-body {
-      padding: 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      font-size: 13px;
-    }
-    .trace-detail-grid {
-      display: grid;
-      grid-template-columns: 140px 1fr;
-      gap: 8px 12px;
-      background: var(--bg-app);
-      padding: 12px;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border-color);
-    }
-    .trace-label {
-      font-weight: 600;
-      color: var(--text-muted);
-    }
-    .trace-val {
-      color: var(--text-primary);
-      word-break: break-all;
-    }
-    .trace-guard-list {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .trace-guard-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-    }
-    .trace-guard-item.pass { color: var(--success-color); }
-    .trace-guard-item.fail { color: var(--danger-color); }
-  </style>
 </head>
-<body>
+<body class="font-md dashboard-page">
   <div class="app-container">
     <!-- Header Layer -->
     <header class="app-header">
       <div class="header-left">
         <a href="index.html" class="header-action-btn" title="Return to Aria Natural Language Assistant">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-          <span>Back to Query Assistant</span>
+          <span>Back to Chat</span>
         </a>
 
         <div class="brand-wrapper" style="margin-left: 8px;">
@@ -96,86 +24,199 @@
             <span class="brand-badge" style="background: var(--success-bg); color: var(--success-color); border-color: var(--success-border);">Layer 8: Active</span>
           </div>
         </div>
+
+        <nav class="header-nav" aria-label="Main application sections">
+          <a href="index.html" class="header-nav-link">Chat Assistant</a>
+          <a href="eval.html" class="header-nav-link">Evaluation</a>
+          <a href="admin.html" class="header-nav-link active">Observability</a>
+        </nav>
       </div>
 
       <div class="header-right">
-        <!-- System Health Badge -->
-        <div class="user-badge" title="Telemetry health check">
+        <div class="user-badge" id="adminUserBadge">
           <div class="user-badge-dot" aria-hidden="true"></div>
-          <span>Agent Core: <strong>Operational</strong></span>
+          <span id="adminUserLabel">Signed in as: <strong>Admin</strong></span>
         </div>
-
-        <!-- Light / Dark Theme Toggle -->
-        <button type="button" class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle color theme"></button>
+        <button type="button" class="header-icon-btn" id="themeToggleBtn" aria-label="Toggle color theme"></button>
       </div>
     </header>
 
-    <!-- Main Observability Workspace -->
-    <div class="admin-viewport">
-      <!-- Title row -->
-      <div class="admin-header-row">
-        <div class="admin-title-area">
-          <h1>Agent Tracing & System Metrics</h1>
-          <p>Real-time telemetry across Intent Understanding, Schema Retrieval, NL-to-SQL generation, and Security Gateways.</p>
+    <!-- Restricted Screen for Non-Admin Roles -->
+    <div id="restrictedView" class="hidden" style="padding: 24px;">
+      <div class="admin-restricted-box">
+        <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--warning-bg); color: var(--warning-color); display: flex; align-items: center; justify-content: center; font-size: 24px;">
+          🔒
         </div>
-        <button type="button" class="header-action-btn" id="refreshTracesBtn">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-          <span>Refresh Metrics</span>
+        <h2 style="font-size: 18px; font-weight: 700;">Observability Restricted to Admin Role</h2>
+        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;" id="restrictedExplanation">
+          You are currently signed in with a non-admin role. The Agent Observability, Tracing, and Security Audit dashboard is restricted to the <strong>Data / Admin team</strong> persona.
+        </p>
+        <button type="button" class="btn-new-chat" id="switchToAdminBtn" style="width: auto; background: var(--accent-primary); color: #fff; padding: 8px 20px;">
+          Switch to Data / Admin Role
         </button>
       </div>
+    </div>
 
-      <!-- KPI Summary Cards Grid -->
+    <!-- Main Observability Workspace (Data / Admin Role) -->
+    <main class="admin-viewport" id="adminWorkspace">
+      <!-- Title & Action Bar -->
+      <div class="admin-header-row">
+        <div class="admin-title-area">
+          <h1>Agent Observability, Tracing &amp; Audit Trail</h1>
+          <p>Real-time telemetry across Intent Understanding, AST Security Gateways, Feedback metrics, and Session Audits.</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <button type="button" class="action-tool-btn" id="exportAuditCsvBtnTop" style="padding: 7px 12px; font-weight: 500;">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Export Audit CSV</span>
+          </button>
+          <button type="button" class="btn-new-chat" id="refreshTracesBtn" style="width: auto; background: var(--bg-surface); color: var(--text-primary); border-color: var(--border-color); padding: 7px 14px;">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            <span>Refresh Telemetry</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards Grid (5 horizontal cards) -->
       <div class="kpi-cards-grid">
-        <div class="kpi-card">
+        <div class="kpi-card kpi-accent-blue">
           <div class="kpi-label">Avg Pipeline Latency</div>
           <div class="kpi-value" id="kpiLatency">--</div>
           <div class="kpi-meta">5-stage orchestration cycle</div>
         </div>
 
-        <div class="kpi-card">
+        <div class="kpi-card kpi-accent-green">
           <div class="kpi-label">Query Success Rate</div>
           <div class="kpi-value" id="kpiSuccess">--</div>
-          <div class="kpi-meta">Includes clarified intents</div>
+          <div class="kpi-meta"><span class="badge-status success" style="font-size: 10px;">Verified Queries</span></div>
         </div>
 
-        <div class="kpi-card">
+        <div class="kpi-card kpi-accent-purple">
           <div class="kpi-label">Total Queries Processed</div>
           <div class="kpi-value" id="kpiQueries">--</div>
-          <div class="kpi-meta">Enterprise DW sessions</div>
+          <div class="kpi-meta">Session &amp; historical requests</div>
         </div>
 
-        <div class="kpi-card">
-          <div class="kpi-label">Retries & Recovery</div>
+        <div class="kpi-card kpi-accent-amber">
+          <div class="kpi-label">Retries &amp; Recovery</div>
           <div class="kpi-value" id="kpiRetries">--</div>
-          <div class="kpi-meta">Max recovery retry limit: 2</div>
+          <div class="kpi-meta">Max recovery limit: 2</div>
         </div>
 
-        <div class="kpi-card">
-          <div class="kpi-label">Schema Coverage</div>
-          <div class="kpi-value" id="kpiSchema">98 / 104</div>
-          <div class="kpi-meta">Tables indexed in metadata mart</div>
+        <div class="kpi-card kpi-accent-rose">
+          <div class="kpi-label">Security Interceptions</div>
+          <div class="kpi-value" id="kpiBlocked" style="color: var(--danger-color);">--</div>
+          <div class="kpi-meta"><span class="badge-status error" style="font-size: 10px;">Blocked Writes &amp; Injections</span></div>
+        </div>
+      </div>
+
+      <!-- Telemetry Charts Grid (2 columns) -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 16px; width: 100%;">
+        <!-- Latency Over Time (Inline SVG Line Chart) -->
+        <div class="admin-card">
+          <div class="admin-card-header">
+            <div>
+              <div class="admin-card-title">Pipeline Latency Over Time</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Hourly execution latency tracking across 5 pipeline stages</div>
+            </div>
+            <span class="brand-badge" style="background: var(--bg-surface);">Target: &lt;2.0s</span>
+          </div>
+          <div style="padding: 16px 20px;">
+            <div class="chart-svg-wrapper" id="latencyChartWrapper"></div>
+          </div>
+        </div>
+
+        <!-- Feedback & Thumbs Down Reason Breakdown -->
+        <div class="admin-card">
+          <div class="admin-card-header">
+            <div>
+              <div class="admin-card-title">User Feedback &amp; Reason Breakdown</div>
+              <div style="font-size: 11px; color: var(--text-muted);">User thumbs up/down satisfaction and issue categorization</div>
+            </div>
+            <span class="badge-status success" id="feedbackStatsLabel" style="font-size: 11px;">--</span>
+          </div>
+          <div style="padding: 16px 20px;">
+            <div class="chart-svg-wrapper" id="feedbackChartWrapper"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Session Security Audit Trail Table (Layer 3 & 8) -->
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <div>
+            <div class="admin-card-title">Session Security Audit Trail (Layer 3 &amp; 8)</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Captures all answered queries, AST blocks, and access denials in real time</div>
+          </div>
+          <div class="table-toolbar-group">
+            <span class="table-count-badge" id="auditCountBadge">5 records</span>
+            <input type="text" class="table-filter-input" id="auditSearchInput" placeholder="Filter questions or user...">
+            <select class="table-filter-select" id="auditRoleFilter">
+              <option value="All">All Roles</option>
+              <option value="Sales Manager">Sales Manager</option>
+              <option value="Finance Analyst">Finance Analyst</option>
+              <option value="Project Manager">Project Manager</option>
+              <option value="Procurement Officer">Procurement Officer</option>
+              <option value="Executive">Executive</option>
+              <option value="Data / Admin team">Data / Admin team</option>
+            </select>
+            <select class="table-filter-select" id="auditOutcomeFilter">
+              <option value="All">All Outcomes</option>
+              <option value="ANSWERED">ANSWERED</option>
+              <option value="BLOCKED_WRITE">BLOCKED_WRITE</option>
+              <option value="BLOCKED_INJECTION">BLOCKED_INJECTION</option>
+              <option value="ACCESS_DENIED">ACCESS_DENIED</option>
+              <option value="ERROR_RECOVERY_FAILED">ERROR_FAILED</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-scroll-wrapper">
+          <table class="result-data-table" id="auditTable">
+            <thead>
+              <tr>
+                <th style="width: 145px;">Timestamp</th>
+                <th style="width: 130px;">User</th>
+                <th style="width: 140px;">Role</th>
+                <th>Question Asked</th>
+                <th style="width: 140px;">Outcome</th>
+                <th style="width: 90px; text-align: right;">Latency</th>
+                <th>Audit Details</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
         </div>
       </div>
 
       <!-- Recent Query Traces Table -->
       <div class="admin-card">
         <div class="admin-card-header">
-          <div class="admin-card-title">Recent Query Traces (Live Session)</div>
-          <span style="font-size: 11px; color: var(--text-muted);">Auto-synchronized with client requests</span>
+          <div>
+            <div class="admin-card-title">Recent Query Traces (Live Session)</div>
+            <div style="font-size: 11px; color: var(--text-muted);">End-to-end execution metadata, AST verification, and schema lineage</div>
+          </div>
+          <div class="table-toolbar-group">
+            <span class="table-count-badge" id="tracesCountBadge">5 live traces</span>
+            <input type="text" class="table-filter-input" id="tracesSearchInput" placeholder="Filter traces...">
+            <span class="brand-badge" style="background: var(--bg-surface);">Auto-Synchronized</span>
+          </div>
         </div>
 
         <div class="table-scroll-wrapper">
           <table class="result-data-table">
             <thead>
               <tr>
-                <th>Request ID</th>
-                <th>Timestamp</th>
-                <th>Natural Language Question</th>
-                <th>Latency</th>
-                <th>Stages</th>
-                <th>Sources Used</th>
-                <th>Status</th>
-                <th>Action</th>
+                <th style="width: 100px;">Request ID</th>
+                <th style="width: 145px;">Timestamp</th>
+                <th style="width: 170px;">User &amp; Role</th>
+                <th>Question</th>
+                <th style="width: 90px; text-align: right;">Latency</th>
+                <th style="width: 75px; text-align: center;">Stages</th>
+                <th style="width: 110px;">Status</th>
+                <th style="width: 90px; text-align: center;">Action</th>
               </tr>
             </thead>
             <tbody id="tracesTableBody">
@@ -184,19 +225,17 @@
           </table>
         </div>
       </div>
-    </div>
+    </main>
   </div>
 
   <!-- Trace Inspection Modal -->
-  <div class="trace-modal-backdrop" id="traceModalBackdrop">
-    <div class="trace-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <div class="trace-modal-header">
-        <div style="font-weight: 600;" id="modalTitle">Agent Execution Trace Inspection</div>
-        <button type="button" class="header-action-btn" id="closeModalBtn" style="padding: 2px 8px;">✕</button>
+  <div class="modal-backdrop" id="traceModalBackdrop">
+    <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitle">Agent Execution Trace Inspection</div>
+        <button type="button" class="header-icon-btn" id="closeModalBtn" style="padding: 2px 8px;">✕</button>
       </div>
-      <div class="trace-modal-body" id="modalBody">
-        <!-- Dynamically populated -->
-      </div>
+      <div class="modal-body" id="modalBody"></div>
     </div>
   </div>
 
@@ -206,135 +245,379 @@
     (function () {
       'use strict';
 
-      // Theme toggle initialization
+      // 1. Role & Identity Check
+      let currentUser = null;
+      try {
+        const stored = localStorage.getItem('aria_user_profile');
+        if (stored) currentUser = JSON.parse(stored);
+      } catch (e) {}
+
+      const restrictedView = document.getElementById('restrictedView');
+      const adminWorkspace = document.getElementById('adminWorkspace');
+      const adminUserLabel = document.getElementById('adminUserLabel');
+
+      if (currentUser) {
+        adminUserLabel.innerHTML = `Signed in as: <strong>${currentUser.name} (${currentUser.roleTitle})</strong>`;
+      }
+
+      if (!currentUser || currentUser.role !== 'data_admin') {
+        restrictedView.classList.remove('hidden');
+        adminWorkspace.classList.add('hidden');
+        if (currentUser) {
+          document.getElementById('restrictedExplanation').innerHTML = `
+            You are currently signed in as <strong>${currentUser.name} (${currentUser.roleTitle})</strong>.
+            The Agent Observability, Tracing, and Security Audit dashboard is restricted to the <strong>Data / Admin team</strong> persona.
+          `;
+        }
+      } else {
+        restrictedView.classList.add('hidden');
+        adminWorkspace.classList.remove('hidden');
+      }
+
+      document.getElementById('switchToAdminBtn').addEventListener('click', () => {
+        const adminProfile = {
+          id: 'data_admin',
+          name: 'Alex Thorne (Admin)',
+          role: 'data_admin',
+          roleTitle: 'Data / Admin team'
+        };
+        localStorage.setItem('aria_user_profile', JSON.stringify(adminProfile));
+        location.reload();
+      });
+
+      // 2. Theme Initialization
       let currentTheme = localStorage.getItem('aria_theme') || 'light';
       const themeBtn = document.getElementById('themeToggleBtn');
-
-      function applyTheme(theme) {
-        document.documentElement.setAttribute('data-theme', theme);
-        currentTheme = theme;
-        localStorage.setItem('aria_theme', theme);
+      function applyTheme(t) {
+        document.documentElement.setAttribute('data-theme', t);
+        currentTheme = t;
+        localStorage.setItem('aria_theme', t);
         if (themeBtn) {
-          const isDark = theme === 'dark';
-          themeBtn.innerHTML = isDark
-            ? `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`
-            : `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+          themeBtn.innerHTML = t === 'dark'
+            ? `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`
+            : `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
         }
+        loadTelemetry();
       }
-
-      if (themeBtn) {
-        themeBtn.addEventListener('click', () => {
-          applyTheme(currentTheme === 'light' ? 'dark' : 'light');
-        });
-      }
+      if (themeBtn) themeBtn.addEventListener('click', () => applyTheme(currentTheme === 'light' ? 'dark' : 'light'));
       applyTheme(currentTheme);
 
-      // Render Observability Data
-      function loadObservabilityData() {
+      // 3. Render Telemetry & KPIs
+      function loadTelemetry() {
         const store = window.AriaMock.getObservabilityStore();
 
-        // Update KPIs
         document.getElementById('kpiLatency').textContent = (store.metrics.avgLatencyMs / 1000).toFixed(2) + 's';
         document.getElementById('kpiSuccess').textContent = store.metrics.successRatePct.toFixed(1) + '%';
         document.getElementById('kpiQueries').textContent = store.metrics.totalQueries;
         document.getElementById('kpiRetries').textContent = store.metrics.retryCount;
+        document.getElementById('kpiBlocked').textContent = store.metrics.blockedCount || 16;
 
-        // Populate Traces Table
-        const tbody = document.getElementById('tracesTableBody');
-        tbody.innerHTML = store.traces.map((trace) => {
-          let statusClass = 'success';
-          let statusLabel = 'SUCCESS';
-          if (trace.status === 'AMBIGUOUS' || trace.status === 'AMBIGUOUS_RESOLVED') {
-            statusClass = 'ambiguous';
-            statusLabel = 'CLARIFIED';
-          } else if (trace.status === 'ERROR_RECOVERY_FAILED') {
-            statusClass = 'error';
-            statusLabel = 'FAILED';
+        renderLatencyChart(store.latencyHistory);
+        renderFeedbackChart(store.feedback);
+        renderAuditTable();
+        renderTracesTable();
+      }
+
+      // Inline SVG Line Chart for Latency with gradient area
+      function renderLatencyChart(history) {
+        const wrapper = document.getElementById('latencyChartWrapper');
+        if (!wrapper) return;
+        const width = 540;
+        const height = 180;
+        const padX = 45;
+        const padY = 28;
+        const plotW = width - padX * 2;
+        const plotH = height - padY * 2;
+        const maxL = 2.5;
+
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const axisColor = isDark ? '#334155' : '#e2e8f0';
+        const textColor = isDark ? '#94a3b8' : '#64748b';
+        const textPrimaryColor = isDark ? '#f1f5f9' : '#0f172a';
+
+        const pts = (history || []).map((h, i) => {
+          const x = padX + (i / Math.max(1, history.length - 1)) * plotW;
+          const y = height - padY - (h.latency / maxL) * plotH;
+          return { x, y, latency: h.latency, time: h.time };
+        });
+
+        if (pts.length === 0) return;
+
+        const poly = pts.map(p => `${p.x},${p.y}`).join(' ');
+        const areaPts = `${pts[0].x},${height - padY} ${poly} ${pts[pts.length - 1].x},${height - padY}`;
+
+        wrapper.innerHTML = `
+          <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" style="max-width: 100%; height: auto; display: block;" role="img" aria-label="Pipeline Latency Over Time Chart">
+            <defs>
+              <linearGradient id="latencyGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.3"/>
+                <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.02"/>
+              </linearGradient>
+            </defs>
+
+            <!-- Grid lines & Y Axis -->
+            <line x1="${padX}" y1="${height - padY}" x2="${width - padX}" y2="${height - padY}" stroke="${axisColor}"/>
+            <text x="${padX - 8}" y="${height - padY + 4}" font-size="10" text-anchor="end" fill="${textColor}">0s</text>
+
+            <line x1="${padX}" y1="${padY + plotH/2}" x2="${width - padX}" y2="${padY + plotH/2}" stroke="${axisColor}" stroke-dasharray="3"/>
+            <text x="${padX - 8}" y="${padY + plotH/2 + 4}" font-size="10" text-anchor="end" fill="${textColor}">1.25s</text>
+
+            <line x1="${padX}" y1="${padY}" x2="${width - padX}" y2="${padY}" stroke="${axisColor}" stroke-dasharray="3"/>
+            <text x="${padX - 8}" y="${padY + 4}" font-size="10" text-anchor="end" fill="${textColor}">2.5s</text>
+
+            <!-- Area fill -->
+            <polygon fill="url(#latencyGradient)" points="${areaPts}"/>
+
+            <!-- Line -->
+            <polyline fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="${poly}"/>
+
+            <!-- Data points -->
+            ${pts.map(p => `
+              <circle cx="${p.x}" cy="${p.y}" r="4" fill="#2563eb" stroke="#fff" stroke-width="2">
+                <title>${p.time}: ${p.latency}s</title>
+              </circle>
+              <text x="${p.x}" y="${p.y - 8}" font-size="10" font-weight="700" text-anchor="middle" fill="${textPrimaryColor}" font-family="ui-monospace, monospace">${p.latency}s</text>
+              <text x="${p.x}" y="${height - padY + 16}" font-size="10" text-anchor="middle" fill="${textColor}">${p.time}</text>
+            `).join('')}
+          </svg>
+        `;
+      }
+
+      // Inline SVG Bar Chart for Feedback Reasons
+      function renderFeedbackChart(feedback) {
+        const wrapper = document.getElementById('feedbackChartWrapper');
+        if (!wrapper) return;
+        const statsLabel = document.getElementById('feedbackStatsLabel');
+        const totalVotes = (feedback.thumbsUp || 0) + (feedback.thumbsDown || 0) || 1;
+        const upPct = Math.round(((feedback.thumbsUp || 0) / totalVotes) * 100);
+        if (statsLabel) {
+          statsLabel.textContent = `👍 ${upPct}% Positive (${feedback.thumbsUp} Up / ${feedback.thumbsDown} Down)`;
+        }
+
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const trackColor = isDark ? '#1e293b' : '#e2e8f0';
+        const textColor = isDark ? '#94a3b8' : '#475569';
+        const textPrimaryColor = isDark ? '#f1f5f9' : '#0f172a';
+
+        const reasons = Object.keys(feedback.reasons || {}).map(k => ({ label: k, count: feedback.reasons[k] }));
+        const maxCount = Math.max(...reasons.map(r => r.count)) || 1;
+        const width = 520;
+        const barHeight = 20;
+        const gap = 12;
+        const height = reasons.length * (barHeight + gap) + 10;
+
+        wrapper.innerHTML = `
+          <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" style="max-width: 100%; height: auto; display: block;" role="img" aria-label="User Feedback Reason Breakdown Chart">
+            ${reasons.map((r, i) => {
+              const y = i * (barHeight + gap) + 4;
+              const barW = Math.max(12, Math.round((r.count / maxCount) * 320));
+              return `
+                <g>
+                  <text x="125" y="${y + 14}" font-size="11.5" font-weight="600" text-anchor="end" fill="${textColor}">${r.label}</text>
+                  <rect x="135" y="${y}" width="320" height="${barHeight}" rx="4" fill="${trackColor}"/>
+                  <rect x="135" y="${y}" width="${barW}" height="${barHeight}" rx="4" fill="#f59e0b">
+                    <title>${r.label}: ${r.count} reports</title>
+                  </rect>
+                  <text x="${145 + barW}" y="${y + 14}" font-size="11" font-weight="700" fill="${textPrimaryColor}" font-family="ui-monospace, monospace">${r.count}</text>
+                </g>
+              `;
+            }).join('')}
+          </svg>
+        `;
+      }
+
+      // 4. Render Audit Table (with live filtering & counter)
+      function renderAuditTable() {
+        const trail = window.AriaMock.getAuditTrail() || [];
+        const searchVal = (document.getElementById('auditSearchInput').value || '').toLowerCase().trim();
+        const roleVal = document.getElementById('auditRoleFilter').value || 'All';
+        const outcomeVal = document.getElementById('auditOutcomeFilter').value || 'All';
+
+        const filtered = trail.filter((item) => {
+          const matchSearch = !searchVal || (item.question || '').toLowerCase().includes(searchVal) || (item.user || '').toLowerCase().includes(searchVal) || (item.details || '').toLowerCase().includes(searchVal);
+          const matchRole = roleVal === 'All' || item.role === roleVal;
+          const matchOutcome = outcomeVal === 'All' || (item.outcome || '').includes(outcomeVal);
+          return matchSearch && matchRole && matchOutcome;
+        });
+
+        // Update count badge
+        const countBadge = document.getElementById('auditCountBadge');
+        if (countBadge) {
+          countBadge.textContent = `${filtered.length} of ${trail.length} records`;
+        }
+
+        const tbody = document.getElementById('auditTableBody');
+        if (filtered.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7" style="text-align: center; padding: 36px 20px; color: var(--text-muted);">
+                <div style="font-size: 24px; margin-bottom: 6px;">🔍</div>
+                <div style="font-weight: 600; color: var(--text-primary); font-size: 13px;">No audit records match your filters</div>
+                <div style="font-size: 11.5px; margin-top: 4px;">Try searching for a different keyword or resetting dropdown filters.</div>
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = filtered.map((item) => {
+          let badgeClass = 'badge-status success';
+          if (item.outcome.includes('BLOCKED_WRITE') || item.outcome.includes('BLOCKED_INJECTION') || item.outcome.includes('ERROR')) {
+            badgeClass = 'badge-status error';
+          } else if (item.outcome.includes('ACCESS_DENIED') || item.outcome.includes('WARNING')) {
+            badgeClass = 'badge-status warning';
           }
-
-          const tablesBadges = (trace.tablesUsed && trace.tablesUsed.length > 0)
-            ? trace.tablesUsed.map(t => `<span class="source-badge" style="font-size: 10px;">${t}</span>`).join(' ')
-            : '<span style="color: var(--text-muted); font-size: 11px;">None</span>';
 
           return `
             <tr>
-              <td style="font-family: var(--font-mono); font-size: 11px;">${trace.requestId}</td>
-              <td style="white-space: nowrap; font-size: 11px; color: var(--text-muted);">${trace.timestamp}</td>
-              <td style="font-weight: 500; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${trace.query}">
-                ${trace.query}
+              <td style="font-size: 11px; color: var(--text-muted); font-family: ui-monospace, monospace; white-space: nowrap;">${item.timestamp}</td>
+              <td style="font-weight: 600;">${item.user}</td>
+              <td><span class="brand-badge">${item.role}</span></td>
+              <td style="max-width: 270px; word-break: break-word;" title="${item.question}">${item.question}</td>
+              <td><span class="${badgeClass}">${item.outcome}</span></td>
+              <td class="td-number">${(item.latencyMs / 1000).toFixed(2)}s</td>
+              <td style="font-size: 11.5px; color: var(--text-secondary); max-width: 240px; word-break: break-word;">${item.details}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      // 5. Render Traces Table (with search & counter)
+      function renderTracesTable() {
+        const store = window.AriaMock.getObservabilityStore();
+        const traces = store.traces || [];
+        const searchInput = document.getElementById('tracesSearchInput');
+        const qFilter = (searchInput ? searchInput.value : '').toLowerCase().trim();
+
+        const filtered = traces.filter((t) => {
+          return !qFilter || (t.query || '').toLowerCase().includes(qFilter) || (t.requestId || '').toLowerCase().includes(qFilter) || (t.user || '').toLowerCase().includes(qFilter);
+        });
+
+        const countBadge = document.getElementById('tracesCountBadge');
+        if (countBadge) {
+          countBadge.textContent = `${filtered.length} of ${traces.length} live traces`;
+        }
+
+        const tbody = document.getElementById('tracesTableBody');
+        if (filtered.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="8" style="text-align: center; padding: 36px 20px; color: var(--text-muted);">
+                <div style="font-size: 24px; margin-bottom: 6px;">🔍</div>
+                <div style="font-weight: 600; color: var(--text-primary); font-size: 13px;">No query traces match your filter</div>
               </td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = filtered.map((trace) => {
+          let badgeClass = 'badge-status success';
+          if (trace.status.includes('ERROR') || trace.status.includes('BLOCKED')) {
+            badgeClass = 'badge-status error';
+          } else if (trace.status.includes('RETRY')) {
+            badgeClass = 'badge-status warning';
+          }
+
+          return `
+            <tr>
+              <td><code>${trace.requestId}</code></td>
+              <td style="font-size: 11px; color: var(--text-muted); font-family: ui-monospace, monospace;">${trace.timestamp}</td>
+              <td><strong>${trace.user || 'User'}</strong> <span style="font-size: 10.5px; color: var(--text-muted);">(${trace.role || 'Role'})</span></td>
+              <td style="max-width: 260px; word-break: break-word;" title="${trace.query}">${trace.query}</td>
               <td class="td-number">${(trace.latencyMs / 1000).toFixed(2)}s</td>
-              <td style="text-align: center;">${trace.stages}/5</td>
-              <td style="max-width: 200px; overflow: hidden;">${tablesBadges}</td>
-              <td><span class="badge-status ${statusClass}">${statusLabel}</span></td>
-              <td>
-                <button type="button" class="btn-copy-sql inspect-trace-btn" data-req-id="${trace.requestId}">Inspect</button>
-              </td>
+              <td style="text-align: center; font-weight: 600;">${trace.stages}/5</td>
+              <td><span class="${badgeClass}">${trace.status}</span></td>
+              <td style="text-align: center;"><button type="button" class="btn-table-action inspect-btn" data-req="${trace.requestId}">Inspect</button></td>
             </tr>
           `;
         }).join('');
 
-        // Wire inspect buttons
-        tbody.querySelectorAll('.inspect-trace-btn').forEach(btn => {
+        tbody.querySelectorAll('.inspect-btn').forEach((btn) => {
           btn.addEventListener('click', () => {
-            const reqId = btn.getAttribute('data-req-id');
-            const trace = store.traces.find(t => t.requestId === reqId);
-            if (trace) showTraceModal(trace);
+            const req = btn.getAttribute('data-req');
+            const target = traces.find(t => t.requestId === req);
+            if (target) showTraceModal(target);
           });
         });
       }
 
-      // Trace Modal Logic
-      const modalBackdrop = document.getElementById('traceModalBackdrop');
-      const modalBody = document.getElementById('modalBody');
-      const closeModalBtn = document.getElementById('closeModalBtn');
-
       function showTraceModal(trace) {
+        const modalBody = document.getElementById('modalBody');
+        const isErr = trace.status.includes('ERROR') || trace.status.includes('BLOCKED');
+        
         modalBody.innerHTML = `
-          <div class="trace-detail-grid">
-            <div class="trace-label">Request ID</div>
-            <div class="trace-val" style="font-family: var(--font-mono);">${trace.requestId}</div>
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+              <div>
+                <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">REQUEST ID:</span> <code>${trace.requestId}</code>
+                <span style="margin-left: 8px; font-size: 11.5px; color: var(--text-muted);">${trace.timestamp}</span>
+              </div>
+              <span class="badge-status ${isErr ? 'error' : 'success'}">${trace.status}</span>
+            </div>
 
-            <div class="trace-label">User Query</div>
-            <div class="trace-val"><strong>${trace.query}</strong></div>
+            <!-- Pipeline Execution Stepper -->
+            <div>
+              <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Pipeline Orchestration Stages (${trace.stages} of 5 Completed)</div>
+              <div class="trace-stages-stepper">
+                <div class="trace-step-item step-passed">✓ Stage 1: Intent Understanding</div>
+                <div class="trace-step-item step-passed">✓ Stage 2: Schema Retrieval</div>
+                <div class="trace-step-item ${isErr ? 'step-blocked' : 'step-passed'}">${isErr ? '✕' : '✓'} Stage 3: AST Security Gateway</div>
+                <div class="trace-step-item ${isErr ? '' : 'step-passed'}">${isErr ? '○' : '✓'} Stage 4: Database Execution</div>
+                <div class="trace-step-item ${isErr ? '' : 'step-passed'}">${isErr ? '○' : '✓'} Stage 5: Answer Synthesis</div>
+              </div>
+            </div>
 
-            <div class="trace-label">Execution Time</div>
-            <div class="trace-val">${trace.latencyMs} ms</div>
+            <div class="schema-table-card">
+              <div>User: <strong>${trace.user}</strong> <span class="brand-badge" style="margin-left: 6px;">${trace.role}</span></div>
+              <div style="margin-top: 4px;">Natural Language Query: <em>"${trace.query}"</em></div>
+              <div style="margin-top: 4px;">Total Pipeline Latency: <strong>${trace.latencyMs}ms</strong></div>
+              <div style="margin-top: 4px;">Tables Accessed: ${(trace.tablesUsed || []).map(t => `<code>${t}</code>`).join(' ') || '<span style="color: var(--text-muted);">None (Blocked at Layer 3)</span>'}</div>
+            </div>
 
-            <div class="trace-label">Pipeline Stages</div>
-            <div class="trace-val">${trace.stages} of 5 completed</div>
-
-            <div class="trace-label">Execution Status</div>
-            <div class="trace-val"><span class="badge-status ${trace.status.includes('ERROR') ? 'error' : 'success'}">${trace.status}</span></div>
-
-            <div class="trace-label">Schema Tables</div>
-            <div class="trace-val">${(trace.tablesUsed || []).join(', ') || 'No tables accessed'}</div>
-          </div>
-
-          <div>
-            <div style="font-weight: 600; margin-bottom: 6px;">Security & Governance Guardrails (Layer 3)</div>
-            <ul class="trace-guard-list">
-              <li class="trace-guard-item pass">✓ Authentication & Context Validation: Sales Manager (Role 04)</li>
-              <li class="trace-guard-item pass">✓ AST Enforcement: Read-Only SELECT check passed (DDL/DML blocked)</li>
-              <li class="trace-guard-item pass">✓ Data Protection Gateway: Customer PII masking policy active</li>
-              <li class="trace-guard-item pass">✓ Resource Budget: AST complexity score within allowed threshold</li>
-            </ul>
+            <div style="border-top: 1px solid var(--border-color); padding-top: 10px;">
+              <strong style="font-size: 12px; color: var(--text-primary);">Layer 3 AST Security Gateway Audits:</strong>
+              <ul style="margin-left: 20px; margin-top: 6px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary);">
+                <li>✓ AST Read-Only Enforced: Passed (DDL/DML mutations rejected)</li>
+                <li>✓ Dynamic PII Masking: Active on sensitive customer &amp; financial columns</li>
+                <li>✓ Role Domain Entitlement: Verified for active role <strong>${trace.role}</strong></li>
+                <li>✓ AST Complexity Budget: Checked (Max join depth &le; 4)</li>
+              </ul>
+            </div>
           </div>
         `;
-        modalBackdrop.classList.add('open');
+        document.getElementById('traceModalBackdrop').classList.add('open');
       }
 
-      closeModalBtn.addEventListener('click', () => {
-        modalBackdrop.classList.remove('open');
+      document.getElementById('closeModalBtn').addEventListener('click', () => {
+        document.getElementById('traceModalBackdrop').classList.remove('open');
       });
 
-      modalBackdrop.addEventListener('click', (e) => {
-        if (e.target === modalBackdrop) modalBackdrop.classList.remove('open');
-      });
+      document.getElementById('refreshTracesBtn').addEventListener('click', loadTelemetry);
+      document.getElementById('auditSearchInput').addEventListener('input', renderAuditTable);
+      document.getElementById('auditRoleFilter').addEventListener('change', renderAuditTable);
+      document.getElementById('auditOutcomeFilter').addEventListener('change', renderAuditTable);
 
-      document.getElementById('refreshTracesBtn').addEventListener('click', loadObservabilityData);
+      const tracesSearch = document.getElementById('tracesSearchInput');
+      if (tracesSearch) tracesSearch.addEventListener('input', renderTracesTable);
 
-      loadObservabilityData();
+      function exportCsv() {
+        const trail = window.AriaMock.getAuditTrail() || [];
+        const rows = [['ID', 'Timestamp', 'User', 'Role', 'Question', 'Outcome', 'Latency(ms)', 'Details']];
+        trail.forEach(t => rows.push([t.id, t.timestamp, `"${t.user}"`, `"${t.role}"`, `"${t.question}"`, t.outcome, t.latencyMs, `"${t.details}"`]));
+        const csv = rows.map(r => r.join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'aria_security_audit_trail.csv';
+        a.click();
+      }
+
+      const exportTop = document.getElementById('exportAuditCsvBtnTop');
+      if (exportTop) exportTop.addEventListener('click', exportCsv);
+
+      loadTelemetry();
     })();
   </script>
 </body>

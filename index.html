@@ -7,12 +7,12 @@
   <meta name="description" content="AI Agent that allows business users to query enterprise data across projects, contracts, sales, finance, procurement, and construction.">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="font-md">
   <div class="app-container">
     <!-- Header Layer -->
     <header class="app-header">
       <div class="header-left">
-        <button type="button" class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle navigation history">
+        <button type="button" class="header-icon-btn mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle conversation history sidebar">
           <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
         </button>
 
@@ -23,49 +23,92 @@
             <span class="brand-badge">NL Query Engine</span>
           </div>
         </div>
+
+        <!-- Top Navigation -->
+        <nav class="header-nav" aria-label="Main application sections">
+          <a href="index.html" class="header-nav-link active">Chat Assistant</a>
+          <button type="button" class="header-nav-link" id="navDataExplorerBtn">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+            <span>Data Explorer</span>
+          </button>
+          <a href="eval.html" class="header-nav-link">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            <span>Evaluation</span>
+          </a>
+          <a href="admin.html" class="header-nav-link" id="adminNavLink">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+            <span>Observability</span>
+          </a>
+        </nav>
       </div>
 
       <div class="header-right">
-        <!-- Static User Badge -->
-        <div class="user-badge" title="Authenticated session context (RBAC: Sales Manager)">
-          <div class="user-badge-dot" aria-hidden="true"></div>
-          <span>Signed in as: <strong>Sales Manager</strong></span>
+        <!-- User Profile Dropdown Menu -->
+        <div class="user-menu-wrapper">
+          <button type="button" class="user-badge-btn" id="userMenuBtn" aria-label="User profile and roles" aria-expanded="false">
+            <div class="user-badge-dot" aria-hidden="true"></div>
+            <span id="headerUserLabel">Signed in as: <strong>Loading...</strong></span>
+            <span style="font-size: 10px;">▼</span>
+          </button>
+          <div class="user-menu-dropdown" id="userMenuDropdown" role="menu">
+            <div style="padding: 6px 10px; font-size: 11px; color: var(--text-muted); border-bottom: 1px solid var(--border-color);">
+              User Identity &amp; RBAC Context
+            </div>
+            <button type="button" class="user-menu-item" id="switchUserMenuItem" role="menuitem">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+              <span>Switch User &amp; Role</span>
+            </button>
+            <button type="button" class="user-menu-item danger" id="resetDemoDataMenuItem" role="menuitem">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"></polyline><polyline points="23 20 23 14 17 14"></polyline><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path></svg>
+              <span>Reset Demo Data</span>
+            </button>
+          </div>
         </div>
 
-        <!-- Observability Link -->
-        <a href="admin.html" class="header-action-btn" title="View agent execution traces and observability dashboard">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
-          <span>Observability</span>
-        </a>
+        <!-- Saved Answers Button -->
+        <button type="button" class="header-icon-btn" id="savedAnswersBtn" title="View Saved Answers" aria-label="Saved answers">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+        </button>
+
+        <!-- Help / What can I ask button -->
+        <button type="button" class="header-icon-btn" id="helpModalBtn" title="What can I ask? (Help &amp; Shortcuts)" aria-label="Help">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        </button>
+
+        <!-- Settings Button -->
+        <button type="button" class="header-icon-btn" id="settingsBtn" title="Preferences &amp; Settings" aria-label="Settings">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
 
         <!-- Light / Dark Theme Toggle -->
-        <button type="button" class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle color theme">
-          <!-- Populated by JavaScript -->
-        </button>
+        <button type="button" class="header-icon-btn" id="themeToggleBtn" aria-label="Toggle color theme"></button>
       </div>
     </header>
 
-    <!-- Main Workspace Area -->
+    <!-- Main Body Area -->
     <div class="main-wrapper">
       <!-- Conversation History Sidebar -->
-      <aside class="sidebar" id="sidebar">
+      <aside class="sidebar" id="sidebar" aria-label="Conversation history">
         <div class="sidebar-header">
-          <button type="button" class="btn-new-query" id="newQueryBtn">
+          <button type="button" class="btn-new-chat" id="newChatBtn">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            <span>New Query</span>
+            <span>New Chat</span>
           </button>
+
+          <!-- History Search Input -->
+          <div class="sidebar-search-box">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="historySearchInput" placeholder="Search chats (Ctrl+K)..." aria-label="Search conversation history">
+          </div>
         </div>
 
-        <div class="sidebar-content">
-          <div class="sidebar-section-title">Session Query History</div>
-          <ul class="history-list" id="historyList">
-            <!-- Dynamically populated -->
-          </ul>
+        <div class="sidebar-content" id="sidebarConversationsList">
+          <!-- Dynamically populated: Pinned, Today, Yesterday, Earlier -->
         </div>
 
         <div class="sidebar-footer">
-          <div style="font-weight: 500; margin-bottom: 2px;">Data Environment</div>
-          <div style="font-size: 10px; color: var(--text-muted);">Cloud Kinetics DW (104 Tables)</div>
+          <span style="font-size: 10px; color: var(--text-muted);">104 Enterprise Tables</span>
+          <button type="button" class="btn-clear-history" id="clearAllHistoryBtn">Clear all</button>
         </div>
       </aside>
 
@@ -74,13 +117,39 @@
         <!-- Scrollable Messages Container -->
         <div class="chat-messages" id="chatMessages">
           <div class="chat-inner-container" id="chatContainer">
-            <!-- Populated by app.js: idle hero or active conversation thread -->
+            <!-- Populated by app.js: idle welcome or active conversation thread -->
           </div>
         </div>
 
         <!-- Bottom Input Bar -->
         <footer class="chat-input-bar">
+          <!-- Scope Chips & Time Range Quick Select -->
+          <div class="input-helpers-bar">
+            <div class="scope-chips-list" id="domainScopeChips">
+              <button type="button" class="scope-chip active" data-scope="All">All Domains</button>
+              <button type="button" class="scope-chip" data-scope="Sales">Sales</button>
+              <button type="button" class="scope-chip" data-scope="Finance">Finance</button>
+              <button type="button" class="scope-chip" data-scope="Projects">Projects</button>
+              <button type="button" class="scope-chip" data-scope="Procurement">Procurement</button>
+              <button type="button" class="scope-chip" data-scope="Construction">Construction</button>
+              <button type="button" class="scope-chip" data-scope="Property Management">Property</button>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <span style="font-size: 11px; color: var(--text-muted);">Period:</span>
+              <select class="time-range-select" id="timeRangeSelect" aria-label="Select query time range">
+                <option value="This quarter" selected>This quarter (Q3 2026)</option>
+                <option value="Last quarter">Last quarter (Q2 2026)</option>
+                <option value="This year">This year (FY2026)</option>
+                <option value="All-time">All-time historical</option>
+              </select>
+            </div>
+          </div>
+
           <div class="input-box-wrapper">
+            <!-- Typeahead Dropdown -->
+            <div class="typeahead-popup" id="typeaheadPopup"></div>
+
             <input 
               type="text" 
               class="chat-input-field" 
@@ -89,17 +158,228 @@
               aria-label="Natural-language business question input"
               autocomplete="off"
             />
+
+            <!-- Speech to Text Mic Button -->
+            <button type="button" class="btn-mic" id="voiceInputBtn" title="Voice input (Speech to Text)" aria-label="Voice input">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+            </button>
+
+            <!-- Send Button -->
             <button type="button" class="btn-send" id="sendBtn" disabled aria-label="Send question">
               <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
             </button>
           </div>
-          <div class="input-disclaimer">
-            Aria synthesizes answers exclusively from validated enterprise database tables. Read-only permissions enforced.
+
+          <div style="max-width: 860px; width: 100%; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-muted);">
+            <span>Press <kbd style="background: var(--bg-hover); padding: 1px 4px; border-radius: 2px;">Enter</kbd> to send, <kbd style="background: var(--bg-hover); padding: 1px 4px; border-radius: 2px;">/</kbd> to focus</span>
+            <span>Read-only RBAC replica • PII masking enforced</span>
           </div>
         </footer>
       </main>
     </div>
   </div>
+
+  <!-- =========================================================================
+       BLOCKING MODAL: "WHO IS USING" FIRST ACCESS PROFILE PICKER
+       ========================================================================= -->
+  <div class="modal-backdrop" id="userProfileModalBackdrop">
+    <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="profileModalTitle">Welcome to Aria — Select Your Enterprise Persona</div>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
+          Aria applies real-time Role-Based Access Control (RBAC), data domain restrictions,
+          and column-level data masking. Please enter your name and select your operational role to begin.
+        </p>
+
+        <div>
+          <label for="profileNameInput" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Display Name</label>
+          <input type="text" id="profileNameInput" class="table-search-input" style="width: 100%; padding: 8px 10px; font-size: 13px;" placeholder="e.g. Sarah Lin">
+        </div>
+
+        <div>
+          <div style="font-size: 12px; font-weight: 600; margin-bottom: 8px;">Select Role</div>
+          <div class="role-cards-grid" id="roleCardsGrid">
+            <!-- Populated dynamically from USER_ROLES in mock-data.js -->
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+          <button type="button" class="btn-new-chat" id="saveProfileBtn" style="width: auto; padding: 8px 20px; background: var(--accent-primary); color: #fff; border: none;">
+            Start Querying
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       DATA EXPLORER DRAWER (Group D)
+       ========================================================================= -->
+  <div class="app-drawer" id="dataExplorerDrawer" role="dialog" aria-label="Data Explorer">
+    <div class="drawer-header">
+      <div style="font-weight: 700; font-size: 15px;">Schema Intelligence &amp; Data Explorer</div>
+      <button type="button" class="header-icon-btn" id="closeExplorerBtn">✕</button>
+    </div>
+    <div class="drawer-body">
+      <div class="explorer-tabs">
+        <button type="button" class="explorer-tab-btn active" id="tabTablesBtn">Tables Catalog (22)</button>
+        <button type="button" class="explorer-tab-btn" id="tabGlossaryBtn">Business Glossary (8)</button>
+      </div>
+
+      <!-- Search in Drawer -->
+      <div class="sidebar-search-box">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input type="text" id="explorerSearchInput" placeholder="Filter tables, columns, or glossary terms...">
+      </div>
+
+      <div id="explorerTabContent" style="display: flex; flex-direction: column; gap: 10px;">
+        <!-- Dynamically rendered -->
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       SAVED ANSWERS DRAWER (Group B)
+       ========================================================================= -->
+  <div class="app-drawer" id="savedAnswersDrawer" role="dialog" aria-label="Saved Answers">
+    <div class="drawer-header">
+      <div style="font-weight: 700; font-size: 15px;">Saved &amp; Pinned Answers</div>
+      <button type="button" class="header-icon-btn" id="closeSavedAnswersBtn">✕</button>
+    </div>
+    <div class="drawer-body" id="savedAnswersList">
+      <!-- Dynamically rendered -->
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       SETTINGS DRAWER (Group H)
+       ========================================================================= -->
+  <div class="app-drawer" id="settingsDrawer" role="dialog" aria-label="Preferences and Settings">
+    <div class="drawer-header">
+      <div style="font-weight: 700; font-size: 15px;">User Preferences &amp; Settings</div>
+      <button type="button" class="header-icon-btn" id="closeSettingsBtn">✕</button>
+    </div>
+    <div class="drawer-body">
+      <div class="schema-table-card">
+        <div style="font-weight: 600; font-size: 13px;">Appearance Theme</div>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <button type="button" class="view-btn theme-choice-btn" data-theme-choice="light">Light</button>
+          <button type="button" class="view-btn theme-choice-btn" data-theme-choice="dark">Dark</button>
+          <button type="button" class="view-btn theme-choice-btn" data-theme-choice="system">System</button>
+        </div>
+      </div>
+
+      <div class="schema-table-card">
+        <div style="font-weight: 600; font-size: 13px;">Font Size Scaling</div>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <button type="button" class="view-btn font-choice-btn" data-font="font-sm">Small</button>
+          <button type="button" class="view-btn font-choice-btn" data-font="font-md">Medium</button>
+          <button type="button" class="view-btn font-choice-btn" data-font="font-lg">Large</button>
+        </div>
+      </div>
+
+      <div class="schema-table-card">
+        <div style="font-weight: 600; font-size: 13px;">Answer Detail Level</div>
+        <div style="display: flex; gap: 8px; margin-top: 6px;">
+          <button type="button" class="view-btn detail-choice-btn active" data-detail="detailed">Detailed (Executive Summary + Stats)</button>
+          <button type="button" class="view-btn detail-choice-btn" data-detail="concise">Concise (Key Takeaway only)</button>
+        </div>
+      </div>
+
+      <div class="schema-table-card">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="settingShowSqlDefault">
+          <span style="font-size: 13px; font-weight: 500;">Always expand SQL query by default</span>
+        </label>
+      </div>
+
+      <div class="schema-table-card">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="settingShowPipelineDefault" checked>
+          <span style="font-size: 13px; font-weight: 500;">Show animated pipeline stages trail</span>
+        </label>
+      </div>
+
+      <div class="schema-table-card">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="settingCompactMode">
+          <span style="font-size: 13px; font-weight: 500;">Compact message spacing mode</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       HELP MODAL: "WHAT CAN I ASK?" (Group H)
+       ========================================================================= -->
+  <div class="modal-backdrop" id="helpModalBackdrop">
+    <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="helpModalTitle">Aria Enterprise Assistant Guide</div>
+        <button type="button" class="header-icon-btn" id="closeHelpModalBtn">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="explorer-tabs">
+          <button type="button" class="explorer-tab-btn active" id="helpTabDomainsBtn">Supported Domains</button>
+          <button type="button" class="explorer-tab-btn" id="helpTabScopeBtn">Scope &amp; Limitations</button>
+          <button type="button" class="explorer-tab-btn" id="helpTabShortcutsBtn">Shortcuts</button>
+        </div>
+
+        <div id="helpTabContent">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       THUMBS DOWN REASON MODAL (Group B)
+       ========================================================================= -->
+  <div class="modal-backdrop" id="feedbackModalBackdrop">
+    <div class="app-modal" style="max-width: 440px;" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="feedbackTitle">Feedback on Response</div>
+        <button type="button" class="header-icon-btn" id="closeFeedbackModalBtn">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 12.5px; color: var(--text-secondary);">Help us improve model grounding by sharing why this answer was unhelpful:</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px;" id="feedbackReasonChips">
+          <button type="button" class="reason-chip-btn">Wrong table</button>
+          <button type="button" class="reason-chip-btn">Wrong filter</button>
+          <button type="button" class="reason-chip-btn">Wrong numbers</button>
+          <button type="button" class="reason-chip-btn">Unclear answer</button>
+          <button type="button" class="reason-chip-btn">Other</button>
+        </div>
+        <div>
+          <textarea id="feedbackCommentInput" placeholder="Additional details (optional)..." style="width: 100%; height: 70px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px; font-size: 12px; background: var(--bg-app); outline: none;"></textarea>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button type="button" class="action-tool-btn" id="cancelFeedbackBtn">Cancel</button>
+          <button type="button" class="action-tool-btn" id="submitFeedbackBtn" style="background: var(--accent-primary); color: #fff;">Submit Feedback</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       CLICKABLE SOURCE TABLE POPOVER (Group B)
+       ========================================================================= -->
+  <div class="modal-backdrop" id="sourceTableModalBackdrop">
+    <div class="app-modal" style="max-width: 500px;" role="dialog" aria-modal="true" aria-labelledby="sourceTableModalTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="sourceTableModalTitle">Source Table Details</div>
+        <button type="button" class="header-icon-btn" id="closeSourceTableModalBtn">✕</button>
+      </div>
+      <div class="modal-body" id="sourceTableModalBody">
+        <!-- Dynamically populated -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
   <!-- Scripts -->
   <script src="mock-data.js"></script>
