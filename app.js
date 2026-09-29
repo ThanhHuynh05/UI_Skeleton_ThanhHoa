@@ -29,11 +29,11 @@
       fontSize: 'font-md',
       detailLevel: 'detailed',
       showSqlDefault: false,
-      showPipelineDefault: true,
+      showPipelineDefault: false,
       compactMode: false
     },
-    activeDomainScope: 'All',
-    activeTimeRange: 'This quarter',
+    activeDomainScope: 'Auto',
+    activeTimeRange: 'Auto',
     searchQuery: '',
     currentFeedbackMessageId: null,
     voiceRecognition: null,
@@ -194,6 +194,10 @@
   function updateUserBadge() {
     if (!state.currentUser) return;
     headerUserLabelEl.innerHTML = `Signed in as: <strong>${escapeHtml(state.currentUser.name)} (${escapeHtml(state.currentUser.roleTitle)})</strong>`;
+    const adminNav = document.getElementById('adminWorkspaceNav');
+    if (adminNav) {
+      adminNav.style.display = state.currentUser.role === 'data_admin' ? 'flex' : 'none';
+    }
   }
 
   // =========================================================================
@@ -344,13 +348,25 @@
           e.stopPropagation();
           const target = state.conversations.find((c) => c.id === convId);
           if (target) {
-            const newTitle = prompt('Rename conversation:', target.title);
-            if (newTitle && newTitle.trim()) {
-              target.title = newTitle.trim().substring(0, 50);
-              saveConversationsToStorage();
-              renderSidebarConversations();
-              showToast('Conversation renamed');
-            }
+            const renameBackdrop = document.getElementById('renameConvModalBackdrop');
+            const renameInput = document.getElementById('renameConvInput');
+            renameInput.value = target.title;
+            renameBackdrop.classList.add('open');
+            renameInput.focus();
+
+            const closeRename = () => renameBackdrop.classList.remove('open');
+            document.getElementById('closeRenameConvModalBtn').onclick = closeRename;
+            document.getElementById('cancelRenameConvBtn').onclick = closeRename;
+            document.getElementById('submitRenameConvBtn').onclick = () => {
+              const newTitle = renameInput.value;
+              if (newTitle && newTitle.trim()) {
+                target.title = newTitle.trim().substring(0, 50);
+                saveConversationsToStorage();
+                renderSidebarConversations();
+                showToast('Conversation renamed');
+              }
+              closeRename();
+            };
           }
         });
       }
@@ -360,15 +376,25 @@
       if (deleteBtn) {
         deleteBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          if (confirm('Delete this conversation?')) {
-            state.conversations = state.conversations.filter((c) => c.id !== convId);
-            if (state.activeConversationId === convId) {
-              state.activeConversationId = state.conversations.length > 0 ? state.conversations[0].id : null;
-            }
-            saveConversationsToStorage();
-            renderSidebarConversations();
-            renderActiveConversation();
-            showToast('Conversation deleted');
+          const target = state.conversations.find((c) => c.id === convId);
+          if (target) {
+            const deleteBackdrop = document.getElementById('deleteConvModalBackdrop');
+            deleteBackdrop.classList.add('open');
+
+            const closeDelete = () => deleteBackdrop.classList.remove('open');
+            document.getElementById('closeDeleteConvModalBtn').onclick = closeDelete;
+            document.getElementById('cancelDeleteConvBtn').onclick = closeDelete;
+            document.getElementById('submitDeleteConvBtn').onclick = () => {
+              state.conversations = state.conversations.filter((c) => c.id !== convId);
+              if (state.activeConversationId === convId) {
+                state.activeConversationId = state.conversations.length > 0 ? state.conversations[0].id : null;
+              }
+              saveConversationsToStorage();
+              renderSidebarConversations();
+              renderActiveConversation();
+              showToast('Conversation deleted');
+              closeDelete();
+            };
           }
         });
       }
@@ -383,15 +409,19 @@
           ${groupItems.map((c) => `
             <li class="conversation-item ${c.id === state.activeConversationId ? 'active' : ''}" data-conv-id="${c.id}" tabindex="0">
               <span class="conv-title" title="${escapeHtml(c.title)}">
-                ${c.pinned ? '<span class="conv-pin-icon">📌</span>' : ''}
+                ${c.pinned ? '<svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24" style="margin-right: 4px;"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>' : ''}
                 ${escapeHtml(c.title)}
               </span>
               <div class="conv-actions">
                 <button type="button" class="conv-action-btn btn-pin-conv" title="${c.pinned ? 'Unpin' : 'Pin'}">
-                  ${c.pinned ? '★' : '☆'}
+                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
                 </button>
-                <button type="button" class="conv-action-btn btn-rename-conv" title="Rename">✏️</button>
-                <button type="button" class="conv-action-btn btn-delete-conv" title="Delete">🗑️</button>
+                <button type="button" class="conv-action-btn btn-rename-conv" title="Rename">
+                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                </button>
+                <button type="button" class="conv-action-btn btn-delete-conv" title="Delete">
+                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
               </div>
             </li>
           `).join('')}
@@ -470,10 +500,12 @@
     const res = msg.resultsData || {};
     const tableHtml = generateTableHtml(res.table, msg.id, msg.activeView || 'table', msg.tablePage || 1, msg.tableSearch || '');
     const chartHtml = generateChartHtml(res.chart, msg.id, msg.chartType || 'bar');
+    const formatBusinessSource = (name) => name.replace('enterprise_dw.', '').replace('dim_', '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    
     const sourcesHtml = (res.sources || []).map((s) => `
-      <button type="button" class="source-badge-btn" data-table-name="${escapeHtml(s.name)}" title="Inspect table schema &amp; description">
+      <button type="button" class="source-badge-btn" data-table-name="${escapeHtml(s.name)}" title="${escapeHtml(s.name)} - ${escapeHtml(s.description || 'Table schema & description')}">
         <svg width="10" height="10" fill="currentColor" viewBox="0 0 20 20"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2zM3 16a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z"/></svg>
-        ${escapeHtml(s.name)}
+        ${escapeHtml(formatBusinessSource(s.name))}
       </button>
     `).join('');
 
@@ -486,66 +518,31 @@
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
         <div class="agent-response-card">
-          <!-- Answer Meta Line -->
-          <div class="answer-meta-bar">
-            <span class="answer-meta-item">
-              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
-              ${escapeHtml(res.summary || 'Query executed')}
-            </span>
-            <span class="answer-meta-item">🕒 Data as of: ${escapeHtml(res.dataAsOf || 'Yesterday 23:59 UTC')}</span>
-            <span class="answer-meta-item">🛡️ RBAC: ${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Default')}</span>
-          </div>
-
-          <!-- Limitations Note -->
-          ${res.confidenceNote ? `
-            <div class="limitations-note-box">
-              <strong>Grounding &amp; Scope Note:</strong> ${escapeHtml(res.confidenceNote)}
+          <!-- 1. Applied Interpretation & Business Answer -->
+          ${res.interpretation ? `
+            <div class="interpretation-box" style="background: var(--bg-hover); padding: 12px; border-radius: 6px; margin-bottom: 12px; font-size: 12.5px; border-left: 3px solid var(--accent-primary);">
+              <div style="font-weight: 600; margin-bottom: 6px; color: var(--text-primary);">I interpreted your question as:</div>
+              <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); line-height: 1.6;">
+                ${Object.entries(res.interpretation).map(([k, v]) => `<li><strong>${escapeHtml(k)}</strong> = ${escapeHtml(v)}</li>`).join('')}
+              </ul>
             </div>
           ` : ''}
-
-          <!-- Grounded Answer Text -->
           <div class="grounded-answer-text">
             ${formatMarkdownBold(answerBody)}
           </div>
 
-          <!-- Plain English Query Explanation (Group B) -->
-          ${res.plainEnglishExplanation ? `
-            <details class="explanation-details">
-              <summary class="explanation-summary">💡 Explain this query in plain English</summary>
-              <div class="explanation-content">${escapeHtml(res.plainEnglishExplanation)}</div>
-            </details>
-          ` : ''}
-
-          <!-- View Toggle (Table vs Chart) -->
-          <div style="display: flex; justify-content: flex-end;">
+          <!-- 2. Key Evidence/Visualization -->
+          ${(res.table || res.chart) ? `
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
             <div class="table-view-toggle">
-              <button type="button" class="view-btn ${(msg.activeView || 'table') === 'table' ? 'active' : ''}" data-view="table" data-msg-id="${msg.id}">Table View</button>
-              <button type="button" class="view-btn ${(msg.activeView || 'table') === 'chart' ? 'active' : ''}" data-view="chart" data-msg-id="${msg.id}">Chart View</button>
+              ${res.table ? `<button type="button" class="view-btn ${(msg.activeView || 'table') === 'table' ? 'active' : ''}" data-view="table" data-msg-id="${msg.id}">Table View</button>` : ''}
+              ${res.chart ? `<button type="button" class="view-btn ${(msg.activeView || 'table') === 'chart' ? 'active' : ''}" data-view="chart" data-msg-id="${msg.id}">Chart View</button>` : ''}
             </div>
           </div>
-
-          <!-- Main Content: Table or Chart -->
+          ` : ''}
           ${(msg.activeView || 'table') === 'table' ? tableHtml : chartHtml}
 
-          <!-- Source Tables Pill Badges -->
-          <div class="sources-row">
-            <span style="color: var(--text-muted); font-weight: 500;">Sources used:</span>
-            ${sourcesHtml}
-          </div>
-
-          <!-- Collapsible SQL Preview -->
-          <details class="sql-accordion" ${state.settings.showSqlDefault ? 'open' : ''}>
-            <summary class="sql-summary">
-              <div class="sql-summary-left">
-                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
-                <span>View Generated SQL Query</span>
-              </div>
-              <button type="button" class="btn-copy-sql" data-sql="${escapeHtml(res.sql || '')}">Copy SQL</button>
-            </summary>
-            <pre class="sql-code-block"><code>${escapeHtml(res.sql || '-- No SQL executed')}</code></pre>
-          </details>
-
-          <!-- Response Actions & Tools Row -->
+          <!-- 3. Actions -->
           <div class="response-actions-row">
             <div class="action-tools-group">
               <button type="button" class="action-tool-btn btn-copy-answer" data-answer="${escapeHtml(answerBody)}" title="Copy answer text">
@@ -557,24 +554,63 @@
               <button type="button" class="action-tool-btn btn-export-csv" data-msg-id="${msg.id}" title="Download table data as CSV">
                 📥 Download CSV
               </button>
-              <button type="button" class="action-tool-btn btn-pin-answer ${isPinned ? 'pinned' : ''}" data-msg-id="${msg.id}" title="${isPinned ? 'Remove from Saved' : 'Pin to Saved Answers'}">
-                ${isPinned ? '★ Saved' : '☆ Save'}
+              <button type="button" class="action-tool-btn btn-pin-answer ${isPinned ? 'pinned' : ''}" data-msg-id="${msg.id}" title="${isPinned ? 'Remove from Saved' : 'Pin to Saved Insights'}">
+                ${isPinned ? '★ Saved' : '☆ Save Insight'}
               </button>
               <button type="button" class="action-tool-btn btn-regenerate" data-msg-id="${msg.id}" title="Regenerate this answer">
                 🔄 Regenerate
               </button>
             </div>
 
-            <!-- Feedback Buttons -->
             <div class="feedback-buttons">
-              <button type="button" class="feedback-btn btn-feedback-up" data-msg-id="${msg.id}" title="Helpful answer" aria-label="Thumbs up">
-                👍
-              </button>
-              <button type="button" class="feedback-btn btn-feedback-down" data-msg-id="${msg.id}" title="Report issue with answer" aria-label="Thumbs down">
-                👎
-              </button>
+              <button type="button" class="feedback-btn btn-feedback-up" data-msg-id="${msg.id}" title="Helpful answer" aria-label="Thumbs up">👍</button>
+              <button type="button" class="feedback-btn btn-feedback-down" data-msg-id="${msg.id}" title="Report issue with answer" aria-label="Thumbs down">👎</button>
             </div>
           </div>
+
+          <!-- 4. Technical Details / Why this answer? -->
+          <details class="technical-details-accordion" style="margin-top: 12px; font-size: 11.5px; border-top: 1px solid var(--border-color); padding-top: 8px;">
+            <summary style="cursor: pointer; font-weight: 600; color: var(--text-secondary);">⚙️ Technical details / Why this answer?</summary>
+            
+            <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+              <div class="answer-meta-bar" style="border: none; padding: 0; background: transparent;">
+                <span class="answer-meta-item">🕒 Data as of: ${escapeHtml(res.dataAsOf || 'Yesterday 23:59 UTC')}</span>
+                <span class="answer-meta-item">🛡️ RBAC: ${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Default')}</span>
+              </div>
+
+              ${res.confidenceNote ? `
+                <div class="limitations-note-box" style="margin: 0;">
+                  <strong>Grounding &amp; Scope Note:</strong> ${escapeHtml(res.confidenceNote)}
+                </div>
+              ` : ''}
+
+              <div class="sources-row" style="margin: 0;">
+                <span style="color: var(--text-muted); font-weight: 500;">Business Sources &amp; Definitions:</span>
+                ${sourcesHtml}
+              </div>
+
+              ${res.plainEnglishExplanation ? `
+                <div class="explanation-details" style="margin: 0; padding: 8px; background: var(--bg-hover); border-radius: 4px;">
+                  <strong style="display:block; margin-bottom: 4px;">Pipeline / Query Strategy:</strong>
+                  ${escapeHtml(res.plainEnglishExplanation)}
+                </div>
+              ` : ''}
+
+              <details class="sql-accordion" ${state.settings.showSqlDefault ? 'open' : ''} style="margin: 0;">
+                <summary class="sql-summary" style="list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--bg-surface); border: 1.5px solid var(--border-color); border-radius: 6px; font-weight: 600; color: var(--text-primary); transition: all 0.2s ease; margin-bottom: 8px;">
+                  <div class="sql-summary-left" style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                    <span>View Generated SQL Query</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <button type="button" class="btn-copy-sql action-tool-btn" data-sql="${escapeHtml(res.sql || '')}" onclick="event.preventDefault();" style="padding: 4px 8px; font-size: 11px;">Copy SQL</button>
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" class="sql-chevron"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </div>
+                </summary>
+                <pre class="sql-code-block" style="margin-top: 8px;"><code>${escapeHtml(res.sql || '-- No SQL executed')}</code></pre>
+              </details>
+            </div>
+          </details>
 
           <!-- Suggested Follow-ups -->
           ${res.followUps && res.followUps.length > 0 ? `
@@ -624,22 +660,22 @@
     const opts = msg.options || [];
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
-        <div class="agent-response-card">
-          <div class="clarification-box">
-            <div class="clarification-title">
-              <svg width="18" height="18" fill="none" stroke="var(--accent-primary)" stroke-width="2" viewBox="0 0 24 24">
+        <div class="agent-response-card" style="border: 2px solid var(--accent-primary); box-shadow: 0 10px 25px rgba(0,0,0,0.1); padding: 24px; position: relative; z-index: 10;">
+          <div class="clarification-box" style="border: none; background: transparent; padding: 0;">
+            <div class="clarification-title" style="font-size: 16px; margin-bottom: 12px; color: var(--text-primary);">
+              <svg width="24" height="24" fill="none" stroke="var(--accent-primary)" stroke-width="2" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="10"></circle>
                 <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
                 <line x1="12" y1="17" x2="12.01" y2="17"></line>
               </svg>
-              <span>Clarification Required</span>
+              <span style="font-weight: 700;">Agent Clarification Required</span>
             </div>
-            <p class="clarification-question">${escapeHtml(msg.question || '')}</p>
-            <div class="clarification-chips">
+            <p class="clarification-question" style="font-size: 15px; margin-bottom: 20px; line-height: 1.5;">${escapeHtml(msg.question || '')}</p>
+            <div class="clarification-chips" style="display: flex; flex-direction: column; gap: 10px;">
               ${opts.map((opt) => `
-                <button type="button" class="clarification-chip" data-payload="${escapeHtml(opt.payload)}" data-label="${escapeHtml(opt.label)}" ${msg.resolvedPayload ? 'disabled style="opacity:0.6; pointer-events:none;"' : ''}>
-                  <span>${escapeHtml(opt.label)}</span>
-                  <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                <button type="button" class="clarification-chip" data-payload="${escapeHtml(opt.payload)}" data-label="${escapeHtml(opt.label)}" style="width: 100%; justify-content: space-between; padding: 12px 16px; font-size: 14px; border: 1px solid var(--border-color); background: var(--bg-surface); text-align: left;" ${msg.resolvedPayload ? 'disabled' : ''}>
+                  <span style="font-weight: 500;">${escapeHtml(opt.label)}</span>
+                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
                 </button>
               `).join('')}
             </div>
@@ -694,12 +730,11 @@
       <section class="welcome-hero" id="welcomeHero">
         <div class="hero-chip">
           <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12zm1-9H9v5h2V7zm0 6H9v2h2v-2z"/></svg>
-          Enterprise NL-to-SQL Agent • 104 Tables Indexed
+          Read-only enterprise data assistant
         </div>
-        <h1 class="hero-title">Ask anything about enterprise operations</h1>
+        <h1 class="hero-title">Ask questions about the enterprise data you have access to</h1>
         <p class="hero-subtitle">
-          Aria translates natural-language questions into validated SQL queries across projects,
-          contracts, sales, finance, procurement, and construction.
+          Get business answers grounded in approved enterprise data, with applied filters, definitions, and source details you can verify.
         </p>
 
         <div class="example-section">
@@ -991,7 +1026,12 @@
               <tr>
                 ${tableData.headers.map((h, i) => `
                   <th data-col-idx="${i}" data-msg-id="${msgId}">
-                    ${escapeHtml(h)}
+                    ${tableData.types[i] === 'masked' ? `
+                      <div style="display:inline-flex; flex-direction:column; gap:2px;">
+                        <span style="color:var(--danger-color);">🔒 Restricted</span>
+                        <span style="font-size:9px; color:var(--text-muted); font-weight:normal;">Masked by RBAC policy</span>
+                      </div>
+                    ` : escapeHtml(h)}
                   </th>
                 `).join('')}
               </tr>
@@ -1597,9 +1637,13 @@
     savedAnswersList.innerHTML = list.map((item) => `
       <div class="schema-table-card">
         <div style="font-weight: 600; font-size: 13px;">${escapeHtml(item.title)}</div>
+        <div style="font-size: 11px; color: var(--text-muted); margin: 4px 0;">Last refreshed: ${new Date(item.timestamp).toLocaleString()}</div>
         <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">${escapeHtml(item.answer.substring(0, 160))}...</p>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
-          <span style="font-size: 10px; color: var(--text-muted);">${new Date(item.timestamp).toLocaleDateString()}</span>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="view-btn" style="padding: 2px 6px; font-size: 11px;" onclick="alert('Query refreshed.')">🔄 Refresh</button>
+            <button type="button" class="view-btn" style="padding: 2px 6px; font-size: 11px;" onclick="alert('Snapshot saved.')">💾 Save Snapshot</button>
+          </div>
           <button type="button" class="conv-action-btn remove-saved-btn" data-id="${item.id}" style="color: var(--danger-color);">Remove</button>
         </div>
       </div>
@@ -2013,9 +2057,13 @@
       }
     });
 
-    // Mobile Hamburger
+    // Mobile Hamburger / Desktop Collapse
     mobileMenuBtnEl.addEventListener('click', () => {
-      sidebarEl.classList.toggle('open');
+      if (window.innerWidth <= 820) {
+        sidebarEl.classList.toggle('open');
+      } else {
+        sidebarEl.classList.toggle('collapsed');
+      }
     });
 
     // User Profile Dropdown Toggle

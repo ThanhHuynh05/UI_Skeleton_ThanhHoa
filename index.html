@@ -26,19 +26,24 @@
 
         <!-- Top Navigation -->
         <nav class="header-nav" aria-label="Main application sections">
-          <a href="index.html" class="header-nav-link active">Chat Assistant</a>
-          <button type="button" class="header-nav-link" id="navDataExplorerBtn">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
-            <span>Data Explorer</span>
-          </button>
-          <a href="eval.html" class="header-nav-link">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-            <span>Evaluation</span>
-          </a>
-          <a href="admin.html" class="header-nav-link" id="adminNavLink">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
-            <span>Observability</span>
-          </a>
+          <div style="display: flex; gap: 4px; align-items: center;">
+            <a href="index.html" class="header-nav-link active">Chat Assistant</a>
+            <button type="button" class="header-nav-link" id="navDataExplorerBtn">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+              <span>Data Explorer</span>
+            </button>
+          </div>
+          
+          <div id="adminWorkspaceNav" style="display: flex; gap: 4px; align-items: center; border-left: 1px solid var(--border-color); padding-left: 8px; margin-left: 4px;">
+            <a href="eval.html" class="header-nav-link">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              <span>Evaluation</span>
+            </a>
+            <a href="admin.html" class="header-nav-link" id="adminNavLink">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+              <span>Observability</span>
+            </a>
+          </div>
         </nav>
       </div>
 
@@ -65,8 +70,8 @@
           </div>
         </div>
 
-        <!-- Saved Answers Button -->
-        <button type="button" class="header-icon-btn" id="savedAnswersBtn" title="View Saved Answers" aria-label="Saved answers">
+        <!-- Saved Insights Button -->
+        <button type="button" class="header-icon-btn" id="savedAnswersBtn" title="View Saved Insights" aria-label="Saved insights">
           <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
         </button>
 
@@ -107,7 +112,7 @@
         </div>
 
         <div class="sidebar-footer">
-          <span style="font-size: 10px; color: var(--text-muted);">104 Enterprise Tables</span>
+          <span style="font-size: 10px; color: var(--text-muted);">Grounded in approved enterprise data</span>
           <button type="button" class="btn-clear-history" id="clearAllHistoryBtn">Clear all</button>
         </div>
       </aside>
@@ -126,7 +131,7 @@
           <!-- Scope Chips & Time Range Quick Select -->
           <div class="input-helpers-bar">
             <div class="scope-chips-list" id="domainScopeChips">
-              <button type="button" class="scope-chip active" data-scope="All">All Domains</button>
+              <button type="button" class="scope-chip active" data-scope="Auto">Auto (Detect)</button>
               <button type="button" class="scope-chip" data-scope="Sales">Sales</button>
               <button type="button" class="scope-chip" data-scope="Finance">Finance</button>
               <button type="button" class="scope-chip" data-scope="Projects">Projects</button>
@@ -138,7 +143,8 @@
             <div style="display: flex; align-items: center; gap: 4px;">
               <span style="font-size: 11px; color: var(--text-muted);">Period:</span>
               <select class="time-range-select" id="timeRangeSelect" aria-label="Select query time range">
-                <option value="This quarter" selected>This quarter (Q3 2026)</option>
+                <option value="Auto" selected>Auto (No time restriction)</option>
+                <option value="This quarter">This quarter (Q3 2026)</option>
                 <option value="Last quarter">Last quarter (Q2 2026)</option>
                 <option value="This year">This year (FY2026)</option>
                 <option value="All-time">All-time historical</option>
@@ -185,12 +191,12 @@
   <div class="modal-backdrop" id="userProfileModalBackdrop">
     <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
       <div class="modal-header">
-        <div class="modal-title" id="profileModalTitle">Welcome to Aria — Select Your Enterprise Persona</div>
+        <div class="modal-title" id="profileModalTitle">Welcome to Aria — Select Your Demo Persona</div>
       </div>
       <div class="modal-body">
         <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
-          Aria applies real-time Role-Based Access Control (RBAC), data domain restrictions,
-          and column-level data masking. Please enter your name and select your operational role to begin.
+          (Demo Mode) Aria applies real-time Role-Based Access Control (RBAC), data domain restrictions,
+          and column-level data masking. Please enter your name and select your demo persona to begin.
         </p>
 
         <div>
@@ -241,11 +247,11 @@
   </div>
 
   <!-- =========================================================================
-       SAVED ANSWERS DRAWER (Group B)
+       SAVED INSIGHTS DRAWER (Group B)
        ========================================================================= -->
-  <div class="app-drawer" id="savedAnswersDrawer" role="dialog" aria-label="Saved Answers">
+  <div class="app-drawer" id="savedAnswersDrawer" role="dialog" aria-label="Saved Insights">
     <div class="drawer-header">
-      <div style="font-weight: 700; font-size: 15px;">Saved &amp; Pinned Answers</div>
+      <div style="font-weight: 700; font-size: 15px;">Saved Queries &amp; Insights</div>
       <button type="button" class="header-icon-btn" id="closeSavedAnswersBtn">✕</button>
     </div>
     <div class="drawer-body" id="savedAnswersList">
@@ -297,7 +303,7 @@
 
       <div class="schema-table-card">
         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-          <input type="checkbox" id="settingShowPipelineDefault" checked>
+          <input type="checkbox" id="settingShowPipelineDefault">
           <span style="font-size: 13px; font-weight: 500;">Show animated pipeline stages trail</span>
         </label>
       </div>
@@ -380,6 +386,49 @@
 
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <!-- =========================================================================
+       RENAME CONVERSATION MODAL
+       ========================================================================= -->
+  <div class="modal-backdrop" id="renameConvModalBackdrop">
+    <div class="app-modal" style="max-width: 400px;" role="dialog" aria-modal="true" aria-labelledby="renameConvTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="renameConvTitle">Rename Conversation</div>
+        <button type="button" class="header-icon-btn" id="closeRenameConvModalBtn">✕</button>
+      </div>
+      <div class="modal-body">
+        <div>
+          <label for="renameConvInput" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Conversation Name</label>
+          <input type="text" id="renameConvInput" class="table-search-input" style="width: 100%; padding: 8px 10px; font-size: 13px;" autocomplete="off">
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+          <button type="button" class="action-tool-btn" id="cancelRenameConvBtn">Cancel</button>
+          <button type="button" class="action-tool-btn" id="submitRenameConvBtn" style="background: var(--accent-primary); color: #fff;">Save Name</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       DELETE CONVERSATION MODAL
+       ========================================================================= -->
+  <div class="modal-backdrop" id="deleteConvModalBackdrop">
+    <div class="app-modal" style="max-width: 400px;" role="dialog" aria-modal="true" aria-labelledby="deleteConvTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="deleteConvTitle" style="color: var(--danger-color);">Delete Conversation</div>
+        <button type="button" class="header-icon-btn" id="closeDeleteConvModalBtn">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+          Are you sure you want to delete this conversation? This action cannot be undone.
+        </p>
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button type="button" class="action-tool-btn" id="cancelDeleteConvBtn">Cancel</button>
+          <button type="button" class="action-tool-btn" id="submitDeleteConvBtn" style="background: var(--danger-color); color: #fff;">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Scripts -->
   <script src="mock-data.js"></script>

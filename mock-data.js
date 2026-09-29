@@ -595,6 +595,27 @@
   // =========================================================================
   const QUERY_RESPONSES = {
     // -------------------------------------------------------------
+    // KPI / Metric Only Response (No Table/Chart)
+    // -------------------------------------------------------------
+    'What is our total active contract value this year?': {
+      type: 'results',
+      domain: 'Sales',
+      summary: 'Aggregated KPI across enterprise contracts (0.8s)',
+      answer: 'The total active contract value for the current fiscal year is **$124.5 Million** across 32 active projects. This represents a **14% increase** compared to the same period last year.',
+      interpretation: {
+        'Metric': 'total active contract value',
+        'Period': 'Current fiscal year (2026)',
+        'Status': 'Active (excluding terminated or closed)'
+      },
+      plainEnglishExplanation: 'This query sums the contract_value column from the sales_contracts table where the status is Active and the start date is within the current year.',
+      dataAsOf: '2026-09-28 00:00 UTC',
+      confidenceNote: 'High (99%). Data synced live from ERP.',
+      sources: [{ name: 'enterprise_dw.sales_contracts' }],
+      sql: `SELECT SUM(contract_value) AS total_value FROM enterprise_dw.sales_contracts WHERE status = 'ACTIVE' AND EXTRACT(YEAR FROM start_date) = 2026;`,
+      followUps: ['Show breakdown by region', 'Compare to last year']
+    },
+
+    // -------------------------------------------------------------
     // Query 1: Outstanding Receivables
     // -------------------------------------------------------------
     'Which projects have the highest outstanding receivables this quarter?': {
@@ -603,6 +624,12 @@
       summary: 'Understood intent, retrieved schema across 4 tables, generated and validated query (1.7s)',
       answer: 'Across active developments in **Q3 2026**, **Skyline Residences Tower B** holds the highest outstanding receivables at **$8.45M**, followed by **Grand Marina Bay Phase 2** with **$6.20M**. Notably, **68.4%** of Skyline Residences\' balance is severely overdue (>60 days), primarily attributed to pending milestone inspection certifications on MEP installations.',
       answerConcise: '**Skyline Residences Tower B** ($8.45M) and **Grand Marina Bay Phase 2** ($6.20M) account for the highest Q3 outstanding receivables, with 68.4% of Skyline\'s balance overdue >60 days.',
+      interpretation: {
+        'Outstanding receivables': 'unpaid amount on issued invoices',
+        'Period': 'Q3 2026',
+        'Projects': 'all active projects',
+        'Ranking': 'highest outstanding amount first'
+      },
       plainEnglishExplanation: 'This query aggregates unpaid milestone invoices from the receivables ledger filtered for Q3 2026, joins the customer contracts and projects dimension tables to summarize total debt by development, and categorizes debt aging into risk buckets.',
       dataAsOf: '2026-09-27 23:59 UTC',
       confidenceNote: 'High (98%). Reconciled with bank deposit statements up to yesterday evening.',
@@ -1138,9 +1165,9 @@ GROUP BY p.asset_sub_type;`,
             blocked: true,
             type: 'ACCESS_DENIED',
             title: 'Access Denied: Domain Restricted for Role',
-            message: `Your current role (${roleDef.title}) does not have permission to view internal HR payroll or executive compensation records.`,
-            reason: 'Data governance policy restricts HR and executive compensation to the Executive and Data / Admin roles.',
-            details: 'To view this data, please switch to an authorized role using the user profile menu.'
+            message: `You don't have access to payroll data or executive compensation records.`,
+            reason: 'Data governance policy restricts access to this domain based on your current operational role.',
+            details: 'To view this data, please Request Access or Contact the Data Owner.'
           };
         }
       }
