@@ -602,11 +602,6 @@
       domain: 'Sales',
       summary: 'Aggregated KPI across enterprise contracts (0.8s)',
       answer: 'The total active contract value for the current fiscal year is **$124.5 Million** across 32 active projects. This represents a **14% increase** compared to the same period last year.',
-      interpretation: {
-        'Metric': 'total active contract value',
-        'Period': 'Current fiscal year (2026)',
-        'Status': 'Active (excluding terminated or closed)'
-      },
       plainEnglishExplanation: 'This query sums the contract_value column from the sales_contracts table where the status is Active and the start date is within the current year.',
       dataAsOf: '2026-09-28 00:00 UTC',
       confidenceNote: 'High (99%). Data synced live from ERP.',
@@ -624,12 +619,6 @@
       summary: 'Understood intent, retrieved schema across 4 tables, generated and validated query (1.7s)',
       answer: 'Across active developments in **Q3 2026**, **Skyline Residences Tower B** holds the highest outstanding receivables at **$8.45M**, followed by **Grand Marina Bay Phase 2** with **$6.20M**. Notably, **68.4%** of Skyline Residences\' balance is severely overdue (>60 days), primarily attributed to pending milestone inspection certifications on MEP installations.',
       answerConcise: '**Skyline Residences Tower B** ($8.45M) and **Grand Marina Bay Phase 2** ($6.20M) account for the highest Q3 outstanding receivables, with 68.4% of Skyline\'s balance overdue >60 days.',
-      interpretation: {
-        'Outstanding receivables': 'unpaid amount on issued invoices',
-        'Period': 'Q3 2026',
-        'Projects': 'all active projects',
-        'Ranking': 'highest outstanding amount first'
-      },
       plainEnglishExplanation: 'This query aggregates unpaid milestone invoices from the receivables ledger filtered for Q3 2026, joins the customer contracts and projects dimension tables to summarize total debt by development, and categorizes debt aging into risk buckets.',
       dataAsOf: '2026-09-27 23:59 UTC',
       confidenceNote: 'High (98%). Reconciled with bank deposit statements up to yesterday evening.',
@@ -823,7 +812,15 @@ ORDER BY total_invoiced_mil DESC;`,
     // -------------------------------------------------------------
     'What is our current occupancy rate and lease renewal forecast for commercial properties?': {
       type: 'clarification',
+      subtype: 'ambiguous_intent',
       domain: 'Property Management',
+      understoodFields: {
+        metric: 'Commercial occupancy rate (%)',
+        businessArea: 'Property Management',
+        domain: 'Property Management',
+        period: 'Current operational snapshot',
+        fieldToClarify: 'Needs confirmation: Asset class (Office vs Retail) or geographic zone breakdown'
+      },
       question: 'Commercial properties span both Grade-A Office towers and Prime Retail Malls across three regional zones. How would you like me to aggregate this analysis?',
       options: [
         { id: 'asset_class', label: 'By Property Asset Class (Office vs Retail)', payload: 'occupancy_by_asset_class' },
@@ -947,7 +944,15 @@ GROUP BY p.asset_sub_type;`,
     // -------------------------------------------------------------
     'List all supplier contracts expiring soon': {
       type: 'clarification',
+      subtype: 'ambiguous_intent',
       domain: 'Contracts',
+      understoodFields: {
+        metric: 'Supplier agreements expiring',
+        businessArea: 'Contracts',
+        domain: 'Contracts',
+        period: 'Upcoming expiration window',
+        fieldToClarify: 'Needs confirmation: Expiration window (Next 30 / 60 days vs Quarter end)'
+      },
       question: 'There are 84 active supplier and subcontractor agreements in our procurement repository. Which expiration timeframe would you like to inspect?',
       options: [
         { id: 'next_30_days', label: 'Next 30 Days (Urgent Renewal)', payload: 'contracts_expiring_30_days' },
@@ -1785,7 +1790,7 @@ GROUP BY p.asset_sub_type;`,
       };
     }
 
-    if (p === 'calendar_year' || p === 'this year' || p === 'this_year') {
+    if (p === 'calendar_year' || p === 'this year' || p === 'this_year' || p === 'current_year' || p === 'year_to_date') {
       const start = `${currentYear}-01-01`;
       const end = `${currentYear}-12-31`;
       return {
@@ -2169,23 +2174,968 @@ GROUP BY p.asset_sub_type;`,
     };
   }
 
-  function applyScopeToMockResult(baseResult, resolvedScope, queryText = '') {
+  // =========================================================================
+  // 9B. CENTRALIZED QUESTION INTERPRETATION RESOLVER (R2-09)
+  // =========================================================================
+  function parseQuestionIntent(question, demoCtx = DEMO_CONTEXT) {
+    const raw = question || '';
+    const lower = raw.toLowerCase();
+
+    // 1. Metric Candidate
+    let metric = {
+      key: 'total_receivables',
+      label: 'Outstanding receivables',
+      aggregation: 'SUM(amount_due)',
+      source: 'Inferred from question'
+    };
+
+    if (lower.includes('overdue') || lower.includes('>60') || lower.includes('aging') || lower.includes('past due')) {
+      metric = {
+        key: 'overdue_60d',
+        label: 'Overdue receivables >60 days',
+        aggregation: 'SUM(CASE WHEN days_past_due > 60 THEN amount_due ELSE 0 END)',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('receivable') || lower.includes('unpaid') || lower.includes('debt') || lower.includes('arrears')) {
+      metric = {
+        key: 'total_receivables',
+        label: 'Outstanding receivables',
+        aggregation: 'SUM(amount_due)',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('lead time') || lower.includes('delivery time') || lower.includes('shipping days')) {
+      metric = {
+        key: 'avg_lead_time',
+        label: 'Average delivery lead time (Days)',
+        aggregation: 'AVG(delivery_lead_time_days)',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('procurement') || lower.includes('spend') || lower.includes('steel') || lower.includes('concrete') || lower.includes('supplier spend')) {
+      metric = {
+        key: 'total_invoiced_spend',
+        label: 'Total invoiced spend',
+        aggregation: 'SUM(invoice_amount)',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('contract count') || lower.includes('number of contracts') || lower.includes('how many contracts')) {
+      metric = {
+        key: 'contract_count',
+        label: 'Contract count (Agreements)',
+        aggregation: 'COUNT(contract_id)',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('contracts_expiring') || (lower.includes('contract') && lower.includes('expir'))) {
+      metric = {
+        key: 'contract_count',
+        label: 'Supplier contracts expiring within 30 days',
+        aggregation: 'COUNT(contract_id)',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('contract') && !lower.includes('receivable')) {
+      metric = {
+        key: 'contract_value',
+        label: 'Total active contract value',
+        aggregation: 'SUM(contract_value)',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('occupan') || lower.includes('lease') || lower.includes('renewal')) {
+      metric = {
+        key: 'occupancy_rate',
+        label: 'Commercial occupancy rate (%)',
+        aggregation: 'AVG(occupancy_rate)',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('progress') || lower.includes('construction') || lower.includes('delay')) {
+      metric = {
+        key: 'construction_progress',
+        label: 'Construction milestone progress (%)',
+        aggregation: 'AVG(progress_pct)',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('budget') || lower.includes('variance') || lower.includes('headcount')) {
+      metric = {
+        key: 'budget_variance',
+        label: 'Budget variance',
+        aggregation: 'SUM(budget_variance)',
+        source: 'Inferred from question'
+      };
+    } else {
+      metric = {
+        key: 'allocated_value',
+        label: 'Record allocation value',
+        aggregation: 'SUM(amount)',
+        source: 'Inferred from question'
+      };
+    }
+
+    // 2. Breakdown Candidate (Business-friendly terms, avoiding "grain")
+    let breakdown = {
+      key: 'by_project',
+      label: 'By project, highest balance first',
+      sort: 'DESC',
+      source: 'Inferred from question'
+    };
+
+    if (lower.includes('portfolio_total') || lower.includes('portfolio total') || lower.includes('overall portfolio')) {
+      breakdown = {
+        key: 'portfolio_total',
+        label: 'Portfolio total',
+        sort: 'DESC',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('contracts_expiring') || (lower.includes('contract') && lower.includes('expir'))) {
+      breakdown = {
+        key: 'by_vendor',
+        label: 'By vendor and expiry date',
+        sort: 'ASC',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('buyer') || lower.includes('purchaser')) {
+      breakdown = {
+        key: 'by_buyer',
+        label: 'By individual purchaser / buyer contract',
+        sort: 'DESC',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('material') || lower.includes('concrete vs steel') || lower.includes('commodity')) {
+      breakdown = {
+        key: 'by_material',
+        label: 'By material commodity group',
+        sort: 'DESC',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('vendor') || lower.includes('supplier')) {
+      breakdown = {
+        key: 'by_vendor',
+        label: 'By vendor, highest spend first',
+        sort: 'DESC',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('status')) {
+      breakdown = {
+        key: 'by_status',
+        label: 'By execution status',
+        sort: 'ASC',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('asset class') || lower.includes('asset_class') || lower.includes('office vs retail')) {
+      breakdown = {
+        key: 'by_asset_class',
+        label: 'By property asset class (Office vs Retail)',
+        sort: 'DESC',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('region') || lower.includes('geographic zone') || lower.includes('north, central')) {
+      breakdown = {
+        key: 'by_region',
+        label: 'By geographic zone (North, Central, South)',
+        sort: 'DESC',
+        source: 'Inferred from question'
+      };
+    } else if (lower.includes('aging') || lower.includes('overdue')) {
+      breakdown = {
+        key: 'by_project',
+        label: 'By project, highest balance first',
+        sort: 'DESC',
+        source: 'Inferred from question'
+      };
+    }
+
+    // 3. Projects Scope
+    let projects = {
+      mode: 'all',
+      values: ['all'],
+      label: 'All active projects',
+      source: 'Dataset default'
+    };
+    if (lower.includes('skyline') || lower.includes('prj-sk-02')) {
+      projects = {
+        mode: 'specific',
+        values: ['PRJ-SK-02'],
+        label: 'Skyline Residences (PRJ-SK-02)',
+        source: 'Explicit filter'
+      };
+    } else if (lower.includes('grand marina') || lower.includes('prj-gmb-02')) {
+      projects = {
+        mode: 'specific',
+        values: ['PRJ-GMB-02'],
+        label: 'Grand Marina Bay Phase 2 (PRJ-GMB-02)',
+        source: 'Explicit filter'
+      };
+    } else if (lower.includes('heritage') || lower.includes('prj-hh-04')) {
+      projects = {
+        mode: 'specific',
+        values: ['PRJ-HH-04'],
+        label: 'Heritage Heights High-Rise (PRJ-HH-04)',
+        source: 'Explicit filter'
+      };
+    } else if (lower.includes('parkview') || lower.includes('prj-pvh-01')) {
+      projects = {
+        mode: 'specific',
+        values: ['PRJ-PVH-01'],
+        label: 'Parkview Heights Residential (PRJ-PVH-01)',
+        source: 'Explicit filter'
+      };
+    }
+
+    // 4. Assumptions
+    let assumptions = [];
+    if (metric.key === 'total_receivables' || metric.key === 'overdue_60d') {
+      assumptions = [
+        'Only outstanding receivables are included (paid invoices excluded)',
+        'Debt aging >60 days is classified as high-risk',
+        'Inter-company development transfers are excluded'
+      ];
+    } else if (metric.key === 'total_invoiced_spend' || metric.key === 'avg_lead_time') {
+      assumptions = [
+        'Analysis restricted to approved Tier-1 suppliers',
+        'Taxes and customs freight surcharges excluded',
+        'Lead time measured from PO issuance to site gate pass'
+      ];
+    } else if (metric.key === 'contract_value' || metric.key === 'contract_count') {
+      assumptions = [
+        'Only active signed agreements included (terminated or draft agreements excluded)',
+        'Joint venture master packages valued at 100% face value'
+      ];
+    } else if (metric.key === 'occupancy_rate') {
+      assumptions = [
+        'Leased area compared against net lettable area (NLA)',
+        'Renewals counted if binding Letter of Intent (LOI) signed'
+      ];
+    } else {
+      assumptions = [
+        'Data filtered strictly according to applied domain and timeframe',
+        'Simulated access boundaries applied for current role'
+      ];
+    }
+
+    return {
+      rawQuery: raw,
+      metric,
+      breakdown,
+      projects,
+      assumptions
+    };
+  }
+
+  // =========================================================================
+  // R2-09 CAPABILITY MATRIX & GUARDRAILS
+  // =========================================================================
+  const CAPABILITY_MATRIX = {
+    'finance_receivables': {
+      domain: 'Finance',
+      metrics: [
+        { key: 'total_receivables', label: 'Outstanding receivables ($M)', currency: 'USD millions', unit: '$M' },
+        { key: 'overdue_60d', label: 'Overdue receivables >60 days ($M)', currency: 'USD millions', unit: '$M' }
+      ],
+      breakdowns: [
+        { key: 'by_project', label: 'By project, highest balance first' },
+        { key: 'by_aging', label: 'By aging risk bucket' },
+        { key: 'by_buyer', label: 'By individual purchaser / buyer contract' }
+      ],
+      projects: [
+        { key: 'all', label: 'All active projects' },
+        { key: 'PRJ-SK-02', label: 'Skyline Residences (PRJ-SK-02)' },
+        { key: 'PRJ-GMB-02', label: 'Grand Marina Bay Phase 2 (PRJ-GMB-02)' },
+        { key: 'PRJ-HH-04', label: 'Heritage Heights High-Rise (PRJ-HH-04)' },
+        { key: 'PRJ-OCP-01', label: 'Oasis Central Park Villas (PRJ-OCP-01)' },
+        { key: 'PRJ-RLH-01', label: 'Riverside Logistics Hub (PRJ-RLH-01)' }
+      ],
+      periods: [
+        { key: 'current_quarter', label: 'This calendar quarter (Q3 2026)' },
+        { key: 'previous_quarter', label: 'Previous calendar quarter (Q2 2026)' },
+        { key: 'calendar_year', label: 'Calendar year 2026' },
+        { key: 'all_time', label: 'All time' },
+        { key: 'custom', label: 'Custom date range...' }
+      ]
+    },
+    'construction_progress': {
+      domain: 'Construction',
+      metrics: [
+        { key: 'construction_progress', label: 'Construction milestone progress (%)', currency: 'Not applicable (%)', unit: '%' }
+      ],
+      breakdowns: [
+        { key: 'by_project', label: 'By construction project' }
+      ],
+      projects: [
+        { key: 'all', label: 'All active residential projects' }
+      ],
+      periods: [
+        { key: 'auto', label: 'Current active construction cycle' }
+      ]
+    },
+    'construction_damages': {
+      domain: 'Construction',
+      metrics: [
+        { key: 'contract_value', label: 'Contractual liquidated damages clause ($M)', currency: 'USD millions', unit: '$M' }
+      ],
+      breakdowns: [
+        { key: 'by_project', label: 'By construction project' }
+      ],
+      projects: [
+        { key: 'PRJ-PVH-01', label: 'Parkview Heights Residential (PRJ-PVH-01)' }
+      ],
+      periods: [
+        { key: 'auto', label: 'Active EPC contract' }
+      ]
+    },
+    'procurement_spend': {
+      domain: 'Procurement',
+      metrics: [
+        { key: 'total_invoiced_spend', label: 'Total invoiced spend ($M)', currency: 'USD millions', unit: '$M' },
+        { key: 'avg_lead_time', label: 'Average delivery lead time (Days)', currency: 'Not applicable (Days)', unit: 'Days' }
+      ],
+      breakdowns: [
+        { key: 'by_vendor', label: 'By vendor, highest spend first' }
+      ],
+      projects: [
+        { key: 'all', label: 'All procurement packages' }
+      ],
+      periods: [
+        { key: 'current_quarter', label: 'This calendar quarter (Q3 2026)' },
+        { key: 'previous_quarter', label: 'Previous calendar quarter (Q2 2026)' },
+        { key: 'calendar_year', label: 'Calendar year 2026' },
+        { key: 'all_time', label: 'All time' },
+        { key: 'custom', label: 'Custom date range...' }
+      ]
+    },
+    'procurement_pending_pos': {
+      domain: 'Procurement',
+      metrics: [
+        { key: 'allocated_value', label: 'Pending PO value / Allocation ($M)', currency: 'USD millions', unit: '$M' }
+      ],
+      breakdowns: [
+        { key: 'by_project', label: 'By development project' }
+      ],
+      projects: [
+        { key: 'all', label: 'All pending purchase orders' }
+      ],
+      periods: [
+        { key: 'auto', label: 'Pending executive sign-off' }
+      ]
+    },
+    'property_occupancy': {
+      domain: 'Property Management',
+      metrics: [
+        { key: 'occupancy_rate', label: 'Commercial occupancy rate (%)', currency: 'Not applicable (%)', unit: '%' }
+      ],
+      breakdowns: [
+        { key: 'by_asset_class', label: 'By property asset class (Office vs Retail)' },
+        { key: 'by_region', label: 'By geographic zone (North, Central, South)' },
+        { key: 'by_project', label: 'By property asset' },
+        { key: 'portfolio_total', label: 'Portfolio total' }
+      ],
+      projects: [
+        { key: 'all', label: 'All commercial properties' }
+      ],
+      periods: [
+        { key: 'auto', label: 'Current active leases' }
+      ]
+    },
+    'contracts_registry': {
+      domain: 'Contracts',
+      metrics: [
+        { key: 'contract_value', label: 'Total active contract value ($M)', currency: 'USD millions', unit: '$M' },
+        { key: 'contract_count', label: 'Contract count (Agreements)', currency: 'Not applicable (Contracts)', unit: 'Contracts' }
+      ],
+      breakdowns: [
+        { key: 'by_project', label: 'By development project' },
+        { key: 'by_buyer', label: 'By counterparty / vendor / purchaser' }
+      ],
+      projects: [
+        { key: 'all', label: 'All active agreements' }
+      ],
+      periods: [
+        { key: 'current_quarter', label: 'This calendar quarter (Q3 2026)' },
+        { key: 'previous_quarter', label: 'Previous calendar quarter (Q2 2026)' },
+        { key: 'calendar_year', label: 'Calendar year 2026' },
+        { key: 'all_time', label: 'All time' },
+        { key: 'custom', label: 'Custom date range...' }
+      ]
+    },
+    'contracts_expiring': {
+      domain: 'Contracts',
+      metrics: [
+        { key: 'contract_count', label: 'Supplier contracts expiring within 30 days', currency: 'Not applicable (Contracts)', unit: 'Contracts' }
+      ],
+      breakdowns: [
+        { key: 'by_vendor', label: 'By vendor and expiry date' }
+      ],
+      projects: [
+        { key: 'all', label: 'All supplier agreements' }
+      ],
+      periods: [
+        { key: 'auto', label: 'Next 30 days in demo data' }
+      ]
+    },
+    'sales_receivables': {
+      domain: 'Sales',
+      metrics: [
+        { key: 'total_receivables', label: 'Outstanding buyer receivables ($M)', currency: 'USD millions', unit: '$M' },
+        { key: 'buyer_receivables', label: 'Buyer installment receivables ($M)', currency: 'USD millions', unit: '$M' }
+      ],
+      breakdowns: [
+        { key: 'by_buyer', label: 'By individual purchaser / buyer contract' }
+      ],
+      projects: [
+        { key: 'PRJ-SK-02', label: 'Skyline Residences (PRJ-SK-02)' }
+      ],
+      periods: [
+        { key: 'auto', label: 'Active buyer contracts' }
+      ]
+    },
+    'general_marketing_budget': {
+      domain: 'Projects',
+      metrics: [
+        { key: 'budget_variance', label: 'Internal headcount budget variance ($M)', currency: 'USD millions', unit: '$M' }
+      ],
+      breakdowns: [
+        { key: 'by_domain', label: 'By functional domain' }
+      ],
+      projects: [
+        { key: 'all', label: 'Corporate HQ' },
+        { key: 'PRJ-SK-02', label: 'Skyline Residences (PRJ-SK-02)' },
+        { key: 'PRJ-GMB-02', label: 'Grand Marina Bay Phase 2 (PRJ-GMB-02)' },
+        { key: 'PRJ-HH-04', label: 'Heritage Heights High-Rise (PRJ-HH-04)' }
+      ],
+      periods: [
+        { key: 'auto', label: 'FY2021' }
+      ]
+    }
+  };
+
+  function detectCapabilityScenario(result = {}, queryText = '') {
+    const lower = (queryText || (result.originalQuery || '')).toLowerCase();
+    const title = ((result.table && result.table.title) || '').toLowerCase();
+    const domain = ((result.appliedScope && result.appliedScope.domain && result.appliedScope.domain.value) || result.domain || '').toLowerCase();
+
+    if (lower.includes('damages clause') || lower.includes('liquidated damage') || title.includes('delay penalty')) {
+      return 'construction_damages';
+    }
+    if (lower.includes('contracts_expiring') || (lower.includes('contract') && lower.includes('expir')) || title.includes('contracts expiring within 30 days')) {
+      return 'contracts_expiring';
+    }
+    if (lower.includes('skyline residences receivables by individual buyer') || title.includes('skyline residences tower b - overdue buyer') || (domain === 'sales' && lower.includes('skyline'))) {
+      return 'sales_receivables';
+    }
+    if (lower.includes('receivable') || title.includes('receivable') || (domain === 'finance' && !title.includes('procurement'))) {
+      return 'finance_receivables';
+    }
+    if (lower.includes('construction progress') || title.includes('construction progress') || (lower.includes('residential') && lower.includes('progress'))) {
+      return 'construction_progress';
+    }
+    if (lower.includes('purchase orders pending') || title.includes('purchase orders pending')) {
+      return 'procurement_pending_pos';
+    }
+    if (lower.includes('procurement') || title.includes('procurement breakdown') || (lower.includes('steel') && lower.includes('concrete'))) {
+      return 'procurement_spend';
+    }
+    if (lower.includes('occupan') || title.includes('occupancy') || title.includes('commercial portfolio') || domain === 'property management') {
+      return 'property_occupancy';
+    }
+    if (lower.includes('contract') || title.includes('contracts') || domain === 'contracts') {
+      return 'contracts_registry';
+    }
+    if (lower.includes('marketing headcount budget') || title.includes('marketing headcount') || lower.includes('fy2021')) {
+      return 'general_marketing_budget';
+    }
+    return null;
+  }
+
+  function getEditableInterpretationOptions(result = {}, queryText = '') {
+    const lower = (queryText || '').toLowerCase();
+    const scope = (result && result.appliedScope) || {};
+    const scenarioKey = detectCapabilityScenario(result, queryText);
+    const matrixEntry = scenarioKey ? CAPABILITY_MATRIX[scenarioKey] : null;
+
+    let metrics = [];
+    let breakdowns = [];
+    let projects = [];
+    let periods = [];
+
+    if (matrixEntry) {
+      metrics = matrixEntry.metrics.map(m => ({ ...m }));
+      breakdowns = matrixEntry.breakdowns.map(b => ({ ...b }));
+      projects = matrixEntry.projects.map(p => ({ ...p }));
+      periods = matrixEntry.periods.map(pr => ({ ...pr }));
+    } else {
+      metrics = [
+        { key: 'allocated_value', label: 'Record allocation value ($M)', currency: 'USD millions', unit: '$M' },
+        { key: 'total_receivables', label: 'Outstanding receivables ($M)', currency: 'USD millions', unit: '$M' },
+        { key: 'total_invoiced_spend', label: 'Total invoiced spend ($M)', currency: 'USD millions', unit: '$M' },
+        { key: 'contract_value', label: 'Active contract value ($M)', currency: 'USD millions', unit: '$M' }
+      ];
+      breakdowns = [
+        { key: 'by_project', label: 'By project' },
+        { key: 'by_entity', label: 'By operational entity' },
+        { key: 'by_domain', label: 'By business domain' },
+        { key: 'by_status', label: 'By operational status' }
+      ];
+      projects = [
+        { key: 'all', label: 'All active projects' },
+        { key: 'PRJ-SK-02', label: 'Skyline Residences (PRJ-SK-02)' },
+        { key: 'PRJ-GMB-02', label: 'Grand Marina Bay Phase 2 (PRJ-GMB-02)' },
+        { key: 'PRJ-HH-04', label: 'Heritage Heights High-Rise (PRJ-HH-04)' },
+        { key: 'PRJ-OCP-01', label: 'Oasis Central Park Villas (PRJ-OCP-01)' },
+        { key: 'PRJ-RLH-01', label: 'Riverside Logistics Hub (PRJ-RLH-01)' }
+      ];
+      periods = [
+        { key: 'auto', label: 'Auto — No time restriction' },
+        { key: 'current_quarter', label: 'This calendar quarter (Q3 2026)' },
+        { key: 'previous_quarter', label: 'Previous calendar quarter (Q2 2026)' },
+        { key: 'calendar_year', label: 'Calendar year 2026' },
+        { key: 'all_time', label: 'All time' },
+        { key: 'custom', label: 'Custom date range...' }
+      ];
+    }
+
+    const domains = [
+      { key: 'Finance', label: 'Finance' },
+      { key: 'Procurement', label: 'Procurement' },
+      { key: 'Sales', label: 'Sales' },
+      { key: 'Projects', label: 'Projects' },
+      { key: 'Contracts', label: 'Contracts' },
+      { key: 'Construction', label: 'Construction' },
+      { key: 'Property Management', label: 'Property Management' }
+    ];
+
+    if (!projects || projects.length === 0) {
+      projects = [
+        { key: 'all', label: 'All active projects' },
+        { key: 'PRJ-SK-02', label: 'Skyline Residences (PRJ-SK-02)' },
+        { key: 'PRJ-GMB-02', label: 'Grand Marina Bay Phase 2 (PRJ-GMB-02)' },
+        { key: 'PRJ-HH-04', label: 'Heritage Heights High-Rise (PRJ-HH-04)' },
+        { key: 'PRJ-OCP-01', label: 'Oasis Central Park Villas (PRJ-OCP-01)' },
+        { key: 'PRJ-RLH-01', label: 'Riverside Logistics Hub (PRJ-RLH-01)' }
+      ];
+    }
+
+    // Determine currently active keys from scope or fallback intent
+    const domain = (scope.domain && ((typeof scope.domain === 'object' && scope.domain !== null) ? (scope.domain.value || scope.domain.label) : scope.domain)) || (result && result.domain) || '';
+    const isReceivables = lower.includes('receivable') || lower.includes('unpaid') || lower.includes('debt') || lower.includes('arrears') || scenarioKey === 'finance_receivables';
+    const isProcurement = lower.includes('procurement') || lower.includes('spend') || lower.includes('steel') || lower.includes('concrete') || scenarioKey === 'procurement_spend' || scenarioKey === 'procurement_pending_pos';
+    const isContracts = lower.includes('contract') || scenarioKey === 'contracts_registry';
+
+    let activeMetricKey = '';
+    if (scope.metric && scope.metric.key) {
+      activeMetricKey = scope.metric.key;
+    } else if (lower.includes('overdue')) {
+      activeMetricKey = 'overdue_60d';
+    } else if (isReceivables || domain === 'Finance') {
+      activeMetricKey = 'total_receivables';
+    } else if (isProcurement || domain === 'Procurement') {
+      activeMetricKey = lower.includes('lead time') ? 'avg_lead_time' : (lower.includes('order') ? 'allocated_value' : 'total_invoiced_spend');
+    } else if (isContracts || domain === 'Contracts') {
+      activeMetricKey = lower.includes('count') ? 'contract_count' : 'contract_value';
+    } else if (domain === 'Construction') {
+      activeMetricKey = lower.includes('progress') ? 'construction_progress' : (lower.includes('damages') || lower.includes('clause') ? 'contract_value' : 'budget_variance');
+    } else if (domain === 'Property Management') {
+      activeMetricKey = 'occupancy_rate';
+    } else if (metrics[0]) {
+      activeMetricKey = metrics[0].key;
+    }
+
+    // Guarantee active metric is ALWAYS present in options
+    if (activeMetricKey && !metrics.some(m => m.key === activeMetricKey)) {
+      const activeMetricLabel = (scope.metric && scope.metric.label) || activeMetricKey;
+      const unit = (activeMetricKey.includes('pct') || activeMetricKey.includes('rate') || activeMetricKey.includes('progress')) ? '%' : ((activeMetricKey.includes('day') || activeMetricKey.includes('time')) ? 'Days' : (activeMetricKey.includes('count') ? 'Contracts' : '$M'));
+      metrics.unshift({
+        key: activeMetricKey,
+        label: activeMetricLabel,
+        currency: (unit === '%' || unit === 'Days' || unit === 'Contracts') ? `Not applicable (${unit})` : 'USD millions',
+        unit: unit
+      });
+    }
+
+    let activeBreakdownKey = '';
+    if (scope.breakdown && scope.breakdown.key) {
+      activeBreakdownKey = scope.breakdown.key;
+    } else if (scope.grain && scope.grain.key) {
+      activeBreakdownKey = scope.grain.key;
+    } else if (breakdowns[0]) {
+      activeBreakdownKey = breakdowns[0].key;
+    }
+
+    // Guarantee active breakdown is ALWAYS present in options
+    if (activeBreakdownKey && !breakdowns.some(b => b.key === activeBreakdownKey)) {
+      const activeBreakdownLabel = (scope.breakdown && scope.breakdown.label) || (scope.grain && scope.grain.label) || activeBreakdownKey;
+      breakdowns.unshift({
+        key: activeBreakdownKey,
+        label: activeBreakdownLabel
+      });
+    }
+
+    const activeDomainKey = (scope.domain && ((typeof scope.domain === 'object' && scope.domain !== null) ? (scope.domain.value || scope.domain.label) : scope.domain)) || domain || 'Finance';
+    const activeProjectKey = (scope.projectScope && scope.projectScope.key) || (scope.projects && scope.projects.key) || 'all';
+
+    let activePeriodKey = 'auto';
+    if (scope.time) {
+      const pKey = scope.time.preset || scope.time.key || '';
+      const pStart = scope.time.start;
+      const pEnd = scope.time.end;
+      const pLabel = (scope.time.label || scope.periodLabel || '').toLowerCase();
+
+      if (pKey === 'current_quarter' || pKey === 'this_quarter' || (pStart === '2026-07-01' && pEnd === '2026-09-30') || pLabel.includes('q3')) {
+        activePeriodKey = 'current_quarter';
+      } else if (pKey === 'previous_quarter' || pKey === 'prev_quarter' || (pStart === '2026-04-01' && pEnd === '2026-06-30') || pLabel.includes('q2')) {
+        activePeriodKey = 'previous_quarter';
+      } else if (pKey === 'calendar_year' || pKey === 'current_year' || pKey === 'year_to_date' || pKey === 'this_year' || (pStart === '2026-01-01' && pEnd === '2026-12-31') || pLabel.includes('year')) {
+        activePeriodKey = 'calendar_year';
+      } else if (pKey === 'all_time' || pKey === 'all-time' || pLabel.includes('all time')) {
+        activePeriodKey = 'all_time';
+      } else if (pKey === 'custom' || (pStart && pEnd)) {
+        activePeriodKey = 'custom';
+      } else if (pKey === 'auto' || pLabel.includes('no time')) {
+        activePeriodKey = 'auto';
+      }
+    }
+
+    // Set current flags on option arrays for HTML prefill
+    let hasCurrentMetric = false;
+    metrics.forEach(m => {
+      m.current = (m.key === activeMetricKey);
+      if (m.current) hasCurrentMetric = true;
+    });
+    if (!hasCurrentMetric && metrics[0]) metrics[0].current = true;
+
+    let hasCurrentBreakdown = false;
+    breakdowns.forEach(b => {
+      b.current = (b.key === activeBreakdownKey);
+      if (b.current) hasCurrentBreakdown = true;
+    });
+    if (!hasCurrentBreakdown && breakdowns[0]) breakdowns[0].current = true;
+
+    domains.forEach(d => {
+      d.current = (d.key === activeDomainKey);
+    });
+
+    projects.forEach(p => {
+      p.current = (p.key === activeProjectKey);
+    });
+
+    periods.forEach(pr => {
+      pr.current = (pr.key === activePeriodKey);
+    });
+
+    // Handle assumptions with preservation of unchecked state
+    const intent = parseQuestionIntent(queryText || (result.originalQuery || ''), DEMO_CONTEXT);
+    const candidateAssumptions = (intent.assumptions && intent.assumptions.length > 0)
+      ? intent.assumptions
+      : [
+          'Data filtered strictly according to applied domain and timeframe',
+          'Simulated access boundaries applied for current role'
+        ];
+
+    let assumptions = [];
+    if (scope && Array.isArray(scope.assumptions)) {
+      // User has set or fixture already has scope.assumptions (could be [] if user unchecked all)
+      const checkedSet = new Set(scope.assumptions);
+      const seen = new Set();
+      candidateAssumptions.forEach(lbl => {
+        seen.add(lbl);
+        assumptions.push({ label: lbl, checked: checkedSet.has(lbl) });
+      });
+      scope.assumptions.forEach(lbl => {
+        if (!seen.has(lbl)) {
+          seen.add(lbl);
+          assumptions.push({ label: lbl, checked: true });
+        }
+      });
+    } else {
+      // Default: all candidate assumptions checked
+      assumptions = candidateAssumptions.map(lbl => ({ label: lbl, checked: true }));
+    }
+
+    return {
+      metrics,
+      breakdowns,
+      domains,
+      projects,
+      projectScopes: projects,
+      periods,
+      assumptions,
+      currentMetric: activeMetricKey,
+      currentBreakdown: activeBreakdownKey,
+      currentDomain: activeDomainKey,
+      currentProject: activeProjectKey,
+      currentPeriod: activePeriodKey
+    };
+  }
+
+  function buildAppliedInterpretation(result, resolvedScope, queryIntent, overrides = null) {
+    const ov = overrides || {};
+    const intent = queryIntent || parseQuestionIntent('', DEMO_CONTEXT);
+
+    // 1. Metric
+    let metricObj = {
+      key: intent.metric.key,
+      label: intent.metric.label,
+      aggregation: intent.metric.aggregation,
+      source: intent.metric.source || 'Inferred from question'
+    };
+    if (ov.metric) {
+      const opts = getEditableInterpretationOptions(result, intent.rawQuery);
+      const matched = (opts.metrics || []).find(m => m.key === ov.metric);
+      if (matched) {
+        metricObj = {
+          key: matched.key,
+          label: matched.label.replace(/\s*\([^)]*\)$/, ''),
+          aggregation: matched.key === 'overdue_60d' ? 'SUM(CASE WHEN days_past_due > 60 THEN amount_due ELSE 0 END)' : (matched.key === 'avg_lead_time' ? 'AVG(delivery_lead_time_days)' : (matched.key === 'contract_count' ? 'COUNT(contract_id)' : 'SUM(amount)')),
+          source: 'Edited by user'
+        };
+      } else {
+        metricObj = {
+          key: ov.metric,
+          label: ov.metricLabel || ov.metric,
+          aggregation: 'SUM(amount)',
+          source: 'Edited by user'
+        };
+      }
+    }
+
+    // 2. Breakdown (grain alias)
+    let breakdownObj = {
+      key: intent.breakdown.key,
+      label: intent.breakdown.label,
+      sort: intent.breakdown.sort || 'DESC',
+      source: intent.breakdown.source || 'Inferred from question'
+    };
+    if (ov.breakdown) {
+      if (ov.breakdown === 'by_aging' || ov.breakdown === 'by_aging_risk_bucket' || ov.breakdown === 'by_risk_bucket') {
+        breakdownObj = {
+          key: 'by_aging',
+          label: 'By aging risk bucket',
+          sort: 'DESC',
+          source: 'Edited by user'
+        };
+      } else {
+        const opts = getEditableInterpretationOptions(result, intent.rawQuery);
+        const matched = (opts.breakdowns || []).find(b => b.key === ov.breakdown);
+        if (matched) {
+          breakdownObj = {
+            key: matched.key,
+            label: matched.label,
+            sort: 'DESC',
+            source: 'Edited by user'
+          };
+        } else {
+          breakdownObj = {
+            key: ov.breakdown,
+            label: ov.breakdownLabel || ov.breakdown,
+            sort: 'DESC',
+            source: 'Edited by user'
+          };
+        }
+      }
+    }
+
+    // 3. Domain
+    const activeDomain = ov.domain || resolvedScope.domain || 'All Domains';
+    const domainSrc = ov.domain ? 'Edited by user' : ((resolvedScope.source && resolvedScope.source.domain) ? resolvedScope.source.domain : 'Inferred from question');
+    const domainObj = {
+      value: activeDomain,
+      label: activeDomain,
+      source: domainSrc,
+      toString() { return activeDomain; },
+      [Symbol.toPrimitive]() { return activeDomain; }
+    };
+
+    // 4. Projects
+    let projectsObj = {
+      key: intent.projects ? (intent.projects.values ? intent.projects.values[0] : 'all') : 'all',
+      mode: intent.projects ? intent.projects.mode : 'all',
+      values: intent.projects ? intent.projects.values : ['all'],
+      label: intent.projects ? intent.projects.label : 'All active projects',
+      source: intent.projects ? intent.projects.source : 'Dataset default'
+    };
+    const targetProjectKey = ov ? (ov.projectScope || ov.projects) : null;
+    if (targetProjectKey) {
+      const projLabelMap = {
+        'all': 'All active projects',
+        'PRJ-SK-02': 'Skyline Residences (PRJ-SK-02)',
+        'PRJ-GMB-02': 'Grand Marina Bay Phase 2 (PRJ-GMB-02)',
+        'PRJ-HH-04': 'Heritage Heights High-Rise (PRJ-HH-04)',
+        'PRJ-OCP-01': 'Oasis Central Park Villas (PRJ-OCP-01)',
+        'PRJ-RLH-01': 'Riverside Logistics Hub (PRJ-RLH-01)',
+        'PRJ-PVH-01': 'Parkview Heights Residential (PRJ-PVH-01)'
+      };
+      projectsObj = {
+        key: targetProjectKey,
+        mode: targetProjectKey === 'all' ? 'all' : 'specific',
+        values: [targetProjectKey],
+        label: ov.projectsLabel || projLabelMap[targetProjectKey] || targetProjectKey,
+        source: 'Edited by user'
+      };
+    }
+
+    // 5. Time
+    const timeStart = resolvedScope.start || null;
+    const timeEnd = resolvedScope.end || null;
+    const timeRangeStr = (timeStart && timeEnd) ? formatDateRange(timeStart, timeEnd) : null;
+    const timeLabel = resolvedScope.periodLabel || 'No time restriction';
+    const timeSrc = ov.period ? 'Edited by user' : ((resolvedScope.source && resolvedScope.source.time) ? resolvedScope.source.time : 'No time restriction');
+    const timePresetKey = ov.period || resolvedScope.preset || 'auto';
+    const timeObj = {
+      key: timePresetKey,
+      preset: timePresetKey,
+      start: timeStart,
+      end: timeEnd,
+      label: timeLabel,
+      dateRange: timeRangeStr,
+      calendarBasis: resolvedScope.calendarBasis || 'Calendar',
+      source: timeSrc
+    };
+
+    // 6. Currency / Unit
+    let currencyObj = {
+      code: 'USD',
+      unit: 'USD millions',
+      label: 'USD millions',
+      source: 'Dataset default'
+    };
+    const mKey = metricObj.key;
+    if (mKey === 'avg_lead_time') {
+      currencyObj = {
+        code: 'N/A',
+        unit: 'Days',
+        label: 'Not applicable (Days)',
+        source: 'Dataset default'
+      };
+    } else if (mKey === 'contract_count') {
+      currencyObj = {
+        code: 'N/A',
+        unit: 'Contracts',
+        label: 'Not applicable (Contracts)',
+        source: 'Dataset default'
+      };
+    } else if (mKey === 'occupancy_rate') {
+      currencyObj = {
+        code: 'N/A',
+        unit: '%',
+        label: 'Not applicable (%)',
+        source: 'Dataset default'
+      };
+    } else if (mKey === 'construction_progress') {
+      currencyObj = {
+        code: 'N/A',
+        unit: '%',
+        label: 'Not applicable (%)',
+        source: 'Dataset default'
+      };
+    }
+    currencyObj.toString = function() { return this.label; };
+
+    // 7. Assumptions
+    let assumptionsList = [];
+    if (ov.assumptions !== undefined && Array.isArray(ov.assumptions)) {
+      assumptionsList = [...ov.assumptions];
+    } else if (intent.assumptions && Array.isArray(intent.assumptions) && intent.assumptions.length > 0) {
+      assumptionsList = [...intent.assumptions];
+    } else {
+      assumptionsList = [
+        'Data filtered strictly according to applied domain and timeframe',
+        'Simulated access boundaries applied for current role'
+      ];
+    }
+
+    return {
+      metric: metricObj,
+      grain: breakdownObj,
+      breakdown: breakdownObj,
+      domain: domainObj,
+      projectScope: projectsObj,
+      projects: projectsObj,
+      time: timeObj,
+      currency: currencyObj.label,
+      currencyObj: currencyObj,
+      assumptions: assumptionsList,
+      // Flat compatibility properties
+      periodLabel: timeObj.label,
+      dateRange: timeObj.dateRange,
+      calendarBasis: timeObj.calendarBasis,
+      source: {
+        domain: domainObj.source,
+        time: timeObj.source
+      }
+    };
+  }
+
+  function buildUnsupportedCard(result, resolvedScope, queryIntent, ov, reason, supportedHint = {}) {
+    const activeDom = (resolvedScope && resolvedScope.domain) || result.domain || 'Finance';
+    const appliedScope = buildAppliedInterpretation(result, resolvedScope, queryIntent, ov);
+    result.appliedScope = appliedScope;
+    result.interpretation = {
+      'Metric': appliedScope.metric ? appliedScope.metric.label : 'Operational metric',
+      'Breakdown': appliedScope.breakdown ? appliedScope.breakdown.label : 'Standard aggregation',
+      'Domain': (typeof appliedScope.domain === 'object' && appliedScope.domain !== null) ? appliedScope.domain.label : appliedScope.domain,
+      'Period': (appliedScope.time && appliedScope.time.dateRange) ? `${appliedScope.time.label} (${appliedScope.time.dateRange})` : (appliedScope.periodLabel || 'No time restriction')
+    };
+
+    result.answer = `Combination Not Supported in Mock Ledger: ${reason}`;
+    result.plainEnglishExplanation = `The prototype database contains verified mock transactional fixtures for specific real estate operational scenarios. This combination is not currently available in the synthetic demo dataset.`;
+    if (result.answerConcise) {
+      result.answerConcise = `Combination not supported in mock ledger: ${reason}`;
+    }
+
+    const metricLabel = (appliedScope.metric && appliedScope.metric.label) || 'Selected metric';
+    const breakdownLabel = (appliedScope.breakdown && appliedScope.breakdown.label) || 'Selected breakdown';
+    const projectLabel = (appliedScope.projectScope && appliedScope.projectScope.label) || 'Selected project';
+    const periodLabel = (appliedScope.time && appliedScope.time.label) || appliedScope.periodLabel || 'Selected period';
+
+    result.table = {
+      title: `Requested Interpretation Parameters (${activeDom})`,
+      headers: ['Parameter', 'Applied Selection', 'Supported in Demo'],
+      columns: ['param', 'applied', 'supported'],
+      types: ['string', 'string', 'string'],
+      rows: [
+        { param: 'Metric', applied: metricLabel, supported: supportedHint.metric || 'Scenario-specific KPIs' },
+        { param: 'Breakdown', applied: breakdownLabel, supported: supportedHint.breakdown || 'Standard aggregations' },
+        { param: 'Project Scope', applied: projectLabel, supported: supportedHint.project || 'All active projects' },
+        { param: 'Time Period', applied: periodLabel, supported: supportedHint.period || 'Q3 2026, Q2 2026, Calendar Year 2026, All-time' }
+      ]
+    };
+    result.chart = null;
+    result.sql = `-- Combination not supported in synthetic mock database\n-- Reason: ${reason}\n-- Please choose a supported combination from Edit Interpretation`;
+    result.followUps = [
+      'Reset to standard interpretation',
+      'Switch project to All active projects',
+      'Switch to This calendar quarter (Q3 2026)'
+    ];
+    return result;
+  }
+
+  function applyScopeToMockResult(baseResult, resolvedScope, queryText = '', interpretationOverride = null) {
     if (!baseResult) return baseResult;
     // Deep clone so QUERY_RESPONSES is NEVER mutated
     const result = JSON.parse(JSON.stringify(baseResult));
+    const ov = interpretationOverride || null;
 
-    // Snapshot applied scope
-    result.appliedScope = {
-      domain: resolvedScope.domain || 'All Domains',
-      periodLabel: resolvedScope.periodLabel || 'No time restriction',
-      dateRange: (resolvedScope.start && resolvedScope.end) ? formatDateRange(resolvedScope.start, resolvedScope.end) : null,
-      calendarBasis: resolvedScope.calendarBasis || 'Calendar',
-      source: {
-        domain: resolvedScope.source ? resolvedScope.source.domain : 'Inferred from question',
-        time: resolvedScope.source ? resolvedScope.source.time : 'No time restriction'
+    // Apply any explicit override to resolvedScope domain/time
+    if (ov) {
+      if (ov.domain) {
+        resolvedScope.domain = ov.domain;
+        if (resolvedScope.source) resolvedScope.source.domain = 'Edited by user';
       }
-    };
+      if (ov.period) {
+        if (resolvedScope.source) resolvedScope.source.time = 'Edited by user';
+        if (ov.period === 'custom' && ov.startDate && ov.endDate) {
+          resolvedScope.start = ov.startDate;
+          resolvedScope.end = ov.endDate;
+          resolvedScope.periodLabel = `Custom range (${formatDateRange(ov.startDate, ov.endDate)})`;
+        } else if (ov.period === 'auto') {
+          resolvedScope.start = null;
+          resolvedScope.end = null;
+          resolvedScope.periodLabel = 'No time restriction';
+        } else {
+          const pr = resolvePresetDateRange(ov.period, DEMO_CONTEXT);
+          resolvedScope.start = pr.start;
+          resolvedScope.end = pr.end;
+          resolvedScope.periodLabel = pr.label;
+        }
+      }
+    }
 
+    const queryIntent = parseQuestionIntent(queryText, DEMO_CONTEXT);
     const lowerQuery = (queryText || '').toLowerCase();
     const periodStr = resolvedScope.periodLabel || '';
 
@@ -2203,13 +3153,120 @@ GROUP BY p.asset_sub_type;`,
     const activeDom = isSpecificDomain ? resolvedScope.domain : (result.domain && result.domain !== 'All Domains' && result.domain !== 'Projects' ? result.domain : 'All Domains');
     result.domain = activeDom;
 
+    const effectiveMetricKey = ov && ov.metric ? ov.metric : queryIntent.metric.key;
+
+    const scenarioKey = detectCapabilityScenario(baseResult, queryText);
+
+    // Clarification payloads are matched to a concrete fixture while
+    // queryText remains the user's original ambiguous question. Preserve the
+    // breakdown selected by that fixture instead of falling back to by_project.
+    if (scenarioKey === 'property_occupancy' && !ov) {
+      const fixtureTitle = ((baseResult.table && baseResult.table.title) || '').toLowerCase();
+      if (fixtureTitle.includes('asset class')) {
+        queryIntent.breakdown = {
+          key: 'by_asset_class',
+          label: 'By property asset class (Office vs Retail)',
+          sort: 'DESC',
+          source: 'Confirmed after clarification'
+        };
+      } else if (fixtureTitle.includes('by region')) {
+        queryIntent.breakdown = {
+          key: 'by_region',
+          label: 'By geographic zone (North, Central, South)',
+          sort: 'DESC',
+          source: 'Confirmed after clarification'
+        };
+      } else if (fixtureTitle.includes('portfolio overview')) {
+        queryIntent.breakdown = {
+          key: 'portfolio_total',
+          label: 'Portfolio total',
+          sort: 'DESC',
+          source: 'Confirmed after clarification'
+        };
+      }
+    }
+
+    function finalizeResult(res) {
+      res.appliedScope = buildAppliedInterpretation(res, resolvedScope, queryIntent, ov);
+      res.interpretation = {
+        'Metric': res.appliedScope.metric ? res.appliedScope.metric.label : 'Operational metric',
+        'Breakdown': res.appliedScope.breakdown ? res.appliedScope.breakdown.label : 'Standard aggregation',
+        'Domain': (typeof res.appliedScope.domain === 'object' && res.appliedScope.domain !== null) ? res.appliedScope.domain.label : res.appliedScope.domain,
+        'Period': (res.appliedScope.time && res.appliedScope.time.dateRange) ? `${res.appliedScope.time.label} (${res.appliedScope.time.dateRange})` : (res.appliedScope.periodLabel || 'No time restriction')
+      };
+      return res;
+    }
+
     // -------------------------------------------------------------
-    // Case 0: Domain Conflict Resolution
-    // If user asked about receivables but confirmed domain = Sales
+    // Specialized fixtures must be handled before broad domain routes.
+    // These scenarios intentionally expose only the scope combinations
+    // represented by their static demo data.
     // -------------------------------------------------------------
-    if (activeDom === 'Sales' && (lowerQuery.includes('receivable') || (result.table && result.table.title && result.table.title.includes('Receivables')))) {
+    if (scenarioKey === 'contracts_expiring') {
+      const targetProjectKey = ov ? (ov.projectScope || ov.projects) : 'all';
+      const effectiveBreakdownKey = ov && ov.breakdown ? ov.breakdown : 'by_vendor';
+      const effectivePeriodKey = ov && ov.period ? ov.period : 'auto';
+      if (activeDom !== 'Contracts' || effectiveMetricKey !== 'contract_count' || effectiveBreakdownKey !== 'by_vendor' || (targetProjectKey && targetProjectKey !== 'all') || effectivePeriodKey !== 'auto') {
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          'The supplier contract renewal fixture only models agreements expiring within the next 30 days across all suppliers.',
+          { metric: 'Supplier contracts expiring within 30 days', breakdown: 'By vendor and expiry date', project: 'All supplier agreements', period: 'Next 30 days in demo data' }
+        );
+      }
+      resolvedScope.periodLabel = 'Next 30 days in demo data';
+      if (resolvedScope.source) resolvedScope.source.time = 'Confirmed after clarification';
+      return finalizeResult(result);
+    }
+
+    if (scenarioKey === 'construction_damages') {
+      const targetProjectKey = ov ? (ov.projectScope || ov.projects) : ((queryIntent.projects && queryIntent.projects.values) ? queryIntent.projects.values[0] : 'PRJ-PVH-01');
+      const effectiveBreakdownKey = ov && ov.breakdown ? ov.breakdown : 'by_project';
+      const effectivePeriodKey = ov && ov.period ? ov.period : 'auto';
+      if (activeDom !== 'Construction' || effectiveMetricKey !== 'contract_value' || effectiveBreakdownKey !== 'by_project' || targetProjectKey !== 'PRJ-PVH-01' || effectivePeriodKey !== 'auto') {
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          'The liquidated damages fixture only models the active Parkview Heights EPC contract.',
+          { metric: 'Contractual liquidated damages clause ($M)', breakdown: 'By construction project', project: 'Parkview Heights Residential (PRJ-PVH-01)', period: 'Active EPC contract' }
+        );
+      }
+      resolvedScope.periodLabel = 'Active EPC contract';
+      if (resolvedScope.source) resolvedScope.source.time = 'Demo scenario default';
+      return finalizeResult(result);
+    }
+
+    if (scenarioKey === 'procurement_pending_pos') {
+      const targetProjectKey = ov ? (ov.projectScope || ov.projects) : 'all';
+      const effectiveBreakdownKey = ov && ov.breakdown ? ov.breakdown : 'by_project';
+      const effectivePeriodKey = ov && ov.period ? ov.period : 'auto';
+      if (activeDom !== 'Procurement' || effectiveMetricKey !== 'allocated_value' || effectiveBreakdownKey !== 'by_project' || (targetProjectKey && targetProjectKey !== 'all') || effectivePeriodKey !== 'auto') {
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          'The pending purchase order fixture only models the current executive approval queue across all projects.',
+          { metric: 'Pending PO value / Allocation ($M)', breakdown: 'By development project', project: 'All pending purchase orders', period: 'Pending executive sign-off' }
+        );
+      }
+      resolvedScope.periodLabel = 'Pending executive sign-off';
+      if (resolvedScope.source) resolvedScope.source.time = 'Demo scenario default';
+      return finalizeResult(result);
+    }
+
+    // -------------------------------------------------------------
+    // Case 0: Domain Conflict Resolution & Sales Domain
+    // If user asked about receivables but confirmed domain = Sales, or queries Sales domain
+    // -------------------------------------------------------------
+    if (activeDom === 'Sales') {
       result.domain = 'Sales';
-      result.answer = 'In the **Sales** domain, receivables are monitored across executed buyer contracts. Pending commercial buyer installments total **$8.45M** at **Skyline Residences Tower B**, led by **Horizon Global Investment Trust ($3.40M)** for commercial penthouse milestones.';
+      if (effectiveMetricKey && effectiveMetricKey !== 'total_receivables' && effectiveMetricKey !== 'buyer_receivables' && effectiveMetricKey !== 'contract_value') {
+        const opt = getEditableInterpretationOptions(result, queryText);
+        const metricLabel = (opt.metrics.find(m => m.key === effectiveMetricKey) || {}).label || effectiveMetricKey;
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          `The requested metric "${metricLabel}" is not available in Sales domain in this synthetic dataset.`,
+          { metric: 'Outstanding buyer receivables ($M), Buyer installment receivables ($M)', breakdown: 'By individual purchaser / buyer contract' }
+        );
+      }
+      if (lowerQuery.includes('receivable') || (result.table && result.table.title && result.table.title.includes('Receivables'))) {
+        result.answer = 'In the **Sales** domain, receivables are monitored across executed buyer contracts. Pending commercial buyer installments total **$8.45M** at **Skyline Residences Tower B**, led by **Horizon Global Investment Trust ($3.40M)** for commercial penthouse milestones.';
       result.table = {
         title: `Sales Domain: Buyer Contract Receivables (${resolvedScope.periodLabel || 'Active Contracts'})`,
         headers: ['Contract ID', 'Purchaser Name', 'Unit Allocation', 'Milestone Stage', 'Amount Due ($M)', 'Days Overdue'],
@@ -2237,18 +3294,303 @@ GROUP BY p.asset_sub_type;`,
         { name: 'finance_receivables_ledger', records: '14,208 rows', description: 'Installment ledger.' }
       ];
       result.sql = `-- Aria NL-to-SQL Engine v2.4 (Domain: Sales, Scope: ${resolvedScope.periodLabel})\nSELECT sc.contract_id, sc.purchaser_name, sc.unit_allocation, r.milestone_name, ROUND(r.amount_due/1000000.0, 2) AS amount_due_mil, r.days_past_due\nFROM enterprise_dw.sales_contracts sc\nJOIN enterprise_dw.finance_receivables_ledger r ON sc.contract_id = r.contract_id\nWHERE sc.project_code = 'PRJ-SK-02' AND r.payment_status = 'OUTSTANDING';`;
-      if (result.interpretation) {
-        result.interpretation['Domain'] = 'Sales (Buyer Contracts & Unit Installments)';
-        result.interpretation['Period'] = resolvedScope.periodLabel || 'Active Contracts';
-      }
-      return result;
+      return finalizeResult(result);
     }
+  }
 
     // -------------------------------------------------------------
     // Case 1: RECEIVABLES QUERIES (Finance Domain)
     // -------------------------------------------------------------
-    if (lowerQuery.includes('receivable') || (result.table && result.table.title && result.table.title.includes('Receivables'))) {
+    if (scenarioKey === 'finance_receivables' || lowerQuery.includes('receivable') || (result.table && result.table.title && result.table.title.includes('Receivables')) || activeDom === 'Finance') {
       result.domain = 'Finance';
+
+      // Guard: metric must be total_receivables or overdue_60d
+      if (effectiveMetricKey !== 'total_receivables' && effectiveMetricKey !== 'overdue_60d') {
+        const opt = getEditableInterpretationOptions(result, queryText);
+        const metricLabel = (opt.metrics.find(m => m.key === effectiveMetricKey) || {}).label || effectiveMetricKey;
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          `The requested metric "${metricLabel}" is not available for receivables accounting in this synthetic dataset.`,
+          { metric: 'Outstanding receivables ($M), Overdue receivables >60 days ($M)', breakdown: 'By project, highest balance first, By aging risk bucket, By individual purchaser / buyer contract' }
+        );
+      }
+
+      const targetProjectKey = ov ? (ov.projectScope || ov.projects) : (queryIntent.projects && queryIntent.projects.values && queryIntent.projects.values[0] !== 'all' ? queryIntent.projects.values[0] : null);
+      const effectiveBreakdownKey = ov && ov.breakdown ? ov.breakdown : (queryIntent.breakdown ? queryIntent.breakdown.key : 'by_project');
+
+      const projectFixtures = {
+        'PRJ-SK-02': {
+          code: 'PRJ-SK-02',
+          name: 'Skyline Residences Tower B',
+          total: 8.45,
+          overdue: 5.78,
+          overduePct: '68.4%',
+          buyers: [
+            { id: 'CTR-SK-0104', buyer: 'Horizon Global Investment Trust', units: 'PH 01-04 & L42-45', total: 3.40, overdue: 3.40, status: 'High Risk' },
+            { id: 'CTR-SK-0089', buyer: 'Pacific Prime Real Estate SPV', units: 'Tower B - Floors 28-30', total: 2.38, overdue: 1.50, status: 'Moderate' },
+            { id: 'CTR-SK-0112', buyer: 'Vanguard Capital Partners', units: 'Retail Podiums 1-3', total: 1.62, overdue: 0.88, status: 'Moderate' },
+            { id: 'CTR-SK-0074', buyer: 'Private Wealth Syndicate #12', units: 'Units 1201-1208', total: 1.05, overdue: 0.00, status: 'Normal' }
+          ],
+          chartItems: [
+            { label: 'Horizon Global', value: 3.40, color: '#e05252', highlight: true },
+            { label: 'Pacific Prime', value: 2.38, color: '#f59e0b' },
+            { label: 'Vanguard Cap', value: 1.62, color: '#3b82f6' },
+            { label: 'Private Wealth', value: 1.05, color: '#10b981' }
+          ]
+        },
+        'PRJ-GMB-02': {
+          code: 'PRJ-GMB-02',
+          name: 'Grand Marina Bay Phase 2',
+          total: 6.20,
+          overdue: 2.10,
+          overduePct: '33.9%',
+          buyers: [
+            { id: 'CTR-GMB-0201', buyer: 'Delta Marine Coastal Holdings', units: 'Marina Tower Floors 12-16', total: 2.80, overdue: 1.20, status: 'Moderate' },
+            { id: 'CTR-GMB-0188', buyer: 'Pacific Prime SPV', units: 'Waterfront Villas 01-06', total: 1.95, overdue: 0.90, status: 'Moderate' },
+            { id: 'CTR-GMB-0215', buyer: 'Grand Marina Yacht Club', units: 'Commercial Pier & Club', total: 1.45, overdue: 0.00, status: 'Normal' }
+          ],
+          chartItems: [
+            { label: 'Delta Marine', value: 2.80, color: '#e05252', highlight: true },
+            { label: 'Pacific Prime', value: 1.95, color: '#f59e0b' },
+            { label: 'Grand Marina YC', value: 1.45, color: '#10b981' }
+          ]
+        },
+        'PRJ-HH-04': {
+          code: 'PRJ-HH-04',
+          name: 'Heritage Heights High-Rise',
+          total: 4.80,
+          overdue: 2.45,
+          overduePct: '51.0%',
+          buyers: [
+            { id: 'CTR-HH-0301', buyer: 'Apex Residential Trust', units: 'Levels 20-25', total: 2.45, overdue: 1.80, status: 'High Risk' },
+            { id: 'CTR-HH-0312', buyer: 'Summit Metro Holdings', units: 'Penthouse East & West', total: 1.50, overdue: 0.65, status: 'Moderate' },
+            { id: 'CTR-HH-0288', buyer: 'Metro Urban Living Ltd', units: 'Units 501-510', total: 0.85, overdue: 0.00, status: 'Normal' }
+          ],
+          chartItems: [
+            { label: 'Apex Trust', value: 2.45, color: '#e05252', highlight: true },
+            { label: 'Summit Metro', value: 1.50, color: '#f59e0b' },
+            { label: 'Metro Living', value: 0.85, color: '#10b981' }
+          ]
+        },
+        'PRJ-OCP-01': {
+          code: 'PRJ-OCP-01',
+          name: 'Oasis Central Park Villas',
+          total: 3.90,
+          overdue: 0.90,
+          overduePct: '23.1%',
+          buyers: [
+            { id: 'CTR-OCP-0101', buyer: 'Vanguard Capital Holdings', units: 'Park Villas 1-4', total: 2.10, overdue: 0.90, status: 'Moderate' },
+            { id: 'CTR-OCP-0105', buyer: 'Oasis Luxury Estates', units: 'Park Villas 5-8', total: 1.80, overdue: 0.00, status: 'Normal' }
+          ],
+          chartItems: [
+            { label: 'Vanguard Cap', value: 2.10, color: '#3b82f6', highlight: true },
+            { label: 'Oasis Luxury', value: 1.80, color: '#10b981' }
+          ]
+        },
+        'PRJ-RLH-01': {
+          code: 'PRJ-RLH-01',
+          name: 'Riverside Logistics Hub',
+          total: 2.40,
+          overdue: 0.35,
+          overduePct: '14.6%',
+          buyers: [
+            { id: 'CTR-RLH-0042', buyer: 'Summit Logistics SPV', units: 'Warehouse Bay A-C', total: 1.60, overdue: 0.35, status: 'Normal' },
+            { id: 'CTR-RLH-0045', buyer: 'Global Express Cargo Hub', units: 'Freight Facility 1', total: 0.80, overdue: 0.00, status: 'Normal' }
+          ],
+          chartItems: [
+            { label: 'Summit Log', value: 1.60, color: '#3b82f6', highlight: true },
+            { label: 'Global Express', value: 0.80, color: '#10b981' }
+          ]
+        }
+      };
+
+      // 1. SPECIFIC PROJECT DRILLDOWN (Case 2 & Case 3)
+      if (targetProjectKey && targetProjectKey !== 'all') {
+        // Case 4: Aging bucket is portfolio-only
+        if (effectiveBreakdownKey === 'by_aging' || effectiveBreakdownKey === 'by_aging_risk_bucket' || effectiveBreakdownKey === 'by_risk_bucket') {
+          const pName = (projectFixtures[targetProjectKey] && projectFixtures[targetProjectKey].name) || targetProjectKey;
+          return buildUnsupportedCard(
+            result, resolvedScope, queryIntent, ov,
+            `Receivables aging risk bucket aggregation is currently modeled at the enterprise portfolio level (all active projects) in this synthetic dataset. To inspect individual project accounts for ${pName}, please select breakdown "By individual purchaser / buyer contract" or change project scope to "All active projects".`,
+            {
+              metric: 'Outstanding receivables ($M), Overdue receivables >60 days ($M)',
+              breakdown: 'By individual purchaser / buyer contract, By project',
+              project: 'All active projects (required for aging risk bucket)',
+              period: 'Q3 2026, Q2 2026, Calendar Year 2026, All-time'
+            }
+          );
+        }
+
+        if (effectiveBreakdownKey !== 'by_buyer') {
+          return buildUnsupportedCard(
+            result, resolvedScope, queryIntent, ov,
+            'A single-project receivables drilldown is modeled by individual purchaser or buyer contract in this synthetic dataset.',
+            { breakdown: 'By individual purchaser / buyer contract', project: 'Select one modeled project', period: 'Q3 2026, Q2 2026, Calendar Year 2026, All-time' }
+          );
+        }
+
+        const pFix = projectFixtures[targetProjectKey];
+        if (pFix) {
+          if (effectiveMetricKey === 'overdue_60d') {
+            // Case 3: Overdue >60 days + specific project
+            const overdueBuyers = pFix.buyers.filter(b => b.overdue > 0);
+            result.answer = `For **${pFix.name} (${pFix.code})** in **${resolvedScope.periodLabel}**, total overdue receivables (>60 days) stand at **$${pFix.overdue.toFixed(2)}M**, representing **${pFix.overduePct}** of the project's $${pFix.total.toFixed(2)}M outstanding balance. Overdue accounts are concentrated in ${overdueBuyers.map(b => `**${b.buyer} ($${b.overdue.toFixed(2)}M)**`).join(' and ')}.`;
+            if (result.answerConcise) {
+              result.answerConcise = `**${pFix.name} (${pFix.code})** has $${pFix.overdue.toFixed(2)}M overdue (>60d) out of $${pFix.total.toFixed(2)}M total receivables in ${resolvedScope.periodLabel}.`;
+            }
+            result.table = {
+              title: `${pFix.name}: Overdue Receivables >60 Days by Buyer (${resolvedScope.periodLabel})`,
+              headers: ['Contract ID', 'Purchaser Name', 'Unit Allocation', 'Total Due ($M)', 'Overdue > 60d ($M)', 'Status'],
+              columns: ['id', 'buyer', 'units', 'total', 'overdue', 'status'],
+              types: ['string', 'string', 'string', 'number', 'number', 'badge'],
+              rows: overdueBuyers.length > 0 ? overdueBuyers : pFix.buyers
+            };
+            result.chart = {
+              title: `${pFix.name} Overdue Receivables by Buyer ($ Millions)`,
+              unit: '$M',
+              items: overdueBuyers.map((b, idx) => ({
+                label: b.buyer.split(' ')[0] + ' ' + (b.buyer.split(' ')[1] || ''),
+                value: b.overdue,
+                color: idx === 0 ? '#e05252' : '#f59e0b',
+                highlight: idx === 0
+              }))
+            };
+            result.sql = `-- Aria NL-to-SQL Engine v2.4 (Project: ${pFix.code}, Metric: Overdue Receivables >60 Days, Scope: ${resolvedScope.periodLabel})\nSELECT sc.contract_id, sc.purchaser_name, sc.unit_allocation, ROUND(r.amount_due/1000000.0, 2) AS total_due_mil, ROUND(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END / 1000000.0, 2) AS overdue_over_60d_mil, r.days_past_due\nFROM enterprise_dw.sales_contracts sc\nJOIN enterprise_dw.finance_receivables_ledger r ON sc.contract_id = r.contract_id\nWHERE sc.project_code = '${pFix.code}'\n  AND r.days_past_due > 60\n  AND r.payment_status = 'OUTSTANDING'\nORDER BY overdue_over_60d_mil DESC;`;
+            return finalizeResult(result);
+          } else {
+            // Case 2: Total receivables + specific project
+            result.answer = `For **${pFix.name} (${pFix.code})** in **${resolvedScope.periodLabel}**, outstanding receivables total **$${pFix.total.toFixed(2)}M**, with **$${pFix.overdue.toFixed(2)}M (${pFix.overduePct})** overdue past 60 days across active buyer accounts.`;
+            result.table = {
+              title: `${pFix.name}: Receivables by Buyer (${resolvedScope.periodLabel})`,
+              headers: ['Contract ID', 'Purchaser Name', 'Unit Allocation', 'Total Due ($M)', 'Overdue > 60d ($M)', 'Status'],
+              columns: ['id', 'buyer', 'units', 'total', 'overdue', 'status'],
+              types: ['string', 'string', 'string', 'number', 'number', 'badge'],
+              rows: pFix.buyers
+            };
+            result.chart = {
+              title: `${pFix.name} Receivables by Buyer ($ Millions)`,
+              unit: '$M',
+              items: pFix.chartItems
+            };
+            result.sql = `-- Aria NL-to-SQL Engine v2.4 (Project: ${pFix.code}, Scope: ${resolvedScope.periodLabel})\nSELECT sc.contract_id, sc.purchaser_name, sc.unit_allocation, ROUND(r.amount_due/1000000.0, 2) AS amount_due_mil, r.days_past_due\nFROM enterprise_dw.sales_contracts sc\nJOIN enterprise_dw.finance_receivables_ledger r ON sc.contract_id = r.contract_id\nWHERE sc.project_code = '${pFix.code}' AND r.payment_status = 'OUTSTANDING';`;
+            return finalizeResult(result);
+          }
+        } else {
+          return buildUnsupportedCard(
+            result, resolvedScope, queryIntent, ov,
+            `Individual buyer accounts for project "${targetProjectKey}" are not modeled in this synthetic dataset.`,
+            { project: 'Skyline Residences (PRJ-SK-02), Grand Marina Bay Phase 2 (PRJ-GMB-02), Heritage Heights (PRJ-HH-04), Oasis Central Park (PRJ-OCP-01), Riverside Logistics Hub (PRJ-RLH-01)' }
+          );
+        }
+      }
+
+      // 2. PORTFOLIO LEVEL (Case 1: targetProjectKey === 'all')
+      if (effectiveBreakdownKey === 'by_buyer') {
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          'Buyer-level receivables are available only after selecting an individual project in this synthetic dataset.',
+          { breakdown: 'By project, highest balance first, or By aging risk bucket', project: 'Select a specific project for buyer details' }
+        );
+      }
+
+      // Check if breakdown is BY AGING RISK BUCKET
+      if (effectiveBreakdownKey === 'by_aging' || effectiveBreakdownKey === 'by_aging_risk_bucket' || effectiveBreakdownKey === 'by_risk_bucket') {
+        const periodTitle = isQ2 ? 'Q2 2026' : (isYear ? 'Calendar Year 2026' : (isAllTime ? 'All Time' : 'Q3 2026'));
+        result.answer = `Across active developments in **${periodTitle}**, outstanding receivables total **$25.80M**. Aging risk is concentrated in the **High Risk (>60 days overdue)** bucket at **$11.58M (44.9%)**, led by Skyline Residences and Heritage Heights. The **Moderate Risk (31–60 days)** bucket accounts for **$8.32M (32.2%)**, while **$5.90M (22.9%)** remains within the standard 30-day billing cycle.`;
+        if (result.answerConcise) {
+          result.answerConcise = `Receivables aging in ${periodTitle}: High Risk (>60d) is $11.58M (44.9%), Moderate Risk (31-60d) is $8.32M (32.2%), and Normal (0-30d) is $5.90M (22.9%).`;
+        }
+        result.table = {
+          title: `Receivables Aging Risk Bucket Breakdown (${periodTitle})`,
+          headers: ['Aging Risk Category', 'Days Overdue Window', 'Projects Affected', 'Total Balance ($M)', 'Share of Ledger (%)', 'Recommended Action'],
+          columns: ['category', 'window', 'projects', 'balance', 'share', 'action'],
+          types: ['badge', 'string', 'number', 'number', 'number', 'string'],
+          rows: [
+            { category: 'High Risk', window: '> 60 days', projects: 2, balance: 11.58, share: 44.9, action: 'Immediate CFO escalation & legal notice' },
+            { category: 'Moderate Risk', window: '31–60 days', projects: 2, balance: 8.32, share: 32.2, action: 'Finance warning letter & contractor review' },
+            { category: 'Normal / Current', window: '0–30 days', projects: 1, balance: 5.90, share: 22.9, action: 'Standard invoice collection cycle' }
+          ]
+        };
+        result.chart = {
+          title: `Receivables by Aging Risk Bucket ($ Millions) - ${periodTitle}`,
+          unit: '$M',
+          items: [
+            { label: 'High Risk (>60d)', value: 11.58, color: '#e05252', highlight: true },
+            { label: 'Moderate (31-60d)', value: 8.32, color: '#f59e0b' },
+            { label: 'Normal (0-30d)', value: 5.90, color: '#10b981' }
+          ]
+        };
+        const dateCondition = isQ2 ? "r.fiscal_quarter = '2026-Q2'" : (isYear ? "EXTRACT(YEAR FROM r.due_date) = 2026" : (isAllTime ? "1=1" : "r.fiscal_quarter = '2026-Q3'"));
+        result.sql = `-- Aria NL-to-SQL Engine v2.4 (Breakdown: Aging Risk Bucket, Scope: ${periodTitle})\nSELECT \n  CASE \n    WHEN r.days_past_due > 60 THEN 'High Risk (> 60 days)'\n    WHEN r.days_past_due BETWEEN 31 AND 60 THEN 'Moderate Risk (31–60 days)'\n    ELSE 'Normal / Current (0–30 days)'\n  END AS aging_risk_bucket,\n  COUNT(DISTINCT p.project_id) AS projects_affected,\n  ROUND(SUM(r.amount_due) / 1000000.0, 2) AS total_balance_mil,\n  ROUND(SUM(r.amount_due) * 100.0 / SUM(SUM(r.amount_due)) OVER (), 1) AS share_of_ledger_pct\nFROM enterprise_dw.finance_receivables_ledger r\nINNER JOIN enterprise_dw.sales_contracts sc ON r.contract_id = sc.contract_id\nINNER JOIN enterprise_dw.dim_projects p ON sc.project_id = p.project_id\nWHERE ${dateCondition}\n  AND r.payment_status = 'OUTSTANDING'\nGROUP BY \n  CASE \n    WHEN r.days_past_due > 60 THEN 'High Risk (> 60 days)'\n    WHEN r.days_past_due BETWEEN 31 AND 60 THEN 'Moderate Risk (31–60 days)'\n    ELSE 'Normal / Current (0–30 days)'\n  END\nORDER BY total_balance_mil DESC;`;
+        return finalizeResult(result);
+      }
+
+      // Check if metric is OVERDUE >60 DAYS
+      if (effectiveMetricKey === 'overdue_60d') {
+        const periodTitle = isQ2 ? 'Q2 2026' : (isYear ? 'Calendar Year 2026' : (isAllTime ? 'All Time' : 'Q3 2026'));
+        if (isQ2) {
+          result.answer = 'In **Q2 2026**, total overdue receivables (>60 days) across active developments stood at **$9.80M**. **Grand Marina Bay Phase 2** held the largest overdue exposure at **$3.80M**, followed by **Heritage Heights High-Rise** with **$2.95M** overdue.';
+          result.table = {
+            title: `Projects Ranked by Overdue Receivables >60 Days (${periodTitle})`,
+            headers: ['Project Name', 'Project Code', 'Lead Contractor', 'Overdue > 60d ($M)', 'Total Receivables ($M)', 'Risk Status'],
+            columns: ['name', 'code', 'contractor', 'overdue', 'total', 'status'],
+            types: ['string', 'string', 'string', 'number', 'number', 'badge'],
+            rows: [
+              { name: 'Grand Marina Bay Phase 2', code: 'PRJ-GMB-02', contractor: 'Delta Marine Infra', overdue: 3.80, total: 7.10, status: 'High Risk' },
+              { name: 'Heritage Heights High-Rise', code: 'PRJ-HH-04', contractor: 'Apex Build Corp', overdue: 2.95, total: 5.40, status: 'High Risk' },
+              { name: 'Skyline Residences Tower B', code: 'PRJ-SK-02', contractor: 'Apex Build Corp', overdue: 1.80, total: 4.25, status: 'Moderate' },
+              { name: 'Oasis Central Park Villas', code: 'PRJ-OCP-01', contractor: 'Vanguard Civil Engineering', overdue: 0.90, total: 3.10, status: 'Normal' },
+              { name: 'Riverside Logistics Hub', code: 'PRJ-RLH-01', contractor: 'Summit Infrastructure Ltd', overdue: 0.35, total: 2.00, status: 'Normal' }
+            ]
+          };
+          result.chart = {
+            title: `Overdue Receivables (>60 Days) by Project ($ Millions) - ${periodTitle}`,
+            unit: '$M',
+            items: [
+              { label: 'Grand Marina 2', value: 3.80, color: '#e05252', highlight: true },
+              { label: 'Heritage Hgts', value: 2.95, color: '#e05252' },
+              { label: 'Skyline Res. B', value: 1.80, color: '#f59e0b' },
+              { label: 'Oasis Central', value: 0.90, color: '#3b82f6' },
+              { label: 'Riverside Hub', value: 0.35, color: '#10b981' }
+            ]
+          };
+          result.sql = `-- Aria NL-to-SQL Engine v2.4 (Metric: Overdue Receivables >60 Days, Scope: Q2 2026)\nSELECT p.project_code, p.project_name, c.contractor_name,\n       ROUND(SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / 1000000.0, 2) AS overdue_over_60d_mil,\n       ROUND(SUM(r.amount_due) / 1000000.0, 2) AS total_receivables_mil,\n       CASE WHEN SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / SUM(r.amount_due) > 0.5 THEN 'High Risk'\n            WHEN SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / SUM(r.amount_due) > 0.3 THEN 'Moderate'\n            ELSE 'Normal' END AS risk_status\nFROM enterprise_dw.finance_receivables_ledger r\nINNER JOIN enterprise_dw.sales_contracts sc ON r.contract_id = sc.contract_id\nINNER JOIN enterprise_dw.dim_projects p ON sc.project_id = p.project_id\nLEFT JOIN enterprise_dw.dim_contractors c ON p.primary_contractor_id = c.contractor_id\nWHERE r.fiscal_quarter = '2026-Q2'\n  AND r.days_past_due > 60\n  AND r.payment_status = 'OUTSTANDING'\nGROUP BY p.project_code, p.project_name, c.contractor_name\nORDER BY overdue_over_60d_mil DESC\nLIMIT 5;`;
+        } else {
+          // Default Q3 Overdue
+          result.answer = 'In **Q3 2026**, total overdue receivables (>60 days) across active developments stand at **$11.58M**. **Skyline Residences Tower B** holds the highest overdue exposure at **$5.78M** (representing **68.4%** of its outstanding balance), followed by **Heritage Heights High-Rise** with **$2.45M** overdue and **Grand Marina Bay Phase 2** with **$2.10M** overdue.';
+          if (result.answerConcise) {
+            result.answerConcise = '**Skyline Residences Tower B** ($5.78M) and **Heritage Heights** ($2.45M) represent the largest overdue receivables (>60 days) in Q3 2026.';
+          }
+          result.table = {
+            title: `Projects Ranked by Overdue Receivables >60 Days (${periodTitle})`,
+            headers: ['Project Name', 'Project Code', 'Lead Contractor', 'Overdue > 60d ($M)', 'Total Balance ($M)', 'Risk Status'],
+            columns: ['name', 'code', 'contractor', 'overdue', 'total', 'status'],
+            types: ['string', 'string', 'string', 'number', 'number', 'badge'],
+            rows: [
+              { name: 'Skyline Residences Tower B', code: 'PRJ-SK-02', contractor: 'Apex Build Corp', overdue: 5.78, total: 8.45, status: 'High Risk' },
+              { name: 'Heritage Heights High-Rise', code: 'PRJ-HH-04', contractor: 'Apex Build Corp', overdue: 2.45, total: 4.80, status: 'Moderate' },
+              { name: 'Grand Marina Bay Phase 2', code: 'PRJ-GMB-02', contractor: 'Delta Marine Infra', overdue: 2.10, total: 6.20, status: 'Moderate' },
+              { name: 'Oasis Central Park Villas', code: 'PRJ-OCP-01', contractor: 'Vanguard Civil Engineering', overdue: 0.90, total: 3.90, status: 'Normal' },
+              { name: 'Riverside Logistics Hub', code: 'PRJ-RLH-01', contractor: 'Summit Infrastructure Ltd', overdue: 0.35, total: 2.40, status: 'Normal' }
+            ]
+          };
+          result.chart = {
+            title: `Overdue Receivables (>60 Days) by Project ($ Millions) - ${periodTitle}`,
+            unit: '$M',
+            items: [
+              { label: 'Skyline Res. B', value: 5.78, color: '#e05252', highlight: true },
+              { label: 'Heritage Hgts', value: 2.45, color: '#f59e0b' },
+              { label: 'Grand Marina 2', value: 2.10, color: '#f59e0b' },
+              { label: 'Oasis Central', value: 0.90, color: '#3b82f6' },
+              { label: 'Riverside Hub', value: 0.35, color: '#10b981' }
+            ]
+          };
+          result.sql = `-- Aria NL-to-SQL Engine v2.4 (Metric: Overdue Receivables >60 Days, Scope: Q3 2026)\nSELECT p.project_code, p.project_name, c.contractor_name,\n       ROUND(SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / 1000000.0, 2) AS overdue_over_60d_mil,\n       ROUND(SUM(r.amount_due) / 1000000.0, 2) AS total_receivables_mil,\n       CASE WHEN SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / SUM(r.amount_due) > 0.5 THEN 'High Risk'\n            WHEN SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / SUM(r.amount_due) > 0.3 THEN 'Moderate'\n            ELSE 'Normal' END AS risk_status\nFROM enterprise_dw.finance_receivables_ledger r\nINNER JOIN enterprise_dw.sales_contracts sc ON r.contract_id = sc.contract_id\nINNER JOIN enterprise_dw.dim_projects p ON sc.project_id = p.project_id\nLEFT JOIN enterprise_dw.dim_contractors c ON p.primary_contractor_id = c.contractor_id\nWHERE r.fiscal_quarter = '2026-Q3'\n  AND r.days_past_due > 60\n  AND r.payment_status = 'OUTSTANDING'\nGROUP BY p.project_code, p.project_name, c.contractor_name\nORDER BY overdue_over_60d_mil DESC\nLIMIT 5;`;
+        }
+        return finalizeResult(result);
+      }
+
+      // Default: Total Receivables by Project (Case 1)
       if (isQ2) {
         result.answer = 'Across active developments in **Q2 2026**, **Grand Marina Bay Phase 2** held the highest outstanding receivables at **$7.10M**, followed by **Heritage Heights High-Rise** with **$5.40M**. Total overdue receivables (>60 days) were **$9.80M**, which was 18% lower than Q3 balances.';
         if (result.answerConcise) {
@@ -2279,9 +3621,6 @@ GROUP BY p.asset_sub_type;`,
           ]
         };
         result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Q2 2026)\nSELECT p.project_code, p.project_name, c.contractor_name,\n       ROUND(SUM(r.amount_due) / 1000000.0, 2) AS total_receivables_mil,\n       ROUND(SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / 1000000.0, 2) AS overdue_over_60d_mil,\n       CASE WHEN SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / SUM(r.amount_due) > 0.5 THEN 'High Risk'\n            WHEN SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / SUM(r.amount_due) > 0.3 THEN 'Moderate'\n            ELSE 'Normal' END AS risk_status\nFROM enterprise_dw.finance_receivables_ledger r\nINNER JOIN enterprise_dw.sales_contracts sc ON r.contract_id = sc.contract_id\nINNER JOIN enterprise_dw.dim_projects p ON sc.project_id = p.project_id\nLEFT JOIN enterprise_dw.dim_contractors c ON p.primary_contractor_id = c.contractor_id\nWHERE r.fiscal_quarter = '2026-Q2'\n  AND r.payment_status = 'OUTSTANDING'\nGROUP BY p.project_code, p.project_name, c.contractor_name\nORDER BY total_receivables_mil DESC\nLIMIT 5;`;
-        if (result.interpretation) {
-          result.interpretation['Period'] = 'Q2 2026 (01/04/2026–30/06/2026)';
-        }
       } else if (isYear) {
         result.answer = 'Across full calendar year **2026**, cumulative project receivables reached **$34.65M**, led by **Skyline Residences Tower B** ($12.70M) and **Grand Marina Bay Phase 2** ($10.50M).';
         result.table = {
@@ -2309,9 +3648,6 @@ GROUP BY p.asset_sub_type;`,
           ]
         };
         result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Calendar Year 2026)\nSELECT p.project_code, p.project_name, c.contractor_name,\n       ROUND(SUM(r.amount_due) / 1000000.0, 2) AS total_receivables_mil\nFROM enterprise_dw.finance_receivables_ledger r\nINNER JOIN enterprise_dw.sales_contracts sc ON r.contract_id = sc.contract_id\nINNER JOIN enterprise_dw.dim_projects p ON sc.project_id = p.project_id\nLEFT JOIN enterprise_dw.dim_contractors c ON p.primary_contractor_id = c.contractor_id\nWHERE EXTRACT(YEAR FROM r.due_date) = 2026\n  AND r.payment_status = 'OUTSTANDING'\nGROUP BY p.project_code, p.project_name, c.contractor_name\nORDER BY total_receivables_mil DESC\nLIMIT 5;`;
-        if (result.interpretation) {
-          result.interpretation['Period'] = 'Calendar year 2026 (01/01/2026–31/12/2026)';
-        }
       } else if (isAllTime) {
         result.answer = 'Across all enterprise developments without date restriction, total cumulative outstanding receivables stand at **$58.20M** across completed and active project phases.';
         result.table = {
@@ -2339,9 +3675,6 @@ GROUP BY p.asset_sub_type;`,
           ]
         };
         result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: All-Time Historical)\nSELECT p.project_code, p.project_name, c.contractor_name,\n       ROUND(SUM(r.amount_due) / 1000000.0, 2) AS total_receivables_mil\nFROM enterprise_dw.finance_receivables_ledger r\nINNER JOIN enterprise_dw.sales_contracts sc ON r.contract_id = sc.contract_id\nINNER JOIN enterprise_dw.dim_projects p ON sc.project_id = p.project_id\nLEFT JOIN enterprise_dw.dim_contractors c ON p.primary_contractor_id = c.contractor_id\nWHERE r.payment_status = 'OUTSTANDING'\nGROUP BY p.project_code, p.project_name, c.contractor_name\nORDER BY total_receivables_mil DESC\nLIMIT 5;`;
-        if (result.interpretation) {
-          result.interpretation['Period'] = 'No time restriction (All-time historical)';
-        }
       } else if (isCustom) {
         // Strict boundary: custom range outside verified boundaries returns clean no-mock-data state (P0 #3)
         result.answer = `No mock transactional records found in synthetic ledger for the applied custom date range (**${formatDateRange(resolvedScope.start, resolvedScope.end)}**).`;
@@ -2360,25 +3693,129 @@ GROUP BY p.asset_sub_type;`,
           'Switch to Previous calendar quarter (01/04/2026–30/06/2026)',
           'Switch to All time'
         ];
-        if (result.interpretation) {
-          result.interpretation['Period'] = `${formatDateRange(resolvedScope.start, resolvedScope.end)} (No mock data in range)`;
-        }
       } else {
         // Default Q3
         result.table.title = 'Top 5 Projects by Outstanding Receivables this Quarter (2026-Q3)';
         result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Q3 2026)\nSELECT p.project_code, p.project_name, c.contractor_name,\n       ROUND(SUM(r.amount_due) / 1000000.0, 2) AS total_receivables_mil,\n       ROUND(SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / 1000000.0, 2) AS overdue_over_60d_mil,\n       CASE WHEN SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / SUM(r.amount_due) > 0.5 THEN 'High Risk'\n            WHEN SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / SUM(r.amount_due) > 0.3 THEN 'Moderate'\n            ELSE 'Normal' END AS risk_status\nFROM enterprise_dw.finance_receivables_ledger r\nINNER JOIN enterprise_dw.sales_contracts sc ON r.contract_id = sc.contract_id\nINNER JOIN enterprise_dw.dim_projects p ON sc.project_id = p.project_id\nLEFT JOIN enterprise_dw.dim_contractors c ON p.primary_contractor_id = c.contractor_id\nWHERE r.fiscal_quarter = '2026-Q3'\n  AND r.payment_status = 'OUTSTANDING'\nGROUP BY p.project_code, p.project_name, c.contractor_name\nORDER BY total_receivables_mil DESC\nLIMIT 5;`;
-        if (result.interpretation) {
-          result.interpretation['Period'] = 'Q3 2026 (01/07/2026–30/09/2026)';
-        }
       }
-      return result;
+      return finalizeResult(result);
+    }
+
+    // -------------------------------------------------------------
+    // Case 2: CONSTRUCTION PROGRESS (Construction Domain) (Case 5)
+    // -------------------------------------------------------------
+    if (scenarioKey === 'construction_progress' || lowerQuery.includes('construction progress') || (result.table && result.table.title && result.table.title.includes('Construction Progress'))) {
+      result.domain = 'Construction';
+
+      const targetProjectKey = ov ? (ov.projectScope || ov.projects) : null;
+      const effectiveBreakdownKey = ov && ov.breakdown ? ov.breakdown : (queryIntent.breakdown ? queryIntent.breakdown.key : 'by_project');
+
+      if (effectiveMetricKey !== 'construction_progress') {
+        const opt = getEditableInterpretationOptions(result, queryText);
+        const metricLabel = (opt.metrics.find(m => m.key === effectiveMetricKey) || {}).label || effectiveMetricKey;
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          `The active residential construction progress scenario only models milestone completion progress (%). The metric "${metricLabel}" is not modeled in this synthetic dataset.`,
+          { metric: 'Construction milestone progress (%)', breakdown: 'By construction project', project: 'All active residential projects', period: 'Current active construction cycle' }
+        );
+      }
+
+      if (effectiveBreakdownKey && effectiveBreakdownKey !== 'by_project') {
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          'The active residential construction progress scenario only models aggregation by construction project.',
+          { metric: 'Construction milestone progress (%)', breakdown: 'By construction project', project: 'All active residential projects', period: 'Current active construction cycle' }
+        );
+      }
+
+      if (targetProjectKey && targetProjectKey !== 'all') {
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          'The active residential construction progress scenario models portfolio-level construction milestone progress across all active residential developments.',
+          { metric: 'Construction milestone progress (%)', breakdown: 'By construction project', project: 'All active residential projects', period: 'Current active construction cycle' }
+        );
+      }
+
+      if (ov && ov.period && ov.period !== 'auto') {
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          'The construction progress fixture represents the current active construction cycle and does not model historical period changes.',
+          { metric: 'Construction milestone progress (%)', breakdown: 'By construction project', project: 'All active residential projects', period: 'Current active construction cycle' }
+        );
+      }
+
+      resolvedScope.periodLabel = 'Current active construction cycle';
+      if (resolvedScope.source) resolvedScope.source.time = 'Demo scenario default';
+      return finalizeResult(result);
     }
 
     // -------------------------------------------------------------
     // Case 2: PROCUREMENT QUERIES (Procurement Domain) (P0 #1)
     // -------------------------------------------------------------
-    if (lowerQuery.includes('procurement') || (result.table && result.table.title && result.table.title.includes('Procurement'))) {
+    if (lowerQuery.includes('procurement') || (result.table && result.table.title && result.table.title.includes('Procurement')) || activeDom === 'Procurement') {
       result.domain = 'Procurement';
+
+      const targetProjectKey = ov ? (ov.projectScope || ov.projects) : null;
+      const effectiveBreakdownKey = ov && ov.breakdown ? ov.breakdown : (queryIntent.breakdown ? queryIntent.breakdown.key : 'by_vendor');
+      if (effectiveMetricKey && effectiveMetricKey !== 'total_invoiced_spend' && effectiveMetricKey !== 'avg_lead_time' && effectiveMetricKey !== 'allocated_value') {
+        const opt = getEditableInterpretationOptions(result, queryText);
+        const metricLabel = (opt.metrics.find(m => m.key === effectiveMetricKey) || {}).label || effectiveMetricKey;
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          `The requested metric "${metricLabel}" is not available in Procurement domain in this synthetic dataset.`,
+          { metric: 'Total invoiced spend ($M), Average delivery lead time (Days)', breakdown: 'By vendor, highest spend first, By material commodity group' }
+        );
+      }
+      if (targetProjectKey && targetProjectKey !== 'all' && scenarioKey !== 'procurement_pending_pos') {
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          'Raw material procurement expenditures (concrete vs steel) are modeled across enterprise supply contracts, not single project sites.',
+          { project: 'All procurement packages', breakdown: 'By vendor, highest spend first, By material commodity group' }
+        );
+      }
+      if (effectiveBreakdownKey !== 'by_vendor') {
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          'The procurement spend fixture currently models results by vendor; other breakdowns are not available in this synthetic dataset.',
+          { project: 'All procurement packages', breakdown: 'By vendor, highest spend first' }
+        );
+      }
+
+      // Check if metric is AVERAGE LEAD TIME (Days)
+      if (effectiveMetricKey === 'avg_lead_time') {
+        const periodTitle = isQ2 ? 'Q2 2026' : (isYear ? 'Calendar Year 2026' : (isAllTime ? 'All Time' : 'Q3 2026'));
+        result.answer = `For raw material procurement in **${periodTitle}**, **Nippon Steel Direct Corp** exhibited the longest average delivery lead time at **22.0 days**, followed by **ArcelorMittal Rebar Div** at **19.0 days**. By contrast, ready-mix concrete suppliers maintained rapid local delivery turnarounds (2.0–3.0 days).`;
+        if (result.answerConcise) {
+          result.answerConcise = `Average delivery lead times in ${periodTitle}: Structural steel suppliers averaged 19.0–22.0 days, while ready-mix concrete suppliers averaged 2.0–3.0 days.`;
+        }
+        result.table = {
+          title: `Vendor Procurement Ranked by Delivery Lead Time (${periodTitle})`,
+          headers: ['Vendor Name', 'Material Category', 'Avg Lead Time (Days)', 'Total Invoiced ($M)', 'POs Issued', 'Contract Terms'],
+          columns: ['vendor', 'category', 'lead_time', 'amount', 'po_count', 'terms'],
+          types: ['string', 'badge', 'number', 'number', 'number', 'string'],
+          rows: [
+            { vendor: 'Nippon Steel Direct Corp', category: 'Structural Steel', lead_time: 22, amount: 4.10, po_count: 16, terms: 'Net 60' },
+            { vendor: 'ArcelorMittal Rebar Div', category: 'Structural Steel', lead_time: 19, amount: 2.80, po_count: 11, terms: 'Net 45' },
+            { vendor: 'Siam City Cement Co', category: 'Ready-Mix Concrete', lead_time: 3, amount: 3.10, po_count: 22, terms: 'Net 30' },
+            { vendor: 'Holcim Building Solutions Ltd', category: 'Ready-Mix Concrete', lead_time: 2, amount: 5.60, po_count: 34, terms: 'Net 45' },
+            { vendor: 'Pacific Ready-Mix Concrete', category: 'Ready-Mix Concrete', lead_time: 2, amount: 1.40, po_count: 14, terms: 'Net 30' }
+          ]
+        };
+        result.chart = {
+          title: `Average Delivery Lead Time by Vendor (Days) - ${periodTitle}`,
+          unit: 'Days',
+          items: [
+            { label: 'Nippon Steel', value: 22.0, color: '#e05252', highlight: true },
+            { label: 'ArcelorMittal', value: 19.0, color: '#f59e0b' },
+            { label: 'Siam Cement', value: 3.0, color: '#3b82f6' },
+            { label: 'Holcim Solutions', value: 2.0, color: '#3b82f6' },
+            { label: 'Pacific Conc', value: 2.0, color: '#10b981' }
+          ]
+        };
+        result.sql = `-- Aria NL-to-SQL Engine v2.4 (Metric: Delivery Lead Time Days, Scope: ${periodTitle})\nSELECT v.vendor_name, v.commodity_group AS material_category,\n       ROUND(AVG(po.delivery_lead_time_days), 1) AS avg_lead_time_days,\n       ROUND(SUM(inv.invoice_amount) / 1000000.0, 2) AS total_invoiced_mil,\n       COUNT(DISTINCT po.po_id) AS total_pos_issued,\n       v.payment_terms\nFROM enterprise_dw.dim_vendors v\nINNER JOIN enterprise_dw.procurement_purchase_orders po ON v.vendor_id = po.vendor_id\nINNER JOIN enterprise_dw.finance_ap_invoices inv ON po.po_id = inv.po_id\nWHERE v.commodity_group IN ('Ready-Mix Concrete', 'Structural Steel')\nGROUP BY v.vendor_name, v.commodity_group, v.payment_terms\nORDER BY avg_lead_time_days DESC;`;
+        return finalizeResult(result);
+      }
+
       if (isQ2) {
         result.answer = 'In **Q2 2026**, aggregate expenditures across raw material suppliers totaled **$15.40M**. **Ready-mix concrete vendors** represented **$8.90M (57.8%)** across 4 approved vendors, whereas **structural and rebar steel suppliers** absorbed **$6.50M (42.2%)** across 3 vendors. **Holcim Building Solutions** led quarterly disbursements at **$4.80M** for preliminary site works at Heritage Heights.';
         if (result.answerConcise) {
@@ -2409,9 +3846,6 @@ GROUP BY p.asset_sub_type;`,
           ]
         };
         result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Q2 2026)\nSELECT v.vendor_name, v.commodity_group AS material_category, COUNT(DISTINCT po.po_id) AS total_pos_issued, ROUND(SUM(inv.invoice_amount) / 1000000.0, 2) AS total_invoiced_mil, ROUND(AVG(po.delivery_lead_time_days), 1) AS avg_lead_time_days, v.payment_terms\nFROM enterprise_dw.dim_vendors v\nINNER JOIN enterprise_dw.procurement_purchase_orders po ON v.vendor_id = po.vendor_id\nINNER JOIN enterprise_dw.finance_ap_invoices inv ON po.po_id = inv.po_id\nWHERE v.commodity_group IN ('Ready-Mix Concrete', 'Structural Steel')\n  AND inv.invoice_date BETWEEN '2026-04-01' AND '2026-06-30'\nGROUP BY v.vendor_name, v.commodity_group, v.payment_terms\nORDER BY total_invoiced_mil DESC;`;
-        if (result.interpretation) {
-          result.interpretation['Period'] = 'Q2 2026 (01/04/2026–30/06/2026)';
-        }
       } else if (isYear) {
         result.answer = 'Across full calendar year **2026**, cumulative procurement expenditures for raw materials reached **$62.80M**, with concrete vendors accounting for **$37.10M** and structural steel accounting for **$25.70M**.';
         result.table = {
@@ -2439,9 +3873,6 @@ GROUP BY p.asset_sub_type;`,
           ]
         };
         result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Calendar Year 2026)\nSELECT v.vendor_name, v.commodity_group AS material_category, COUNT(DISTINCT po.po_id) AS total_pos_issued, ROUND(SUM(inv.invoice_amount) / 1000000.0, 2) AS total_invoiced_mil, ROUND(AVG(po.delivery_lead_time_days), 1) AS avg_lead_time_days, v.payment_terms\nFROM enterprise_dw.dim_vendors v\nINNER JOIN enterprise_dw.procurement_purchase_orders po ON v.vendor_id = po.vendor_id\nINNER JOIN enterprise_dw.finance_ap_invoices inv ON po.po_id = inv.po_id\nWHERE v.commodity_group IN ('Ready-Mix Concrete', 'Structural Steel')\n  AND inv.invoice_date BETWEEN '2026-01-01' AND '2026-12-31'\nGROUP BY v.vendor_name, v.commodity_group, v.payment_terms\nORDER BY total_invoiced_mil DESC;`;
-        if (result.interpretation) {
-          result.interpretation['Period'] = 'Calendar year 2026 (01/01/2026–31/12/2026)';
-        }
       } else if (isAllTime) {
         result.answer = 'Across all enterprise historical records without date restriction, total cumulative procurement expenditures for concrete and structural steel stand at **$142.5M** across approved vendors.';
         result.table = {
@@ -2469,9 +3900,6 @@ GROUP BY p.asset_sub_type;`,
           ]
         };
         result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: All-Time Historical)\nSELECT v.vendor_name, v.commodity_group AS material_category, COUNT(DISTINCT po.po_id) AS total_pos_issued, ROUND(SUM(inv.invoice_amount) / 1000000.0, 2) AS total_invoiced_mil, ROUND(AVG(po.delivery_lead_time_days), 1) AS avg_lead_time_days, v.payment_terms\nFROM enterprise_dw.dim_vendors v\nINNER JOIN enterprise_dw.procurement_purchase_orders po ON v.vendor_id = po.vendor_id\nINNER JOIN enterprise_dw.finance_ap_invoices inv ON po.po_id = inv.po_id\nWHERE v.commodity_group IN ('Ready-Mix Concrete', 'Structural Steel')\nGROUP BY v.vendor_name, v.commodity_group, v.payment_terms\nORDER BY total_invoiced_mil DESC;`;
-        if (result.interpretation) {
-          result.interpretation['Period'] = 'No time restriction (All-time historical)';
-        }
       } else if (isCustom) {
         result.answer = `No mock transactional records found in synthetic procurement ledger for the applied custom date range (**${formatDateRange(resolvedScope.start, resolvedScope.end)}**).`;
         result.plainEnglishExplanation = `The prototype database currently holds verified benchmark records for Q3 2026 (01/07/2026–30/09/2026), Q2 2026 (01/04/2026–30/06/2026), Calendar Year 2026, and All-Time.`;
@@ -2489,19 +3917,13 @@ GROUP BY p.asset_sub_type;`,
           'Switch to Previous calendar quarter (01/04/2026–30/06/2026)',
           'Switch to All time'
         ];
-        if (result.interpretation) {
-          result.interpretation['Period'] = `${formatDateRange(resolvedScope.start, resolvedScope.end)} (No mock data in range)`;
-        }
       } else {
         // Standard Q3
         result.answer = 'In **Q3 2026**, aggregate expenditures across raw material suppliers totaled **$18.92M**. **Ready-mix concrete vendors** represented **$11.14M (58.9%)** across 4 approved vendors, whereas **structural and rebar steel suppliers** absorbed **$7.78M (41.1%)** across 3 vendors. **Holcim Building Solutions** was the single largest concrete recipient ($6.25M), driven by foundation works at Grand Marina Bay.';
         result.table.title = 'Q3 Vendor Procurement Breakdown: Concrete vs Steel (Q3 2026)';
         result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Q3 2026)\nSELECT v.vendor_name, v.commodity_group AS material_category, COUNT(DISTINCT po.po_id) AS total_pos_issued, ROUND(SUM(inv.invoice_amount) / 1000000.0, 2) AS total_invoiced_mil, ROUND(AVG(po.delivery_lead_time_days), 1) AS avg_lead_time_days, v.payment_terms\nFROM enterprise_dw.dim_vendors v\nINNER JOIN enterprise_dw.procurement_purchase_orders po ON v.vendor_id = po.vendor_id\nINNER JOIN enterprise_dw.finance_ap_invoices inv ON po.po_id = inv.po_id\nWHERE v.commodity_group IN ('Ready-Mix Concrete', 'Structural Steel')\n  AND inv.invoice_date BETWEEN '2026-07-01' AND '2026-09-30'\nGROUP BY v.vendor_name, v.commodity_group, v.payment_terms\nORDER BY total_invoiced_mil DESC;`;
-        if (result.interpretation) {
-          result.interpretation['Period'] = 'Q3 2026 (01/07/2026–30/09/2026)';
-        }
       }
-      return result;
+      return finalizeResult(result);
     }
 
     // -------------------------------------------------------------
@@ -2509,6 +3931,75 @@ GROUP BY p.asset_sub_type;`,
     // -------------------------------------------------------------
     if (lowerQuery.includes('contract') && !lowerQuery.includes('receivable')) {
       result.domain = 'Contracts';
+
+      const targetProjectKey = ov ? (ov.projectScope || ov.projects) : 'all';
+      const effectiveBreakdownKey = ov && ov.breakdown ? ov.breakdown : (queryIntent.breakdown ? queryIntent.breakdown.key : 'by_project');
+
+      if (effectiveMetricKey && effectiveMetricKey !== 'contract_value' && effectiveMetricKey !== 'contract_count') {
+        const opt = getEditableInterpretationOptions(result, queryText);
+        const metricLabel = (opt.metrics.find(m => m.key === effectiveMetricKey) || {}).label || effectiveMetricKey;
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          `The requested metric "${metricLabel}" is not available in Contracts domain in this synthetic dataset.`,
+          { metric: 'Total active contract value ($M), Contract count (Agreements)', breakdown: 'By development project, By counterparty / vendor / purchaser' }
+        );
+      }
+      if (targetProjectKey && targetProjectKey !== 'all') {
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          'The enterprise contract registry fixture is modeled across all active agreements and does not provide project-specific totals.',
+          { project: 'All active agreements', breakdown: 'By development project or by counterparty' }
+        );
+      }
+      if ((effectiveMetricKey === 'contract_count' && effectiveBreakdownKey !== 'by_buyer') || (effectiveMetricKey !== 'contract_count' && effectiveBreakdownKey !== 'by_project')) {
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          'This contract metric and breakdown combination is not modeled in the synthetic registry.',
+          { metric: 'Contract value with By development project; Contract count with By counterparty', project: 'All active agreements' }
+        );
+      }
+
+      // Check if metric is CONTRACT COUNT
+      if (effectiveMetricKey === 'contract_count') {
+        const periodTitle = isQ3 ? 'Q3 2026' : (isQ2 ? 'Q2 2026' : (isYear ? 'Calendar Year 2026' : 'All Time'));
+        const countVal = isQ3 ? '842' : (isQ2 ? '715' : (isYear ? '2,940' : '3,890'));
+        result.answer = `Across enterprise projects, a total of **${countVal} executed contracts** are registered for **${periodTitle}**. The repository is led by **Apex Build Corp** with master EPC subcontracts, followed by individual buyer agreements across Skyline Residences and Grand Marina Bay.`;
+        if (result.answerConcise) {
+          result.answerConcise = `A total of **${countVal} executed contracts** are active across enterprise developments for ${periodTitle}.`;
+        }
+        result.table = {
+          title: `Contract Count by Primary Counterparty (${periodTitle})`,
+          headers: ['Contractor / Purchaser', 'Domain Allocation', 'Active Agreements Count', 'Contractual Value ($M)', 'Execution Status'],
+          columns: ['counterparty', 'domain', 'count', 'val', 'status'],
+          types: ['string', 'string', 'number', 'number', 'badge'],
+          rows: [
+            { counterparty: 'Apex Build Corp', domain: 'Construction', count: 45, val: 45.00, status: 'Active' },
+            { counterparty: 'Horizon Global Trust', domain: 'Sales', count: 12, val: 14.50, status: 'Active' },
+            { counterparty: 'Pacific Prime SPV', domain: 'Sales', count: 8, val: 9.20, status: 'Active' },
+            { counterparty: 'Holcim Building Solutions', domain: 'Procurement', count: 28, val: 6.25, status: 'Active' },
+            { counterparty: 'Nippon Steel Direct', domain: 'Procurement', count: 14, val: 4.80, status: 'Active' }
+          ]
+        };
+        result.chart = {
+          title: `Active Contracts Count by Counterparty - ${periodTitle}`,
+          unit: 'Contracts',
+          items: [
+            { label: 'Apex Build Corp', value: 45, color: '#3b82f6', highlight: true },
+            { label: 'Holcim Solutions', value: 28, color: '#10b981' },
+            { label: 'Nippon Steel', value: 14, color: '#6366f1' },
+            { label: 'Horizon Trust', value: 12, color: '#f59e0b' },
+            { label: 'Pacific Prime', value: 8, color: '#3b82f6' }
+          ]
+        };
+        let dateFilter = '';
+        if (isQ3) dateFilter = "WHERE execution_date BETWEEN '2026-07-01' AND '2026-09-30'\n";
+        else if (isQ2) dateFilter = "WHERE execution_date BETWEEN '2026-04-01' AND '2026-06-30'\n";
+        else if (isYear) dateFilter = "WHERE execution_date BETWEEN '2026-01-01' AND '2026-12-31'\n";
+        else if (resolvedScope.start && resolvedScope.end) dateFilter = `WHERE execution_date BETWEEN '${resolvedScope.start}' AND '${resolvedScope.end}'\n`;
+        result.sql = `-- Aria NL-to-SQL Engine v2.4 (Metric: Contract Count, Scope: ${periodTitle})\nSELECT counterparty_name, domain_category, COUNT(contract_id) AS contract_count, ROUND(SUM(contract_value)/1000000.0, 2) AS total_val_mil\nFROM enterprise_dw.sales_contracts\n${dateFilter}GROUP BY counterparty_name, domain_category\nORDER BY contract_count DESC\nLIMIT 5;`;
+        return finalizeResult(result);
+      }
+
       if (isQ3) {
         result.answer = 'Found **842 contracts executed in Q3 2026** (01/07/2026–30/09/2026), totaling **$78.4M** in quarterly contract value across residential and commercial developments.';
         result.table = {
@@ -2536,9 +4027,6 @@ GROUP BY p.asset_sub_type;`,
           ]
         };
         result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Q3 2026 Contracts)\nSELECT contract_id, purchaser_name, project_code, contract_type, contract_value, execution_date, status\nFROM enterprise_dw.sales_contracts\nWHERE execution_date BETWEEN '2026-07-01' AND '2026-09-30';`;
-        if (result.interpretation) {
-          result.interpretation['Period'] = 'Q3 2026 (01/07/2026–30/09/2026)';
-        }
       } else if (isQ2) {
         result.answer = 'Found **715 contracts executed in Q2 2026** (01/04/2026–30/06/2026), totaling **$64.2M** in quarterly contract value.';
         result.table = {
@@ -2566,9 +4054,6 @@ GROUP BY p.asset_sub_type;`,
           ]
         };
         result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Q2 2026 Contracts)\nSELECT contract_id, purchaser_name, project_code, contract_type, contract_value, execution_date, status\nFROM enterprise_dw.sales_contracts\nWHERE execution_date BETWEEN '2026-04-01' AND '2026-06-30';`;
-        if (result.interpretation) {
-          result.interpretation['Period'] = 'Q2 2026 (01/04/2026–30/06/2026)';
-        }
       } else if (isYear) {
         result.answer = 'Found **2,940 contracts executed in Calendar Year 2026**, totaling **$268.5M** in annual contract value across enterprise developments.';
         result.table = {
@@ -2596,9 +4081,6 @@ GROUP BY p.asset_sub_type;`,
           ]
         };
         result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Calendar Year 2026 Contracts)\nSELECT contract_id, purchaser_name, project_code, contract_type, contract_value, execution_date, status\nFROM enterprise_dw.sales_contracts\nWHERE execution_date BETWEEN '2026-01-01' AND '2026-12-31';`;
-        if (result.interpretation) {
-          result.interpretation['Period'] = 'Calendar year 2026 (01/01/2026–31/12/2026)';
-        }
       } else if (isCustom) {
         result.answer = `No mock contract records found in synthetic registry for the applied custom date range (**${formatDateRange(resolvedScope.start, resolvedScope.end)}**).`;
         result.plainEnglishExplanation = `The prototype database currently holds verified benchmark records for Q3 2026 (01/07/2026–30/09/2026), Q2 2026 (01/04/2026–30/06/2026), Calendar Year 2026, and All-Time.`;
@@ -2616,9 +4098,6 @@ GROUP BY p.asset_sub_type;`,
           'Switch to Previous calendar quarter (01/04/2026–30/06/2026)',
           'Switch to All time'
         ];
-        if (result.interpretation) {
-          result.interpretation['Period'] = `${formatDateRange(resolvedScope.start, resolvedScope.end)} (No mock data in range)`;
-        }
       } else {
         // All time
         result.answer = 'Found **3,890 executed contracts** across enterprise developments without date restriction, totaling **$342.8M** in cumulative contract value.';
@@ -2647,11 +4126,126 @@ GROUP BY p.asset_sub_type;`,
           ]
         };
         result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: All Contracts, No Date Restriction)\nSELECT contract_id, purchaser_name, project_code, contract_type, contract_value, status\nFROM enterprise_dw.sales_contracts;`;
-        if (result.interpretation) {
-          result.interpretation['Period'] = 'No time restriction (All contracts)';
-        }
       }
-      return result;
+      return finalizeResult(result);
+    }
+
+    // -------------------------------------------------------------
+    // Case 3B: PROPERTY MANAGEMENT / OCCUPANCY QUERIES
+    // -------------------------------------------------------------
+    if (scenarioKey === 'property_occupancy' || lowerQuery.includes('occupan') || (result.table && result.table.title && result.table.title.includes('Occupancy')) || activeDom === 'Property Management') {
+      result.domain = 'Property Management';
+
+      const targetProjectKey = ov ? (ov.projectScope || ov.projects) : null;
+      const effectiveBreakdownKey = ov && ov.breakdown ? ov.breakdown : (queryIntent.breakdown ? queryIntent.breakdown.key : 'by_asset_class');
+
+      if (effectiveMetricKey && effectiveMetricKey !== 'occupancy_rate') {
+        const opt = getEditableInterpretationOptions(result, queryText);
+        const metricLabel = (opt.metrics.find(m => m.key === effectiveMetricKey) || {}).label || effectiveMetricKey;
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          `The requested metric "${metricLabel}" is not available for commercial property management in this synthetic dataset.`,
+          { metric: 'Commercial occupancy rate (%)', breakdown: 'By property asset class (Office vs Retail), By geographic zone, By property asset' }
+        );
+      }
+      if (targetProjectKey && targetProjectKey !== 'all') {
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          'Commercial occupancy is modeled at portfolio level in this synthetic dataset; individual project filtering is not available.',
+          { metric: 'Commercial occupancy rate (%)', breakdown: 'By property asset class, geographic zone, or property asset', project: 'All commercial properties', period: 'Current active leases' }
+        );
+      }
+      if (ov && ov.period && ov.period !== 'auto') {
+        return buildUnsupportedCard(
+          result, resolvedScope, queryIntent, ov,
+          'The occupancy fixture represents current active leases and does not model historical period changes.',
+          { metric: 'Commercial occupancy rate (%)', breakdown: 'By property asset class, geographic zone, or property asset', project: 'All commercial properties', period: 'Current active leases' }
+        );
+      }
+
+      resolvedScope.periodLabel = 'Current active leases';
+      if (resolvedScope.source) resolvedScope.source.time = 'Demo scenario default';
+
+      if (effectiveBreakdownKey === 'portfolio_total') {
+        return finalizeResult(result);
+      } else if (effectiveBreakdownKey === 'by_region') {
+        result.answer = 'Across regional hubs, the **Central Business District (South Zone)** holds the highest occupancy at **96.2%** with a **91.0% renewal forecast**. The **North Industrial/Tech Corridor** holds **88.4% occupancy** with high tenant interest in co-working flex conversions.';
+        result.table = {
+          title: 'Commercial Occupancy & Forecast by Region',
+          headers: ['Zone', 'Commercial Properties', 'Total Area (sqm)', 'Occupancy %', 'Renewal Forecast %'],
+          columns: ['zone', 'properties', 'area', 'occupancy', 'renewal'],
+          types: ['string', 'number', 'number', 'percent', 'percent'],
+          rows: [
+            { zone: 'CBD South Hub', properties: 14, area: 215000, occupancy: 96.2, renewal: 91.0 },
+            { zone: 'Central Financial Corridor', properties: 12, area: 160000, occupancy: 93.5, renewal: 84.5 },
+            { zone: 'North Tech Zone', properties: 12, area: 90000, occupancy: 88.4, renewal: 72.0 }
+          ]
+        };
+        result.chart = {
+          title: 'Occupancy Rate by Geographic Zone (%)',
+          unit: '%',
+          items: [
+            { label: 'CBD South Hub', value: 96.2, color: '#10b981', highlight: true },
+            { label: 'Central Financial', value: 93.5, color: '#3b82f6' },
+            { label: 'North Tech', value: 88.4, color: '#f59e0b' }
+          ]
+        };
+        result.sql = `SELECT p.geographic_zone AS zone, COUNT(DISTINCT p.asset_id) AS property_count, ROUND(SUM(l.occupied_area_sqm)/SUM(p.net_lettable_area_sqm)*100.0, 1) AS occupancy_pct FROM enterprise_dw.dim_property_assets p JOIN enterprise_dw.property_leases l ON p.asset_id = l.asset_id GROUP BY p.geographic_zone;`;
+        return finalizeResult(result);
+      } else if (effectiveBreakdownKey === 'by_project') {
+        result.answer = 'Across individual commercial assets, **Skyline Commercial Tower B** and **Grand Marina Bay Plaza** lead portfolio performance with **96.5%** and **93.8%** occupancy respectively.';
+        result.table = {
+          title: 'Commercial Occupancy by Property Asset',
+          headers: ['Property Asset Name', 'Sector', 'Lettable Area (sqm)', 'Occupancy %', 'WALE (Years)', 'Status'],
+          columns: ['name', 'sector', 'area', 'occupancy', 'wale', 'status'],
+          types: ['string', 'string', 'number', 'percent', 'number', 'badge'],
+          rows: [
+            { name: 'Skyline Commercial Tower B', sector: 'Grade-A Office', area: 85000, occupancy: 96.5, wale: 4.2, status: 'Healthy' },
+            { name: 'Grand Marina Bay Plaza', sector: 'Mixed-Use Retail', area: 62000, occupancy: 93.8, wale: 3.9, status: 'Healthy' },
+            { name: 'Heritage Financial Center', sector: 'Commercial Office', area: 54000, occupancy: 91.2, wale: 3.5, status: 'Healthy' },
+            { name: 'Oasis Retail Galleria', sector: 'Prime Retail', area: 48000, occupancy: 89.4, wale: 3.1, status: 'Normal' },
+            { name: 'Riverside Logistics Depot', sector: 'Industrial / Logistics', area: 110000, occupancy: 88.0, wale: 4.5, status: 'Normal' }
+          ]
+        };
+        result.chart = {
+          title: 'Occupancy Rate by Property Asset (%)',
+          unit: '%',
+          items: [
+            { label: 'Skyline Tower B', value: 96.5, color: '#10b981', highlight: true },
+            { label: 'Grand Marina Plaza', value: 93.8, color: '#3b82f6' },
+            { label: 'Heritage Center', value: 91.2, color: '#3b82f6' },
+            { label: 'Oasis Galleria', value: 89.4, color: '#f59e0b' },
+            { label: 'Riverside Depot', value: 88.0, color: '#6366f1' }
+          ]
+        };
+        result.sql = `SELECT p.asset_name, p.asset_sub_type AS sector, p.net_lettable_area_sqm, ROUND(SUM(l.occupied_area_sqm)/p.net_lettable_area_sqm*100.0, 1) AS occupancy_pct, ROUND(AVG(l.lease_term_years), 1) AS avg_wale FROM enterprise_dw.dim_property_assets p JOIN enterprise_dw.property_leases l ON p.asset_id = l.asset_id GROUP BY p.asset_name, p.asset_sub_type, p.net_lettable_area_sqm ORDER BY occupancy_pct DESC;`;
+        return finalizeResult(result);
+      } else {
+        // Standard asset class
+        result.answer = 'Commercial property occupancy is currently **92.4%** across 38 assets, exceeding the 90.0% benchmark. **Grade-A Office** leads at **94.1%**, while **Prime Retail** stands at **89.8%** with **80.3% projected lease renewals** for Q4.';
+        result.table = {
+          title: 'Commercial Occupancy & Renewal Forecast by Asset Class',
+          headers: ['Asset Class', 'Total NLA (sqm)', 'Occupied (sqm)', 'Current Occupancy %', 'Expiring Q4 (sqm)', 'Renewal Forecast %'],
+          columns: ['asset_class', 'nla', 'occupied', 'occupancy', 'expiring', 'renewal'],
+          types: ['string', 'number', 'number', 'percent', 'number', 'percent'],
+          rows: [
+            { asset_class: 'Grade-A Office', nla: 245000, occupied: 230545, occupancy: 94.1, expiring: 18200, renewal: 82.5 },
+            { asset_class: 'Prime Retail', nla: 120000, occupied: 107760, occupancy: 89.8, expiring: 12400, renewal: 76.0 },
+            { asset_class: 'Mixed-Use Plazas', nla: 100000, occupied: 92200, occupancy: 92.2, expiring: 8100, renewal: 88.0 }
+          ]
+        };
+        result.chart = {
+          title: 'Current Occupancy vs Renewal Forecast by Asset Class (%)',
+          unit: '%',
+          items: [
+            { label: 'Grade-A Office', value: 94.1, targetValue: 82.5, color: '#3b82f6', highlight: true },
+            { label: 'Prime Retail', value: 89.8, targetValue: 76.0, color: '#10b981' },
+            { label: 'Mixed-Use Plazas', value: 92.2, targetValue: 88.0, color: '#6366f1' }
+          ]
+        };
+        result.sql = `SELECT p.asset_sub_type AS asset_class, SUM(p.net_lettable_area_sqm) AS total_nla_sqm, SUM(l.occupied_area_sqm) AS leased_area_sqm, ROUND((SUM(l.occupied_area_sqm)/SUM(p.net_lettable_area_sqm))*100.0, 1) AS current_occupancy_pct FROM enterprise_dw.dim_property_assets p JOIN enterprise_dw.property_leases l ON p.asset_id = l.asset_id GROUP BY p.asset_sub_type;`;
+        return finalizeResult(result);
+      }
     }
 
     // -------------------------------------------------------------
@@ -2734,7 +4328,7 @@ GROUP BY p.asset_sub_type;`,
       result.sql = `-- Aria General NL-to-SQL Template (Scope: Domain=${domainScopeLabel}, Period=${periodBadge})\nSELECT p.project_name, p.asset_type, gl.fiscal_period, gl.status, SUM(gl.amount) AS total_val\nFROM enterprise_dw.dim_projects p\nJOIN enterprise_dw.general_ledger_summaries gl ON p.project_id = gl.project_id${whereClause}\nGROUP BY p.project_name, p.asset_type, gl.fiscal_period, gl.status\nLIMIT 5;`;
     }
 
-    return result;
+    return finalizeResult(result);
   }
 
   function buildConflictQuestionText(conflict) {
@@ -2951,7 +4545,24 @@ GROUP BY p.asset_sub_type;`,
       let resolvedScope = null;
       let queryToExecute = trimmed;
 
-      if (options.scopeConfirmation) {
+      if (options.interpretationOverride) {
+        // User confirmed an edited interpretation
+        const ov = options.interpretationOverride;
+        const effectiveScope = {
+          domain: { mode: (ov.domain && ov.domain !== 'Auto') ? 'explicit' : 'auto', value: ov.domain || 'Auto' },
+          time: {
+            mode: ov.period === 'custom' ? 'custom' : (ov.period === 'auto' ? 'auto' : 'preset'),
+            preset: ov.period || 'auto',
+            start: ov.startDate || null,
+            end: ov.endDate || null
+          }
+        };
+        resolvedScope = resolveSelectedScope(effectiveScope, null, DEMO_CONTEXT);
+        if (resolvedScope.source) {
+          if (ov.domain) resolvedScope.source.domain = 'Edited by user';
+          if (ov.period) resolvedScope.source.time = 'Edited by user';
+        }
+      } else if (options.scopeConfirmation) {
         // User confirmed a conflict resolution choice
         const conf = options.scopeConfirmation;
         resolvedScope = resolveSelectedScope(options.selectedScope, null, DEMO_CONTEXT, conf);
@@ -3152,7 +4763,7 @@ GROUP BY p.asset_sub_type;`,
       }
 
       // Apply Scope to Results via Unified Scope Resolver
-      const finalResult = applyScopeToMockResult(matchedData, resolvedScope, queryToExecute);
+      const finalResult = applyScopeToMockResult(matchedData, resolvedScope, queryToExecute, options.interpretationOverride);
 
       // Standard pipeline execution (5 stages)
       let stageIdx = 0;
@@ -3194,7 +4805,11 @@ GROUP BY p.asset_sub_type;`,
     parseQuestionScope,
     detectScopeConflicts,
     resolveSelectedScope,
-    applyScopeToMockResult
+    parseQuestionIntent,
+    getEditableInterpretationOptions,
+    buildAppliedInterpretation,
+    applyScopeToMockResult,
+    applyInterpretationToMockResult: applyScopeToMockResult
   };
 
   window.AriaMock = {
@@ -3213,7 +4828,11 @@ GROUP BY p.asset_sub_type;`,
     detectScopeConflicts,
     resolveSelectedScope,
     resolvePresetDateRange,
+    parseQuestionIntent,
+    getEditableInterpretationOptions,
+    buildAppliedInterpretation,
     applyScopeToMockResult,
+    applyInterpretationToMockResult: applyScopeToMockResult,
     getObservabilityStore,
     logQueryToObservability,
     recordFeedback,

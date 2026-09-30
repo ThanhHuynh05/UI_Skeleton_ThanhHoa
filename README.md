@@ -117,6 +117,17 @@ UI_Skeleton/
 - **Turn-Snapshotted Applied Scope**: Every completed query card displays a prominent "Applied Scope" header showing Domain, Period/Date Range (always including exact dates like `(01/07/2026–30/09/2026)`), Calendar basis (`Calendar`), and exact scope source (`Inferred from question`, `Selected by user`, `Confirmed after conflict`). Snapshotted per turn so subsequent UI changes never retroactively change prior answers.
 - **Full Scope Synchronization**: Scope resolution updates all evidence simultaneously: business answer, data table rows & title, inline SVG chart, plain-English interpretation, and verifiable SQL lineage across Finance, Procurement, and Contracts domains.
 
+### GROUP C1: Question Interpretation & Direct Editing (R2-09)
+- **Unified "How I interpreted your question" Card**: Replaces separate "Applied Scope" and disconnected interpretation boxes with a single unified card before the business answer on every success result.
+- **Business-Language-First Fields**: Displays Metric, Breakdown (in business-friendly terms without technical "grain"), Business Area (Domain), Project Scope, Period & Exact Dates, Currency / Unit (e.g. `USD millions`, `Not applicable (Days)`, `Not applicable (Contracts)`), and explicitly bulleted Business Assumptions.
+- **Interactive "Edit interpretation" Modal**: Clicking `[Edit interpretation]` opens a modal pre-filled with the current query's applied interpretation parameters.
+- **Dynamic Unit Adaptation**: Selecting non-monetary metrics (such as `Average Delivery Lead Time` in Procurement or `Contract Count` in Contracts) automatically updates unit and currency indicators.
+- **Turn Immutability & Superseded State**: When an interpretation is re-run, the original response is preserved immutably and flagged as "Superseded", while the new response clearly displays "Re-run with edited interpretation" and tags the modified metrics with `Edited by user`.
+- **Truthful Unsupported Combinations**: Requesting an unsupported cross-domain metric (e.g., Sales domain with Average Lead Time) displays a clean, non-hallucinating explanation, parameter breakdown table, and actionable recovery follow-ups.
+- **Scenario-Safe Demo Options**: The editor only offers project, period, and breakdown choices represented by each synthetic fixture; direct unsupported overrides are stopped with a transparent notice instead of reusing unrelated results.
+- **"What I understood so far" Clarification**: Ambiguous queries display an explicit comprehension snapshot highlighting what Aria deduced so far and which specific parameter needs confirmation.
+- **Comprehensive Markdown Export**: The conversation export (`.md`) includes the complete "How I interpreted your question" block with all parameters and assumptions.
+
 ---
 
 ### GROUP D: Schema Intelligence Panels
@@ -174,3 +185,7 @@ UI_Skeleton/
 | **16. Exact dates & resolved state (P1 Defects 6 & 7)** | Applied Scope always displays exact date range (e.g. `01/07/2026–30/09/2026`); resolved conflict cards display green banner and disable repeated clicks. | PASS |
 | **17. Calendar anchors & snapshots (R2-08)** | Changing `DEMO_CONTEXT.dataAsOf` updates preset dates dynamically; changing UI scope does not mutate past responses. | PASS |
 | **18. Auto domain fallback integrity (P0)** | Question with project terms (`"Show project budgets by status"`) infers `Projects — Inferred from question` with matching table and SQL; general query without domain keeps `All Domains` with multi-domain rows and no silent `p.domain` filter. | PASS |
+| **19. Unified interpretation card (R2-09)** | Unified "How I interpreted your question" card renders on all success results with Metric, Breakdown, Domain, Project Scope, Period & Exact Dates, Currency/Unit, and bulleted Assumptions. | PASS |
+| **20. Edit interpretation modal & prefill (R2-09)** | Modal opens and prefills all fields for 11/11 fixtures; unchecking all assumptions persists `[]`; re-running marks prior turn as `Superseded`. | PASS |
+| **21. Capability matrix & guardrails (R2-09 Cases 1–5)** | Verified 5 acceptance cases: Case 1 (Portfolio receivables), Case 2 (Grand Marina Bay receivables), Case 3 (Grand Marina Bay overdue >60d $2.10M), Case 4 (Aging + single project blocked with transparent unsupported notice), Case 5 (Construction progress metric switch guarded). | PASS |
+| **22. Date preset & custom consistency (R2-09)** | Full date and SQL alignment across Q3 (`01/07/2026–30/09/2026`), Q2 (`01/04/2026–30/06/2026`), Calendar Year 2026 (`01/01/2026–31/12/2026`), and Custom ranges. | PASS |

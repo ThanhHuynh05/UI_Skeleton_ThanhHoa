@@ -117,6 +117,24 @@
   const customDateValidationMsgEl = document.getElementById('customDateValidationMsg');
   const applyCustomDateBtnEl = document.getElementById('applyCustomDateBtn');
 
+  // R2-09 Edit Interpretation Modal Elements
+  const editInterpretationModalBackdrop = document.getElementById('editInterpretationModalBackdrop');
+  const closeEditInterpretationModalBtn = document.getElementById('closeEditInterpretationModalBtn');
+  const btnCancelEditInterpretation = document.getElementById('btnCancelEditInterpretation');
+  const btnApplyEditInterpretation = document.getElementById('btnApplyEditInterpretation');
+  const editInterpSourceMsgId = document.getElementById('editInterpSourceMsgId');
+  const editInterpMetric = document.getElementById('editInterpMetric');
+  const editInterpBreakdown = document.getElementById('editInterpBreakdown');
+  const editInterpDomain = document.getElementById('editInterpDomain');
+  const editInterpProjects = document.getElementById('editInterpProjects');
+  const editInterpPeriod = document.getElementById('editInterpPeriod');
+  const editInterpCustomDateRow = document.getElementById('editInterpCustomDateRow');
+  const editInterpStartDate = document.getElementById('editInterpStartDate');
+  const editInterpEndDate = document.getElementById('editInterpEndDate');
+  const editInterpCurrency = document.getElementById('editInterpCurrency');
+  const editInterpAssumptionsList = document.getElementById('editInterpAssumptionsList');
+  const editInterpDynamicHint = document.getElementById('editInterpDynamicHint');
+
   // =========================================================================
   // 1. INITIALIZATION & IDENTITY (FIX 2: WHO IS USING)
   // =========================================================================
@@ -496,40 +514,116 @@
     `;
   }
 
-  function generateAppliedScopeHtml(scope) {
-    if (!scope) return '';
-    const domainSrc = (scope.source && scope.source.domain) ? scope.source.domain : 'Inferred from question';
-    const timeSrc = (scope.source && scope.source.time) ? scope.source.time : 'No time restriction';
+  function getInterpSourceClass(src) {
+    if (!src) return 'source-inferred';
+    const s = src.toLowerCase();
+    if (s.includes('edited') || s.includes('confirmed')) return 'source-confirmed';
+    if (s.includes('selected') || s.includes('preset')) return 'source-selected';
+    if (s.includes('default') || s.includes('standard')) return 'source-standard';
+    return 'source-inferred';
+  }
 
-    const getSourceClass = (src) => {
-      if (src && src.includes('Confirmed')) return 'source-confirmed';
-      if (src && src.includes('Inferred')) return 'source-inferred';
-      return 'source-selected';
-    };
+  function generateInterpretationHtml(scope, msg) {
+    if (!scope) return '';
+
+    const metricLabel = (scope.metric && scope.metric.label) ? scope.metric.label : 'Enterprise Records';
+    const metricSource = (scope.metric && scope.metric.source) ? scope.metric.source : 'Inferred from question';
+
+    const breakdownLabel = (scope.breakdown && scope.breakdown.label) ? scope.breakdown.label : 'Standard business breakdown';
+    const breakdownSource = (scope.breakdown && scope.breakdown.source) ? scope.breakdown.source : 'Inferred from question';
+
+    const domainLabel = (scope.domain && (scope.domain.label || scope.domain.value)) ? (scope.domain.label || scope.domain.value) : (scope.domain || 'All Domains');
+    const domainSource = (scope.domain && scope.domain.source) ? scope.domain.source : ((scope.source && scope.source.domain) ? scope.source.domain : 'Inferred from question');
+
+    const projectLabel = (scope.projectScope && scope.projectScope.label) ? scope.projectScope.label : 'All enterprise projects';
+    const projectSource = (scope.projectScope && scope.projectScope.source) ? scope.projectScope.source : 'All active portfolios';
+
+    const timeLabel = (scope.time && scope.time.label) ? scope.time.label : (scope.periodLabel || 'No time restriction');
+    const timeRange = (scope.time && scope.time.dateRange) ? scope.time.dateRange : scope.dateRange;
+    const timeSource = (scope.time && scope.time.source) ? scope.time.source : ((scope.source && scope.source.time) ? scope.source.time : 'No time restriction');
+
+    const currencyLabel = scope.currency || ((scope.metric && scope.metric.unit) ? scope.metric.unit : 'USD millions');
+    const assumptions = scope.assumptions || [];
+    const calendarBasis = scope.calendarBasis || 'Calendar';
+    const msgId = msg ? msg.id : '';
+    const isSuperseded = msg && msg.isSuperseded;
 
     return `
-      <div class="applied-scope-card">
-        <div class="applied-scope-header">
-          <div class="applied-scope-badge-title">
-            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-            <span>Applied Scope</span>
+      <div class="interpretation-card ${isSuperseded ? 'card-superseded' : ''}">
+        <div class="interpretation-header">
+          <div class="interpretation-title-group">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+            </svg>
+            <span class="interpretation-card-title">How I interpreted your question</span>
           </div>
-          <span class="applied-scope-basis">Calendar basis: <strong>${escapeHtml(scope.calendarBasis || 'Calendar')}</strong></span>
+          <div class="interpretation-header-actions">
+            <span class="interpretation-basis">Basis: <strong>${escapeHtml(calendarBasis)}</strong></span>
+            ${isSuperseded
+              ? `<span class="superseded-badge-pill" title="This interpretation was updated in a later response">Superseded</span>`
+              : `<button type="button" class="btn-edit-interpretation" data-msg-id="${msgId}" title="Edit interpretation parameters">
+                  <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                  <span>Edit interpretation</span>
+                </button>`
+            }
+          </div>
         </div>
-        <div class="applied-scope-grid">
-          <div class="applied-scope-item">
-            <span class="applied-scope-label">Domain</span>
-            <span class="applied-scope-value">${escapeHtml(scope.domain || 'All Domains')}</span>
-            <span class="applied-scope-source ${getSourceClass(domainSrc)}">${escapeHtml(domainSrc)}</span>
+
+        <div class="interpretation-grid">
+          <div class="interpretation-item">
+            <span class="interpretation-item-label">Metric</span>
+            <span class="interpretation-item-val">${escapeHtml(metricLabel)}</span>
+            <span class="scope-source-tag ${getInterpSourceClass(metricSource)}">${escapeHtml(metricSource)}</span>
           </div>
-          <div class="applied-scope-item">
-            <span class="applied-scope-label">Period</span>
-            <span class="applied-scope-value">${escapeHtml(scope.periodLabel || 'No time restriction')}${scope.dateRange && !scope.periodLabel.includes(scope.dateRange) ? ` <small class="applied-scope-dates">(${escapeHtml(scope.dateRange)})</small>` : ''}</span>
-            <span class="applied-scope-source ${getSourceClass(timeSrc)}">${escapeHtml(timeSrc)}</span>
+
+          <div class="interpretation-item">
+            <span class="interpretation-item-label">Breakdown</span>
+            <span class="interpretation-item-val">${escapeHtml(breakdownLabel)}</span>
+            <span class="scope-source-tag ${getInterpSourceClass(breakdownSource)}">${escapeHtml(breakdownSource)}</span>
+          </div>
+
+          <div class="interpretation-item">
+            <span class="interpretation-item-label">Business area</span>
+            <span class="interpretation-item-val">${escapeHtml(domainLabel)}</span>
+            <span class="scope-source-tag ${getInterpSourceClass(domainSource)}">${escapeHtml(domainSource)}</span>
+          </div>
+
+          <div class="interpretation-item">
+            <span class="interpretation-item-label">Project scope</span>
+            <span class="interpretation-item-val">${escapeHtml(projectLabel)}</span>
+            <span class="scope-source-tag ${getInterpSourceClass(projectSource)}">${escapeHtml(projectSource)}</span>
+          </div>
+
+          <div class="interpretation-item">
+            <span class="interpretation-item-label">Period &amp; dates</span>
+            <span class="interpretation-item-val">${escapeHtml(timeLabel)}${timeRange && !timeLabel.includes(timeRange) ? ` · <small class="interpretation-dates">(${escapeHtml(timeRange)})</small>` : ''}</span>
+            <span class="scope-source-tag ${getInterpSourceClass(timeSource)}">${escapeHtml(timeSource)}</span>
+          </div>
+
+          <div class="interpretation-item">
+            <span class="interpretation-item-label">Currency / Unit</span>
+            <span class="interpretation-item-val">${escapeHtml(currencyLabel)}</span>
+            <span class="scope-source-tag source-standard">System standard</span>
           </div>
         </div>
+
+        ${assumptions.length > 0 ? `
+          <div class="interpretation-assumptions-block">
+            <div class="interpretation-assumptions-title">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              <span>Assumptions:</span>
+            </div>
+            <ul class="interpretation-assumptions-list">
+              ${assumptions.map(a => `<li>${escapeHtml(a)}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
       </div>
     `;
+  }
+
+  function generateAppliedScopeHtml(scope) {
+    return generateInterpretationHtml(scope, null);
   }
 
   function renderAgentMessageHtml(msg, msgIdx) {
@@ -564,18 +658,26 @@
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
         <div class="agent-response-card">
-          <!-- Applied Scope (Prominent, Turn-Snapshotted) -->
-          ${generateAppliedScopeHtml(msg.appliedScope || (res && res.appliedScope))}
-
-          <!-- 1. Applied Interpretation & Business Answer -->
-          ${res.interpretation ? `
-            <div class="interpretation-box" style="background: var(--bg-hover); padding: 12px; border-radius: 6px; margin-bottom: 12px; font-size: 12.5px; border-left: 3px solid var(--accent-primary);">
-              <div style="font-weight: 600; margin-bottom: 6px; color: var(--text-primary);">I interpreted your question as:</div>
-              <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); line-height: 1.6;">
-                ${Object.entries(res.interpretation).map(([k, v]) => `<li><strong>${escapeHtml(k)}</strong> = ${escapeHtml(v)}</li>`).join('')}
-              </ul>
+          <!-- Superseded Notice (if this interpretation was later re-run) -->
+          ${msg.isSuperseded ? `
+            <div class="superseded-callout">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              <span>This answer has been superseded by an updated interpretation below.</span>
             </div>
           ` : ''}
+
+          <!-- Re-run notice (if this was created from editing an earlier answer) -->
+          ${msg.sourceMessageId ? `
+            <div class="rerun-callout">
+              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+              <span>Re-run with edited interpretation (Original response preserved above)</span>
+            </div>
+          ` : ''}
+
+          <!-- Unified "How I interpreted your question" Card (R2-09) -->
+          ${generateInterpretationHtml(msg.appliedScope || (res && res.appliedScope), msg)}
+
+          <!-- Business Answer -->
           <div class="grounded-answer-text">
             ${formatMarkdownBold(answerBody)}
           </div>
@@ -758,6 +860,26 @@
               </svg>
               <span style="font-weight: 700;">Agent Clarification Required</span>
             </div>
+            ${msg.understoodFields ? `
+              <div class="clarification-understood-box" style="margin-bottom: 16px; padding: 12px 14px; background: var(--bg-hover); border-left: 3px solid var(--accent-primary); border-radius: 6px; font-size: 12.5px;">
+                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                  <span>What I understood so far:</span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px 14px; color: var(--text-secondary);">
+                  ${msg.understoodFields.domain ? `<div><span style="color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 600; display: block;">Business area</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.domain)}</strong></div>` : ''}
+                  ${msg.understoodFields.metric ? `<div><span style="color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 600; display: block;">Metric</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.metric)}</strong></div>` : ''}
+                  ${msg.understoodFields.period ? `<div><span style="color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 600; display: block;">Period</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.period)}</strong></div>` : ''}
+                  ${msg.understoodFields.projectScope ? `<div><span style="color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 600; display: block;">Project scope</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.projectScope)}</strong></div>` : ''}
+                </div>
+                ${msg.understoodFields.fieldToClarify ? `
+                  <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border-color); color: var(--warning-color); font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
+                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    <span>${escapeHtml(msg.understoodFields.fieldToClarify)}</span>
+                  </div>
+                ` : ''}
+              </div>
+            ` : ''}
             <p class="clarification-question" style="font-size: 15px; margin-bottom: 20px; line-height: 1.5;">${escapeHtml(msg.question || '')}</p>
             ${msg.resolvedPayload ? `
               <div class="conflict-resolved-banner" style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--success-bg); border: 1px solid var(--success-color); border-radius: var(--radius-sm); color: var(--success-color); font-size: 12.5px; font-weight: 600; margin-bottom: 12px;">
@@ -923,6 +1045,7 @@
       selectedScope: state.selectedScope,
       clarificationPayload: options.clarificationPayload,
       scopeConfirmation: options.scopeConfirmation,
+      interpretationOverride: options.interpretationOverride,
       signal: state.activeAbortController.signal
     })
     .then((result) => {
@@ -935,6 +1058,14 @@
         applyRoleColumnMasking(result.table, state.currentUser.role);
       }
 
+      // If re-running from an edited interpretation, mark original response as superseded
+      if (options.sourceMessageId) {
+        const srcMsg = conv.messages.find(m => m.id === options.sourceMessageId);
+        if (srcMsg) {
+          srcMsg.isSuperseded = true;
+        }
+      }
+
       // Append Agent Message
       const agentMsg = {
         id: agentMsgId,
@@ -945,11 +1076,13 @@
         timestamp: Date.now(),
         resultsData: result.type === 'results' ? result : null,
         appliedScope: result.appliedScope || null,
+        understoodFields: result.understoodFields || null,
+        sourceMessageId: options.sourceMessageId || null,
         errorData: result.type === 'error' ? result.friendlyError : null,
         clarificationData: result.type === 'clarification' ? result : null,
         question: result.question || null,
         options: result.options || null,
-        originalQuery: result.originalQuery || null,
+        originalQuery: result.originalQuery || (options.sourceMessageId ? promptText : null),
         title: result.title || null,
         message: result.message || null,
         reason: result.reason || null,
@@ -1351,6 +1484,289 @@
   }
 
   // =========================================================================
+  // 9B. R2-09 INTERPRETATION MODAL & EDIT LOGIC
+  // =========================================================================
+  function findUserQueryForAgentMsg(conv, agentMsg) {
+    if (!conv || !agentMsg) return '';
+    if (agentMsg.originalQuery) return agentMsg.originalQuery;
+    const idx = conv.messages.findIndex(m => m.id === agentMsg.id);
+    if (idx > 0) {
+      for (let i = idx - 1; i >= 0; i--) {
+        if (conv.messages[i].role === 'user') {
+          return conv.messages[i].text;
+        }
+      }
+    }
+    return '';
+  }
+
+  function openEditInterpretationModal(conv, msgId) {
+    if (!conv || !msgId || !editInterpretationModalBackdrop) return;
+    const msg = conv.messages.find(m => m.id === msgId);
+    if (!msg) return;
+
+    const res = msg.resultsData || {};
+    const scope = msg.appliedScope || res.appliedScope;
+    if (!scope) return;
+
+    const userQuery = findUserQueryForAgentMsg(conv, msg);
+    const interpOpts = window.AriaScope.getEditableInterpretationOptions(res, userQuery);
+
+    if (editInterpSourceMsgId) editInterpSourceMsgId.value = msgId;
+
+    // Populate Metric
+    if (editInterpMetric) {
+      editInterpMetric.innerHTML = (interpOpts.metrics || []).map(m => `
+        <option value="${escapeHtml(m.key)}" data-unit="${escapeHtml(m.unit || '')}" ${m.current ? 'selected' : ''}>${escapeHtml(m.label)}</option>
+      `).join('');
+      if (interpOpts.currentMetric) {
+        if (!editInterpMetric.querySelector(`option[value="${CSS.escape(interpOpts.currentMetric)}"]`)) {
+          const opt = document.createElement('option');
+          opt.value = interpOpts.currentMetric;
+          opt.textContent = (scope.metric && scope.metric.label) || interpOpts.currentMetric;
+          opt.selected = true;
+          editInterpMetric.prepend(opt);
+        }
+        editInterpMetric.value = interpOpts.currentMetric;
+      }
+    }
+
+    // Populate Breakdown
+    if (editInterpBreakdown) {
+      editInterpBreakdown.innerHTML = (interpOpts.breakdowns || []).map(b => `
+        <option value="${escapeHtml(b.key)}" ${b.current ? 'selected' : ''}>${escapeHtml(b.label)}</option>
+      `).join('');
+      if (interpOpts.currentBreakdown) {
+        if (!editInterpBreakdown.querySelector(`option[value="${CSS.escape(interpOpts.currentBreakdown)}"]`)) {
+          const opt = document.createElement('option');
+          opt.value = interpOpts.currentBreakdown;
+          opt.textContent = (scope.breakdown && scope.breakdown.label) || interpOpts.currentBreakdown;
+          opt.selected = true;
+          editInterpBreakdown.prepend(opt);
+        }
+        editInterpBreakdown.value = interpOpts.currentBreakdown;
+      }
+    }
+
+    // Populate Domain
+    if (editInterpDomain) {
+      const activeDom = interpOpts.currentDomain || (scope.domain && (scope.domain.value || scope.domain.label)) || 'Finance';
+      if (!editInterpDomain.querySelector(`option[value="${CSS.escape(activeDom)}"]`)) {
+        const opt = document.createElement('option');
+        opt.value = activeDom;
+        opt.textContent = activeDom;
+        opt.selected = true;
+        editInterpDomain.prepend(opt);
+      }
+      editInterpDomain.value = activeDom;
+    }
+
+    // Populate Projects
+    if (editInterpProjects) {
+      const projectList = interpOpts.projectScopes || interpOpts.projects || [];
+      editInterpProjects.innerHTML = projectList.map(p => `
+        <option value="${escapeHtml(p.key)}" ${p.current ? 'selected' : ''}>${escapeHtml(p.label)}</option>
+      `).join('');
+      if (interpOpts.currentProject) {
+        if (!editInterpProjects.querySelector(`option[value="${CSS.escape(interpOpts.currentProject)}"]`)) {
+          const opt = document.createElement('option');
+          opt.value = interpOpts.currentProject;
+          opt.textContent = (scope.projectScope && scope.projectScope.label) || interpOpts.currentProject;
+          opt.selected = true;
+          editInterpProjects.prepend(opt);
+        }
+        editInterpProjects.value = interpOpts.currentProject;
+      }
+    }
+
+    // Populate Period
+    if (editInterpPeriod) {
+      let activePer = interpOpts.currentPeriod || 'auto';
+      if (activePer === 'current_year' || activePer === 'year_to_date') activePer = 'calendar_year';
+      const periodList = interpOpts.periods || [];
+      editInterpPeriod.innerHTML = periodList.map(p => `
+        <option value="${escapeHtml(p.key)}" ${p.current ? 'selected' : ''}>${escapeHtml(p.label)}</option>
+      `).join('');
+      if (activePer && !editInterpPeriod.querySelector(`option[value="${CSS.escape(activePer)}"]`)) {
+        const opt = document.createElement('option');
+        opt.value = activePer;
+        opt.textContent = (scope.time && scope.time.label) || activePer;
+        opt.selected = true;
+        editInterpPeriod.prepend(opt);
+      }
+      editInterpPeriod.value = activePer;
+      if (editInterpPeriod.value === 'custom') {
+        if (editInterpCustomDateRow) editInterpCustomDateRow.style.display = 'grid';
+        if (editInterpStartDate && scope.time && scope.time.start) editInterpStartDate.value = scope.time.start;
+        if (editInterpEndDate && scope.time && scope.time.end) editInterpEndDate.value = scope.time.end;
+      } else {
+        if (editInterpCustomDateRow) editInterpCustomDateRow.style.display = 'none';
+      }
+    }
+
+    // Update Currency
+    updateEditInterpCurrency();
+
+    // Populate Assumptions
+    if (editInterpAssumptionsList) {
+      const assumptionsList = interpOpts.assumptions || [];
+      editInterpAssumptionsList.innerHTML = assumptionsList.map(a => `
+        <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: var(--text-primary); cursor: pointer; padding: 2px 0;">
+          <input type="checkbox" class="interp-assumption-checkbox" value="${escapeHtml(a.label)}" ${a.checked ? 'checked' : ''} style="margin-top: 2px;">
+          <span>${escapeHtml(a.label)}</span>
+        </label>
+      `).join('');
+    }
+
+    syncInterpProjectAndBreakdown();
+    editInterpretationModalBackdrop.classList.add('open');
+  }
+
+  function updateEditInterpCurrency() {
+    if (!editInterpCurrency || !editInterpMetric) return;
+    const selectedOpt = editInterpMetric.options[editInterpMetric.selectedIndex];
+    const metricVal = editInterpMetric.value;
+    if (metricVal === 'avg_lead_time') {
+      editInterpCurrency.value = 'Not applicable (Days)';
+    } else if (metricVal === 'contract_count') {
+      editInterpCurrency.value = 'Not applicable (Contracts)';
+    } else if (metricVal === 'occupancy_rate' || metricVal === 'construction_progress' || metricVal === 'renewal_rate') {
+      editInterpCurrency.value = 'Not applicable (%)';
+    } else if (selectedOpt && selectedOpt.getAttribute('data-unit')) {
+      const u = selectedOpt.getAttribute('data-unit');
+      if (u === '%') editInterpCurrency.value = 'Not applicable (%)';
+      else if (u === 'Days') editInterpCurrency.value = 'Not applicable (Days)';
+      else if (u === 'Contracts') editInterpCurrency.value = 'Not applicable (Contracts)';
+      else editInterpCurrency.value = u.includes('$') ? 'USD millions' : u;
+    } else {
+      editInterpCurrency.value = 'USD millions';
+    }
+  }
+
+  function syncInterpProjectAndBreakdown() {
+    if (!editInterpProjects || !editInterpBreakdown) return;
+    const selectedProject = editInterpProjects.value;
+    const selectedMetric = editInterpMetric ? editInterpMetric.value : '';
+    let selectedBreakdown = editInterpBreakdown.value;
+
+    const isSingleProject = Boolean(selectedProject && selectedProject !== 'all');
+    const agingOpt = editInterpBreakdown.querySelector('option[value="by_aging"], option[value="by_aging_risk_bucket"], option[value="by_risk_bucket"]');
+    const buyerOpt = editInterpBreakdown.querySelector('option[value="by_buyer"]');
+    const projectOpt = editInterpBreakdown.querySelector('option[value="by_project"]');
+
+    // Keep supported metric/breakdown pairs aligned in the skeleton.
+    if (selectedMetric === 'contract_count' && buyerOpt) {
+      editInterpBreakdown.value = 'by_buyer';
+      selectedBreakdown = 'by_buyer';
+    } else if (selectedMetric === 'contract_value' && projectOpt && selectedBreakdown === 'by_buyer') {
+      editInterpBreakdown.value = 'by_project';
+      selectedBreakdown = 'by_project';
+    }
+
+    // A single-project receivables drilldown is represented by buyer rows.
+    // Portfolio results return to project aggregation when moving back to All.
+    if (isSingleProject && selectedBreakdown === 'by_project' && buyerOpt) {
+      editInterpBreakdown.value = 'by_buyer';
+      selectedBreakdown = 'by_buyer';
+    } else if (!isSingleProject && selectedBreakdown === 'by_buyer' && projectOpt && selectedMetric !== 'contract_count') {
+      editInterpBreakdown.value = 'by_project';
+      selectedBreakdown = 'by_project';
+    }
+
+    if (agingOpt) {
+      if (isSingleProject) {
+        if (!agingOpt.textContent.includes('(Portfolio only')) {
+          agingOpt.setAttribute('data-orig-label', agingOpt.textContent);
+          agingOpt.textContent = agingOpt.textContent + ' (Portfolio only in demo)';
+        }
+      } else {
+        if (agingOpt.getAttribute('data-orig-label')) {
+          agingOpt.textContent = agingOpt.getAttribute('data-orig-label');
+          agingOpt.removeAttribute('data-orig-label');
+        }
+      }
+    }
+
+    if (editInterpDynamicHint) {
+      if (isSingleProject && (selectedBreakdown === 'by_aging' || selectedBreakdown === 'by_aging_risk_bucket' || selectedBreakdown === 'by_risk_bucket')) {
+        editInterpDynamicHint.textContent = 'Aging risk bucket breakdown is modeled at portfolio level (All active projects). Selecting this with an individual project will return a transparent unsupported scope notice.';
+        editInterpDynamicHint.style.display = 'block';
+      } else {
+        editInterpDynamicHint.style.display = 'none';
+        editInterpDynamicHint.textContent = '';
+      }
+    }
+  }
+
+  function handleApplyEditInterpretation() {
+    const msgId = editInterpSourceMsgId ? editInterpSourceMsgId.value : null;
+    const conv = getActiveConversation();
+    if (!conv || !msgId) return;
+
+    const srcMsg = conv.messages.find(m => m.id === msgId);
+    if (!srcMsg) return;
+
+    const userQuery = findUserQueryForAgentMsg(conv, srcMsg);
+    if (!userQuery) {
+      showToast('Could not find original user question.');
+      return;
+    }
+
+    const selectedMetric = editInterpMetric ? editInterpMetric.value : null;
+    const selectedBreakdown = editInterpBreakdown ? editInterpBreakdown.value : null;
+    const selectedDomain = editInterpDomain ? editInterpDomain.value : null;
+    const selectedProject = editInterpProjects ? editInterpProjects.value : null;
+    const selectedPeriod = editInterpPeriod ? editInterpPeriod.value : 'auto';
+
+    let startDate = null;
+    let endDate = null;
+    if (selectedPeriod === 'custom') {
+      startDate = editInterpStartDate ? editInterpStartDate.value : null;
+      endDate = editInterpEndDate ? editInterpEndDate.value : null;
+      if (!startDate || !endDate) {
+        showToast('Please select both start and end dates for custom date range.');
+        return;
+      }
+      if (startDate > endDate) {
+        showToast('Start date cannot be after end date.');
+        return;
+      }
+    }
+
+    const checkedAssumptions = editInterpAssumptionsList
+      ? Array.from(editInterpAssumptionsList.querySelectorAll('.interp-assumption-checkbox:checked')).map(cb => cb.value)
+      : [];
+
+    const overrides = {
+      metric: selectedMetric,
+      breakdown: selectedBreakdown,
+      domain: selectedDomain,
+      projectScope: selectedProject,
+      period: selectedPeriod,
+      startDate: startDate,
+      endDate: endDate,
+      assumptions: checkedAssumptions
+    };
+
+    // Immutably flag source message as superseded
+    srcMsg.isSuperseded = true;
+    saveConversationsToStorage();
+
+    // Close modal
+    if (editInterpretationModalBackdrop) {
+      editInterpretationModalBackdrop.classList.remove('open');
+    }
+
+    // Re-run original query with overrides
+    processUserPrompt(userQuery, {
+      interpretationOverride: overrides,
+      sourceMessageId: msgId
+    });
+
+    showToast('Applying updated interpretation and re-running...');
+  }
+
+  // =========================================================================
   // 10. EVENT HANDLERS ON CHAT INTERACTIONS (Group A, B, C)
   // =========================================================================
   function attachConversationEventHandlers(conv) {
@@ -1363,6 +1779,21 @@
           if (m.role === 'user') {
             md += `### User Query (${m.time})\n> ${m.text}\n\n`;
           } else {
+            const scope = m.appliedScope || (m.resultsData && m.resultsData.appliedScope);
+            if (scope) {
+              md += `#### How I interpreted your question\n`;
+              if (scope.metric) md += `- **Metric:** ${scope.metric.label || scope.metric} (${scope.metric.source || 'Standard'})\n`;
+              if (scope.breakdown) md += `- **Breakdown:** ${scope.breakdown.label || scope.breakdown} (${scope.breakdown.source || 'Standard'})\n`;
+              if (scope.domain) md += `- **Business area:** ${scope.domain.label || scope.domain.value || scope.domain}\n`;
+              if (scope.projectScope) md += `- **Project scope:** ${scope.projectScope.label || scope.projectScope}\n`;
+              if (scope.time) md += `- **Period & dates:** ${scope.time.label || scope.periodLabel}${scope.time.dateRange ? ` (${scope.time.dateRange})` : ''}\n`;
+              if (scope.currency) md += `- **Currency / Unit:** ${scope.currency}\n`;
+              if (scope.assumptions && scope.assumptions.length > 0) {
+                md += `- **Assumptions:**\n`;
+                scope.assumptions.forEach(a => { md += `  - ${a}\n`; });
+              }
+              md += `\n`;
+            }
             md += `### Aria Answer (${m.time})\n${m.resultsData ? m.resultsData.answer : (m.message || '')}\n\n`;
             if (m.resultsData && m.resultsData.sql) {
               md += `\`\`\`sql\n${m.resultsData.sql}\n\`\`\`\n\n`;
@@ -1447,6 +1878,14 @@
       chip.addEventListener('click', () => {
         const query = chip.getAttribute('data-query');
         processUserPrompt(query);
+      });
+    });
+
+    // 5B. Edit Interpretation Button (R2-09)
+    chatContainerEl.querySelectorAll('.btn-edit-interpretation').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const msgId = btn.getAttribute('data-msg-id');
+        openEditInterpretationModal(conv, msgId);
       });
     });
 
@@ -2204,6 +2643,7 @@
     helpModalBackdrop.classList.remove('open');
     feedbackModalBackdrop.classList.remove('open');
     sourceTableModalBackdrop.classList.remove('open');
+    if (editInterpretationModalBackdrop) editInterpretationModalBackdrop.classList.remove('open');
     userMenuDropdownEl.classList.remove('open');
     closeTypeahead();
   }
@@ -2430,5 +2870,39 @@
     });
 
     closeSourceTableModalBtn.addEventListener('click', () => sourceTableModalBackdrop.classList.remove('open'));
+
+    // Edit Interpretation Modal Listeners (R2-09)
+    if (closeEditInterpretationModalBtn) {
+      closeEditInterpretationModalBtn.addEventListener('click', () => {
+        if (editInterpretationModalBackdrop) editInterpretationModalBackdrop.classList.remove('open');
+      });
+    }
+    if (btnCancelEditInterpretation) {
+      btnCancelEditInterpretation.addEventListener('click', () => {
+        if (editInterpretationModalBackdrop) editInterpretationModalBackdrop.classList.remove('open');
+      });
+    }
+    if (btnApplyEditInterpretation) {
+      btnApplyEditInterpretation.addEventListener('click', handleApplyEditInterpretation);
+    }
+    if (editInterpMetric) {
+      editInterpMetric.addEventListener('change', () => {
+        updateEditInterpCurrency();
+        syncInterpProjectAndBreakdown();
+      });
+    }
+    if (editInterpBreakdown) {
+      editInterpBreakdown.addEventListener('change', syncInterpProjectAndBreakdown);
+    }
+    if (editInterpProjects) {
+      editInterpProjects.addEventListener('change', syncInterpProjectAndBreakdown);
+    }
+    if (editInterpPeriod) {
+      editInterpPeriod.addEventListener('change', () => {
+        if (editInterpCustomDateRow) {
+          editInterpCustomDateRow.style.display = editInterpPeriod.value === 'custom' ? 'grid' : 'none';
+        }
+      });
+    }
   });
 })();

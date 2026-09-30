@@ -432,6 +432,106 @@
     </div>
   </div>
 
+  <!-- =========================================================================
+       EDIT INTERPRETATION MODAL (R2-09)
+       ========================================================================= -->
+  <div class="modal-backdrop" id="editInterpretationModalBackdrop">
+    <div class="app-modal" style="max-width: 540px;" role="dialog" aria-modal="true" aria-labelledby="editInterpretationTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="editInterpretationTitle">Edit Question Interpretation</div>
+        <button type="button" class="header-icon-btn" id="closeEditInterpretationModalBtn" aria-label="Close modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+          Adjust how Aria interprets your question. Applying changes will re-run the analysis with your specified parameters.
+        </p>
+        <form id="editInterpretationForm" onsubmit="return false;">
+          <input type="hidden" id="editInterpSourceMsgId" value="">
+
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label for="editInterpMetric" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Metric</label>
+            <select id="editInterpMetric" class="scope-select" style="width: 100%;">
+              <!-- Dynamic options -->
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label for="editInterpBreakdown" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Breakdown</label>
+            <select id="editInterpBreakdown" class="scope-select" style="width: 100%;">
+              <!-- Dynamic options -->
+            </select>
+            <div id="editInterpDynamicHint" class="interp-dynamic-hint" style="display: none;"></div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label for="editInterpDomain" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Business Area</label>
+              <select id="editInterpDomain" class="scope-select" style="width: 100%;">
+                <option value="Finance">Finance</option>
+                <option value="Procurement">Procurement</option>
+                <option value="Contracts">Contracts</option>
+                <option value="Construction">Construction</option>
+                <option value="Property Management">Property Management</option>
+                <option value="Projects">Projects</option>
+                <option value="All Domains">All Domains</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="editInterpProjects" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Project Scope</label>
+              <select id="editInterpProjects" class="scope-select" style="width: 100%;">
+                <option value="all">All enterprise projects</option>
+                <option value="PRJ-SK-02">Skyline Residences Tower B (PRJ-SK-02)</option>
+                <option value="PRJ-GMB-02">Grand Marina Bay Phase 2 (PRJ-GMB-02)</option>
+                <option value="PRJ-HH-04">Heritage Heights High-Rise (PRJ-HH-04)</option>
+                <option value="PRJ-OCP-01">Oasis Central Park Villas (PRJ-OCP-01)</option>
+                <option value="PRJ-RLH-01">Riverside Logistics Hub (PRJ-RLH-01)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label for="editInterpPeriod" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Period</label>
+            <select id="editInterpPeriod" class="scope-select" style="width: 100%;">
+              <option value="auto">Auto — No time restriction</option>
+              <option value="current_quarter">This calendar quarter (01/07/2026–30/09/2026)</option>
+              <option value="previous_quarter">Previous calendar quarter (01/04/2026–30/06/2026)</option>
+              <option value="calendar_year">Calendar year 2026 (01/01/2026–31/12/2026)</option>
+              <option value="custom">Custom date range...</option>
+            </select>
+          </div>
+
+          <div id="editInterpCustomDateRow" style="display: none; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div class="form-group">
+              <label for="editInterpStartDate" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">Start Date</label>
+              <input type="date" id="editInterpStartDate" class="scope-select" style="width: 100%; font-size: 13px;">
+            </div>
+            <div class="form-group">
+              <label for="editInterpEndDate" style="display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">End Date</label>
+              <input type="date" id="editInterpEndDate" class="scope-select" style="width: 100%; font-size: 13px;">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 12px;">
+            <label for="editInterpCurrency" style="display: block; font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Currency / Unit</label>
+            <input type="text" id="editInterpCurrency" class="scope-select" readonly disabled style="width: 100%; background: var(--bg-hover, #f1f5f9); color: var(--text-secondary);">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">Assumptions</label>
+            <div id="editInterpAssumptionsList" class="interpretation-assumptions-edit-box" style="display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-surface);">
+              <!-- Checkboxes for assumptions -->
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+            <button type="button" class="action-tool-btn" id="btnCancelEditInterpretation">Cancel</button>
+            <button type="button" class="action-tool-btn primary" id="btnApplyEditInterpretation">Apply &amp; re-run</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="mock-data.js"></script>
   <script src="app.js"></script>
