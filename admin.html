@@ -21,7 +21,7 @@
           <div class="brand-icon" aria-hidden="true" style="background: #475569;">O</div>
           <div class="brand-title">
             <span>Aria Observability</span>
-            <span class="brand-badge" style="background: var(--success-bg); color: var(--success-color); border-color: var(--success-border);">Layer 8: Active</span>
+            <span class="demo-status-badge">Demo <span aria-hidden="true">&bull;</span> Synthetic data</span>
           </div>
         </div>
 
@@ -35,7 +35,7 @@
       <div class="header-right">
         <div class="user-badge" id="adminUserBadge">
           <div class="user-badge-dot" aria-hidden="true"></div>
-          <span id="adminUserLabel">Signed in as: <strong>Admin</strong></span>
+          <span id="adminUserLabel">Demo persona: <strong>Admin</strong></span>
         </div>
         <button type="button" class="header-icon-btn" id="themeToggleBtn" aria-label="Toggle color theme"></button>
       </div>
@@ -257,7 +257,7 @@
       const adminUserLabel = document.getElementById('adminUserLabel');
 
       if (currentUser) {
-        adminUserLabel.innerHTML = `Signed in as: <strong>${currentUser.name} (${currentUser.roleTitle})</strong>`;
+        adminUserLabel.innerHTML = `Demo persona: <strong>${currentUser.name}</strong>`;
       }
 
       if (!currentUser || currentUser.role !== 'data_admin') {
@@ -603,7 +603,12 @@
 
       function exportCsv() {
         const trail = window.AriaMock.getAuditTrail() || [];
-        const rows = [['ID', 'Timestamp', 'User', 'Role', 'Question', 'Outcome', 'Latency(ms)', 'Details']];
+        const rows = [
+          ['Demo • Synthetic data'],
+          ['Prototype export — access rules and masking are simulated'],
+          [],
+          ['ID', 'Timestamp', 'User', 'Role', 'Question', 'Outcome', 'Latency(ms)', 'Details']
+        ];
         trail.forEach(t => rows.push([t.id, t.timestamp, `"${t.user}"`, `"${t.role}"`, `"${t.question}"`, t.outcome, t.latencyMs, `"${t.details}"`]));
         const csv = rows.map(r => r.join(',')).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });

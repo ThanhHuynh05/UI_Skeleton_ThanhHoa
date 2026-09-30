@@ -235,6 +235,20 @@ a:hover {
   border-radius: var(--radius-sm);
 }
 
+.demo-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-full);
+  background: var(--warning-bg);
+  color: var(--warning-color);
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 /* Header Top Navigation */
 .header-nav {
   display: flex;
@@ -305,7 +319,7 @@ a:hover {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  width: 240px;
+  width: 250px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
@@ -315,6 +329,35 @@ a:hover {
   flex-direction: column;
   gap: 2px;
   z-index: 60;
+}
+
+.user-menu-context {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px 9px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.user-menu-context strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.user-menu-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--border-color);
+}
+
+.user-menu-admin-links {
+  display: none;
+}
+
+.user-menu-chevron {
+  font-size: 10px;
 }
 .user-menu-dropdown.open {
   display: flex;
@@ -1553,6 +1596,15 @@ a:hover {
     background: #ffffff !important;
     color: #000000 !important;
   }
+  body::before {
+    content: "DEMO • SYNTHETIC DATA — Access and masking behaviours are simulated.";
+    display: block;
+    margin-bottom: 12px;
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    font: 600 11px/1.4 Arial, sans-serif;
+  }
   .app-header, .sidebar, .chat-input-bar, .response-actions-row, .table-toolbar, .collapsed-pipeline, .btn-new-chat, .header-action-btn, .theme-toggle-btn {
     display: none !important;
   }
@@ -1565,6 +1617,18 @@ a:hover {
     box-shadow: none !important;
     border: 1px solid #ccc !important;
     page-break-inside: avoid;
+  }
+}
+
+@media (max-width: 1100px) and (min-width: 821px) {
+  .app-header { padding-inline: 12px; }
+  .header-left { gap: 10px; }
+  .header-nav { margin-left: 4px; }
+  .user-badge-btn { max-width: 240px; }
+  #headerUserLabel {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -2120,3 +2184,307 @@ body.dashboard-page .app-header {
 .sql-summary::-webkit-details-marker { display: none; }
 details[open] .sql-chevron { transform: rotate(180deg); }
 .sql-chevron { transition: transform 0.2s ease; }
+
+/* =========================================================================
+   R2-06 & R2-08: SCOPE EDITOR, APPLIED SCOPE & CONFLICT RESOLUTION
+   ========================================================================= */
+
+.scope-helper-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-right: 2px;
+}
+
+.scope-period-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.scope-period-control .time-range-select {
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.scope-period-control .time-range-select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+/* Custom Date Range Sub-Bar */
+.custom-date-range-bar {
+  max-width: 860px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+}
+
+.custom-date-inputs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.date-field-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-field-group label {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.date-input {
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  font-size: 11.5px;
+  color: var(--text-primary);
+  font-family: inherit;
+}
+
+.date-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.btn-apply-custom-date {
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent-primary);
+  background: var(--accent-primary);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-apply-custom-date:hover {
+  opacity: 0.9;
+}
+
+.custom-date-validation {
+  font-size: 11.5px;
+  color: var(--danger-color);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Scope editor highlight pulse */
+@keyframes scope-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.6); }
+  50% { box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+}
+
+.scope-editor-pulse {
+  animation: scope-pulse 1.2s ease-in-out 2;
+  border-radius: var(--radius-md);
+}
+
+/* Applied Scope Card (Prominent Answer Block) */
+.applied-scope-card {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--accent-primary);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.applied-scope-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 6px;
+}
+
+.applied-scope-badge-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--accent-primary);
+}
+
+.applied-scope-basis {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.applied-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px 16px;
+}
+
+.applied-scope-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.applied-scope-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.applied-scope-value {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.applied-scope-value small {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.applied-scope-source {
+  font-size: 10px;
+  font-weight: 500;
+  display: inline-block;
+  margin-top: 1px;
+}
+
+.applied-scope-source.source-confirmed {
+  color: var(--success-color);
+}
+
+.applied-scope-source.source-inferred {
+  color: var(--accent-primary);
+}
+
+.applied-scope-source.source-selected {
+  color: var(--text-secondary);
+}
+
+/* Scope Conflict Clarification Card */
+.scope-conflict-card {
+  border: 2px solid var(--warning-color) !important;
+  background-color: var(--bg-surface);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.conflict-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.conflict-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  background-color: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--warning-color);
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.conflict-explanation {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.conflict-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.conflict-option-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.conflict-option-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+  transform: translateX(2px);
+}
+
+.conflict-option-btn.btn-edit-scope-action {
+  border-style: dashed;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+
+.conflict-option-btn.btn-edit-scope-action:hover {
+  color: var(--accent-primary);
+}
+
+.conflict-option-btn:disabled,
+.clarification-chip:disabled {
+  opacity: 0.75;
+  cursor: default !important;
+  pointer-events: none;
+  transform: none !important;
+}
+
+.conflict-option-btn.selected-resolution,
+.clarification-chip.selected-resolution {
+  border-color: var(--success-color, #10b981) !important;
+  background-color: var(--success-bg, #ecfdf5) !important;
+  color: var(--success-color, #065f46) !important;
+  font-weight: 600 !important;
+}
+
+.conflict-resolved-banner {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}

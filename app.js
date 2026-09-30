@@ -34,6 +34,10 @@
     },
     activeDomainScope: 'Auto',
     activeTimeRange: 'Auto',
+    selectedScope: {
+      domain: { mode: 'auto', value: 'Auto' },
+      time: { mode: 'auto', preset: 'auto', start: null, end: null }
+    },
     searchQuery: '',
     currentFeedbackMessageId: null,
     voiceRecognition: null,
@@ -106,6 +110,12 @@
 
   const domainScopeChipsEl = document.getElementById('domainScopeChips');
   const timeRangeSelectEl = document.getElementById('timeRangeSelect');
+  const scopeEditorBarEl = document.getElementById('scopeEditorBar');
+  const customDateRangeBarEl = document.getElementById('customDateRangeBar');
+  const customStartDateEl = document.getElementById('customStartDate');
+  const customEndDateEl = document.getElementById('customEndDate');
+  const customDateValidationMsgEl = document.getElementById('customDateValidationMsg');
+  const applyCustomDateBtnEl = document.getElementById('applyCustomDateBtn');
 
   // =========================================================================
   // 1. INITIALIZATION & IDENTITY (FIX 2: WHO IS USING)
@@ -188,15 +198,15 @@
     loadUserConversations();
     renderSidebarConversations();
     renderActiveConversation();
-    showToast(`Signed in as ${userObj.name} (${userObj.roleTitle})`);
+    showToast(`Demo persona changed to ${userObj.name}`);
   }
 
   function updateUserBadge() {
     if (!state.currentUser) return;
-    headerUserLabelEl.innerHTML = `Signed in as: <strong>${escapeHtml(state.currentUser.name)} (${escapeHtml(state.currentUser.roleTitle)})</strong>`;
+    headerUserLabelEl.innerHTML = `Demo persona: <strong>${escapeHtml(state.currentUser.name)}</strong>`;
     const adminNav = document.getElementById('adminWorkspaceNav');
     if (adminNav) {
-      adminNav.style.display = state.currentUser.role === 'data_admin' ? 'flex' : 'none';
+      adminNav.style.display = state.currentUser.role === 'data_admin' ? 'block' : 'none';
     }
   }
 
@@ -486,6 +496,42 @@
     `;
   }
 
+  function generateAppliedScopeHtml(scope) {
+    if (!scope) return '';
+    const domainSrc = (scope.source && scope.source.domain) ? scope.source.domain : 'Inferred from question';
+    const timeSrc = (scope.source && scope.source.time) ? scope.source.time : 'No time restriction';
+
+    const getSourceClass = (src) => {
+      if (src && src.includes('Confirmed')) return 'source-confirmed';
+      if (src && src.includes('Inferred')) return 'source-inferred';
+      return 'source-selected';
+    };
+
+    return `
+      <div class="applied-scope-card">
+        <div class="applied-scope-header">
+          <div class="applied-scope-badge-title">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+            <span>Applied Scope</span>
+          </div>
+          <span class="applied-scope-basis">Calendar basis: <strong>${escapeHtml(scope.calendarBasis || 'Calendar')}</strong></span>
+        </div>
+        <div class="applied-scope-grid">
+          <div class="applied-scope-item">
+            <span class="applied-scope-label">Domain</span>
+            <span class="applied-scope-value">${escapeHtml(scope.domain || 'All Domains')}</span>
+            <span class="applied-scope-source ${getSourceClass(domainSrc)}">${escapeHtml(domainSrc)}</span>
+          </div>
+          <div class="applied-scope-item">
+            <span class="applied-scope-label">Period</span>
+            <span class="applied-scope-value">${escapeHtml(scope.periodLabel || 'No time restriction')}${scope.dateRange && !scope.periodLabel.includes(scope.dateRange) ? ` <small class="applied-scope-dates">(${escapeHtml(scope.dateRange)})</small>` : ''}</span>
+            <span class="applied-scope-source ${getSourceClass(timeSrc)}">${escapeHtml(timeSrc)}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function renderAgentMessageHtml(msg, msgIdx) {
     if (msg.type === 'blocked') {
       return renderBlockedSecurityHtml(msg);
@@ -518,6 +564,9 @@
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
         <div class="agent-response-card">
+          <!-- Applied Scope (Prominent, Turn-Snapshotted) -->
+          ${generateAppliedScopeHtml(msg.appliedScope || (res && res.appliedScope))}
+
           <!-- 1. Applied Interpretation & Business Answer -->
           ${res.interpretation ? `
             <div class="interpretation-box" style="background: var(--bg-hover); padding: 12px; border-radius: 6px; margin-bottom: 12px; font-size: 12.5px; border-left: 3px solid var(--accent-primary);">
@@ -575,7 +624,7 @@
             <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
               <div class="answer-meta-bar" style="border: none; padding: 0; background: transparent;">
                 <span class="answer-meta-item">🕒 Data as of: ${escapeHtml(res.dataAsOf || 'Yesterday 23:59 UTC')}</span>
-                <span class="answer-meta-item">🛡️ RBAC: ${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Default')}</span>
+                <span class="answer-meta-item">Simulated access view: ${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Default')}</span>
               </div>
 
               ${res.confidenceNote ? `
@@ -658,6 +707,45 @@
 
   function renderClarificationHtml(msg) {
     const opts = msg.options || [];
+
+    if (msg.subtype === 'scope_conflict') {
+      return `
+        <div class="chat-row agent-row" id="msg_row_${msg.id}">
+          <div class="agent-response-card scope-conflict-card" style="border: 2px solid var(--warning-color); padding: 22px;">
+            <div class="conflict-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <div class="conflict-badge" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background-color: var(--warning-bg); border: 1px solid var(--warning-border); color: var(--warning-color); border-radius: var(--radius-full); font-size: 12px; font-weight: 700;">
+                <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                <span>Scope Conflict Resolution Required</span>
+              </div>
+              <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">Clarification required before query execution</span>
+            </div>
+
+            <p class="conflict-explanation" style="font-size: 14px; margin-bottom: 16px; line-height: 1.5; color: var(--text-primary);">${formatMarkdownBold(msg.question || '')}</p>
+
+            ${msg.resolvedPayload ? `
+              <div class="conflict-resolved-banner" style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--success-bg); border: 1px solid var(--success-color); border-radius: var(--radius-sm); color: var(--success-color); font-size: 12.5px; font-weight: 600; margin-bottom: 12px;">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <span>Scope conflict resolved: Applied <strong>${escapeHtml(msg.resolvedChoice || msg.resolvedPayload)}</strong></span>
+              </div>
+            ` : ''}
+
+            <div class="conflict-options-list" style="display: flex; flex-direction: column; gap: 8px;">
+              ${opts.map((opt) => {
+                const payloadStr = typeof opt.payload === 'object' ? JSON.stringify(opt.payload) : opt.payload;
+                const isSelected = msg.resolvedChoice === opt.label || msg.resolvedPayload === opt.label;
+                return `
+                  <button type="button" class="clarification-chip conflict-option-btn ${opt.isEditScope ? 'btn-edit-scope-action' : ''} ${isSelected ? 'selected-resolution' : ''}" data-msg-id="${msg.id}" data-payload='${escapeHtml(payloadStr)}' data-label="${escapeHtml(opt.label)}" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; font-size: 13.5px; border-radius: var(--radius-md); border: 1px solid ${isSelected ? 'var(--success-color)' : 'var(--border-color)'}; background: ${isSelected ? 'var(--success-bg)' : 'var(--bg-surface)'}; text-align: left; cursor: ${msg.resolvedPayload ? 'default' : 'pointer'};" ${msg.resolvedPayload ? 'disabled' : ''}>
+                    <span style="font-weight: 600;">${isSelected ? '✓ ' : ''}${escapeHtml(opt.label)}</span>
+                    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
         <div class="agent-response-card" style="border: 2px solid var(--accent-primary); box-shadow: 0 10px 25px rgba(0,0,0,0.1); padding: 24px; position: relative; z-index: 10;">
@@ -671,10 +759,16 @@
               <span style="font-weight: 700;">Agent Clarification Required</span>
             </div>
             <p class="clarification-question" style="font-size: 15px; margin-bottom: 20px; line-height: 1.5;">${escapeHtml(msg.question || '')}</p>
+            ${msg.resolvedPayload ? `
+              <div class="conflict-resolved-banner" style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--success-bg); border: 1px solid var(--success-color); border-radius: var(--radius-sm); color: var(--success-color); font-size: 12.5px; font-weight: 600; margin-bottom: 12px;">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <span>Clarification resolved: Selected <strong>${escapeHtml(msg.resolvedChoice || msg.resolvedPayload)}</strong></span>
+              </div>
+            ` : ''}
             <div class="clarification-chips" style="display: flex; flex-direction: column; gap: 10px;">
               ${opts.map((opt) => `
-                <button type="button" class="clarification-chip" data-payload="${escapeHtml(opt.payload)}" data-label="${escapeHtml(opt.label)}" style="width: 100%; justify-content: space-between; padding: 12px 16px; font-size: 14px; border: 1px solid var(--border-color); background: var(--bg-surface); text-align: left;" ${msg.resolvedPayload ? 'disabled' : ''}>
-                  <span style="font-weight: 500;">${escapeHtml(opt.label)}</span>
+                <button type="button" class="clarification-chip ${msg.resolvedChoice === opt.label ? 'selected-resolution' : ''}" data-msg-id="${msg.id}" data-payload="${escapeHtml(typeof opt.payload === 'object' ? JSON.stringify(opt.payload) : opt.payload)}" data-label="${escapeHtml(opt.label)}" style="width: 100%; justify-content: space-between; padding: 12px 16px; font-size: 14px; border: 1px solid var(--border-color); background: var(--bg-surface); text-align: left;" ${msg.resolvedPayload ? 'disabled' : ''}>
+                  <span style="font-weight: 500;">${msg.resolvedChoice === opt.label ? '✓ ' : ''}${escapeHtml(opt.label)}</span>
                   <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
                 </button>
               `).join('')}
@@ -730,11 +824,11 @@
       <section class="welcome-hero" id="welcomeHero">
         <div class="hero-chip">
           <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12zm1-9H9v5h2V7zm0 6H9v2h2v-2z"/></svg>
-          Read-only enterprise data assistant
+          Demo workspace &bull; Synthetic data
         </div>
-        <h1 class="hero-title">Ask questions about the enterprise data you have access to</h1>
+        <h1 class="hero-title">Ask about sales, finance, projects, and operations</h1>
         <p class="hero-subtitle">
-          Get business answers grounded in approved enterprise data, with applied filters, definitions, and source details you can verify.
+          Explore business questions using synthetic data. Persona access, filtering, and masking shown here are simulated prototype behaviours.
         </p>
 
         <div class="example-section">
@@ -773,6 +867,11 @@
   function handleSendMessage() {
     const text = chatInputEl.value.trim();
     if (!text || state.isThinking) return;
+
+    if (!validateCustomDateRange()) {
+      showToast('Invalid date range: Start date cannot be after end date.');
+      return;
+    }
 
     chatInputEl.value = '';
     updateSendButtonState();
@@ -821,7 +920,9 @@
       user: state.currentUser,
       domainScope: state.activeDomainScope,
       timeRange: state.activeTimeRange,
+      selectedScope: state.selectedScope,
       clarificationPayload: options.clarificationPayload,
+      scopeConfirmation: options.scopeConfirmation,
       signal: state.activeAbortController.signal
     })
     .then((result) => {
@@ -839,13 +940,16 @@
         id: agentMsgId,
         role: 'agent',
         type: result.type,
+        subtype: result.subtype || null,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         timestamp: Date.now(),
         resultsData: result.type === 'results' ? result : null,
+        appliedScope: result.appliedScope || null,
         errorData: result.type === 'error' ? result.friendlyError : null,
         clarificationData: result.type === 'clarification' ? result : null,
         question: result.question || null,
         options: result.options || null,
+        originalQuery: result.originalQuery || null,
         title: result.title || null,
         message: result.message || null,
         reason: result.reason || null,
@@ -1254,7 +1358,7 @@
     const exportBtn = document.getElementById('exportConvBtn');
     if (exportBtn) {
       exportBtn.addEventListener('click', () => {
-        let md = `# ${conv.title}\n*Exported from Aria AI Assistant on ${new Date().toLocaleString()}*\n\n---\n\n`;
+        let md = `# ${conv.title}\n\n> **Demo • Synthetic data** — This export comes from a prototype. Persona access and masking are simulated and do not demonstrate production security enforcement.\n\n*Exported from Aria on ${new Date().toLocaleString()}*\n\n---\n\n`;
         conv.messages.forEach((m) => {
           if (m.role === 'user') {
             md += `### User Query (${m.time})\n> ${m.text}\n\n`;
@@ -1292,9 +1396,49 @@
     // 4. Clarification Chips
     chatContainerEl.querySelectorAll('.clarification-chip').forEach((chip) => {
       chip.addEventListener('click', () => {
-        const payload = chip.getAttribute('data-payload');
+        const rawPayload = chip.getAttribute('data-payload');
         const label = chip.getAttribute('data-label');
-        processUserPrompt(label, { clarificationPayload: payload });
+        const msgId = chip.getAttribute('data-msg-id');
+
+        let parsedPayload = null;
+        try {
+          if (rawPayload && (rawPayload.startsWith('{') || rawPayload.startsWith('['))) {
+            parsedPayload = JSON.parse(rawPayload);
+          }
+        } catch (e) {
+          parsedPayload = null;
+        }
+
+        if (parsedPayload && parsedPayload.resolution === 'edit_scope') {
+          if (scopeEditorBarEl) {
+            scopeEditorBarEl.classList.remove('scope-editor-pulse');
+            void scopeEditorBarEl.offsetWidth;
+            scopeEditorBarEl.classList.add('scope-editor-pulse');
+            scopeEditorBarEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+          if (timeRangeSelectEl) {
+            timeRangeSelectEl.focus();
+          }
+          showToast('Scope editor highlighted. Adjust domain or period above.');
+          return;
+        }
+
+        // Mark this clarification message as resolved
+        if (msgId) {
+          const targetMsg = conv.messages.find((m) => m.id === msgId);
+          if (targetMsg) {
+            targetMsg.resolvedPayload = label;
+            targetMsg.resolvedChoice = label;
+            saveConversationsToStorage();
+          }
+        }
+
+        if (parsedPayload && parsedPayload.type === 'scope_resolution') {
+          processUserPrompt(label, { scopeConfirmation: parsedPayload });
+          return;
+        }
+
+        processUserPrompt(label, { clarificationPayload: rawPayload });
       });
     });
 
@@ -1418,7 +1562,13 @@
         const msg = conv.messages.find((m) => m.id === msgId);
         if (msg && msg.resultsData && msg.resultsData.table) {
           const t = msg.resultsData.table;
-          const csv = [t.headers.join(','), ...t.rows.map((r) => t.columns.map((c) => `"${r[c]}"`).join(','))].join('\n');
+          const csv = [
+            '"Demo • Synthetic data"',
+            '"Prototype export — persona access and masking are simulated"',
+            '',
+            t.headers.join(','),
+            ...t.rows.map((r) => t.columns.map((c) => `"${r[c]}"`).join(','))
+          ].join('\n');
           downloadFile('query_results.csv', csv, 'text/csv');
           showToast('Table downloaded as CSV');
         }
@@ -1659,6 +1809,75 @@
     });
   }
 
+  function validateCustomDateRange() {
+    if (!timeRangeSelectEl || timeRangeSelectEl.value !== 'custom') {
+      if (customDateValidationMsgEl) customDateValidationMsgEl.style.display = 'none';
+      return true;
+    }
+    const startVal = customStartDateEl ? customStartDateEl.value : '';
+    const endVal = customEndDateEl ? customEndDateEl.value : '';
+
+    if (!startVal || !endVal) {
+      if (customDateValidationMsgEl) {
+        customDateValidationMsgEl.textContent = 'Please select both start and end dates.';
+        customDateValidationMsgEl.style.display = 'flex';
+      }
+      return false;
+    }
+
+    if (startVal > endVal) {
+      if (customDateValidationMsgEl) {
+        const fmtStart = window.AriaScope ? window.AriaScope.formatDisplayDate(startVal) : startVal;
+        const fmtEnd = window.AriaScope ? window.AriaScope.formatDisplayDate(endVal) : endVal;
+        customDateValidationMsgEl.textContent = `Start date (${fmtStart}) cannot be after end date (${fmtEnd}). Please select a valid range.`;
+        customDateValidationMsgEl.style.display = 'flex';
+      }
+      return false;
+    }
+
+    if (customDateValidationMsgEl) {
+      customDateValidationMsgEl.style.display = 'none';
+    }
+    return true;
+  }
+
+  function updateScopeEditorUI() {
+    if (!timeRangeSelectEl || !window.AriaScope) return;
+    const demoCtx = (window.AriaMock && window.AriaMock.DEMO_CONTEXT) ? window.AriaMock.DEMO_CONTEXT : (window.DEMO_CONTEXT || { dataAsOf: '2026-09-28' });
+    const curQ = window.AriaScope.resolvePresetDateRange('current_quarter', demoCtx);
+    const prevQ = window.AriaScope.resolvePresetDateRange('previous_quarter', demoCtx);
+    const yr = window.AriaScope.resolvePresetDateRange('calendar_year', demoCtx);
+
+    const currentVal = timeRangeSelectEl.value;
+
+    timeRangeSelectEl.innerHTML = `
+      <option value="auto" ${currentVal === 'auto' ? 'selected' : ''}>Auto — No time restriction</option>
+      <option value="current_quarter" ${currentVal === 'current_quarter' ? 'selected' : ''}>This calendar quarter (${curQ.displayRange})</option>
+      <option value="previous_quarter" ${currentVal === 'previous_quarter' ? 'selected' : ''}>Previous calendar quarter (${prevQ.displayRange})</option>
+      <option value="calendar_year" ${currentVal === 'calendar_year' ? 'selected' : ''}>Calendar year ${yr.year} (${yr.displayRange})</option>
+      <option value="all_time" ${currentVal === 'all_time' ? 'selected' : ''}>All time</option>
+      <option value="custom" ${currentVal === 'custom' ? 'selected' : ''}>Custom date range...</option>
+    `;
+
+    if (state.selectedScope && state.selectedScope.time) {
+      if (state.selectedScope.time.preset === 'current_quarter') {
+        state.selectedScope.time.start = curQ.start;
+        state.selectedScope.time.end = curQ.end;
+        state.activeTimeRange = curQ.label;
+      } else if (state.selectedScope.time.preset === 'previous_quarter') {
+        state.selectedScope.time.start = prevQ.start;
+        state.selectedScope.time.end = prevQ.end;
+        state.activeTimeRange = prevQ.label;
+      } else if (state.selectedScope.time.preset === 'calendar_year') {
+        state.selectedScope.time.start = yr.start;
+        state.selectedScope.time.end = yr.end;
+        state.activeTimeRange = yr.label;
+      }
+    }
+  }
+
+  window.updateScopeEditorUI = updateScopeEditorUI;
+
   // =========================================================================
   // 14. INPUT HELPERS: TYPEAHEAD, DOMAIN CHIPS, VOICE INPUT (Group C)
   // =========================================================================
@@ -1714,7 +1933,12 @@
         chip.addEventListener('click', () => {
           domainScopeChipsEl.querySelectorAll('.scope-chip').forEach((c) => c.classList.remove('active'));
           chip.classList.add('active');
-          state.activeDomainScope = chip.getAttribute('data-scope');
+          const scopeVal = chip.getAttribute('data-scope');
+          state.activeDomainScope = scopeVal;
+          state.selectedScope.domain = {
+            mode: scopeVal === 'Auto' ? 'auto' : 'explicit',
+            value: scopeVal
+          };
           showToast(`Query scope limited to: ${state.activeDomainScope}`);
           if (!getActiveConversation() || (getActiveConversation().messages || []).length === 0) {
             renderIdleState();
@@ -1723,11 +1947,67 @@
       });
     }
 
-    // 3. Time Range Select
+    // 3. Time Range / Scope Editor Select
     if (timeRangeSelectEl) {
       timeRangeSelectEl.addEventListener('change', () => {
-        state.activeTimeRange = timeRangeSelectEl.value;
-        showToast(`Time window set to: ${state.activeTimeRange}`);
+        const val = timeRangeSelectEl.value;
+        if (val === 'custom') {
+          if (customDateRangeBarEl) customDateRangeBarEl.style.display = 'flex';
+          state.selectedScope.time = {
+            mode: 'custom',
+            preset: 'custom',
+            start: customStartDateEl ? customStartDateEl.value : null,
+            end: customEndDateEl ? customEndDateEl.value : null
+          };
+          state.activeTimeRange = 'Custom';
+          validateCustomDateRange();
+          updateSendButtonState();
+        } else {
+          if (customDateRangeBarEl) customDateRangeBarEl.style.display = 'none';
+          if (customDateValidationMsgEl) customDateValidationMsgEl.style.display = 'none';
+          updateSendButtonState();
+
+          if (val === 'auto' || val === 'Auto') {
+            state.selectedScope.time = { mode: 'auto', preset: 'auto', start: null, end: null };
+            state.activeTimeRange = 'Auto';
+            showToast('Time window set to: Auto (No time restriction)');
+          } else {
+            const p = window.AriaScope.resolvePresetDateRange(val, window.AriaMock.DEMO_CONTEXT);
+            state.selectedScope.time = {
+              mode: 'preset',
+              preset: val,
+              start: p.start,
+              end: p.end
+            };
+            state.activeTimeRange = p.label;
+            showToast(`Time window set to: ${p.label}`);
+          }
+        }
+      });
+    }
+
+    if (customStartDateEl && customEndDateEl) {
+      const handleCustomDateChange = () => {
+        const isValid = validateCustomDateRange();
+        if (isValid && state.selectedScope.time.mode === 'custom') {
+          state.selectedScope.time.start = customStartDateEl.value;
+          state.selectedScope.time.end = customEndDateEl.value;
+        }
+        updateSendButtonState();
+      };
+      customStartDateEl.addEventListener('change', handleCustomDateChange);
+      customStartDateEl.addEventListener('input', handleCustomDateChange);
+      customEndDateEl.addEventListener('change', handleCustomDateChange);
+      customEndDateEl.addEventListener('input', handleCustomDateChange);
+    }
+
+    if (applyCustomDateBtnEl) {
+      applyCustomDateBtnEl.addEventListener('click', () => {
+        if (validateCustomDateRange()) {
+          state.selectedScope.time.start = customStartDateEl.value;
+          state.selectedScope.time.end = customEndDateEl.value;
+          showToast(`Custom range applied: ${window.AriaScope.formatDateRange(customStartDateEl.value, customEndDateEl.value)}`);
+        }
       });
     }
 
@@ -1888,7 +2168,7 @@
         <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12.5px;">
           <p><strong>Architecture Boundaries &amp; Known Limitations:</strong></p>
           <div class="schema-table-card">
-            <strong>Read-Only Guarantee:</strong> Aria cannot modify, insert, or delete enterprise data. All SQL runs on read-only replicas.
+            <strong>Prototype behaviour:</strong> This demo presents read-only interactions with synthetic data. It does not prove production data controls.
           </div>
           <div class="schema-table-card">
             <strong>Catalog Boundaries:</strong> Indexed operational data spans FY2023–FY2026. Pre-2023 payroll and internal corporate HR records (stored in Workday) are out-of-scope.
@@ -1897,7 +2177,7 @@
             <strong>Ungrounded Forecasting:</strong> External macroeconomic forecasts (e.g. 2030 mortgage interest rates) are unsupported to prevent hallucination.
           </div>
           <div class="schema-table-card">
-            <strong>Role Masking:</strong> Sensitive columns (personal phone, tax ID, contractor profit margins) are masked per RBAC rules.
+            <strong>Simulated access and masking:</strong> Persona-based restrictions and masked fields illustrate intended behaviour only; no production enforcement is implied.
           </div>
         </div>
       `;
@@ -1958,9 +2238,10 @@
   function updateThemeIcon() {
     if (!themeToggleBtnEl) return;
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    themeToggleBtnEl.innerHTML = isDark
-      ? `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`
-      : `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+    const themeIcon = isDark
+      ? `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line></svg>`
+      : `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+    themeToggleBtnEl.innerHTML = `${themeIcon}<span>Use ${isDark ? 'light' : 'dark'} appearance</span>`;
   }
 
   function showToast(message, type = 'info') {
@@ -1978,7 +2259,8 @@
 
   function updateSendButtonState() {
     const hasText = chatInputEl.value.trim().length > 0;
-    sendBtnEl.disabled = !hasText || state.isThinking;
+    const isCustomDateValid = validateCustomDateRange();
+    sendBtnEl.disabled = !hasText || state.isThinking || !isCustomDateValid;
   }
 
   function scrollToBottom() {
@@ -2022,6 +2304,7 @@
     initTheme();
     initUserIdentity();
     initInputHelpers();
+    updateScopeEditorUI();
     initSettingsAndHelp();
 
     // Chat Input Keys & Send
@@ -2070,9 +2353,11 @@
     userMenuBtnEl.addEventListener('click', (e) => {
       e.stopPropagation();
       userMenuDropdownEl.classList.toggle('open');
+      userMenuBtnEl.setAttribute('aria-expanded', userMenuDropdownEl.classList.contains('open') ? 'true' : 'false');
     });
     document.addEventListener('click', () => {
       userMenuDropdownEl.classList.remove('open');
+      userMenuBtnEl.setAttribute('aria-expanded', 'false');
     });
 
     switchUserMenuItemEl.addEventListener('click', () => {

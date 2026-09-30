@@ -1681,6 +1681,1225 @@ GROUP BY p.asset_sub_type;`,
   }
 
   // =========================================================================
+  // 10B. SCOPE RESOLUTION ENGINE & CALENDAR SEMANTICS (R2-06 & R2-08)
+  // =========================================================================
+  const DEMO_CONTEXT = {
+    _dataAsOf: '2026-09-28',
+    calendarBasis: 'Calendar',
+    fiscalYearStartMonth: 1, // 1 = January (Calendar basis; no fiscal speculation)
+    get dataAsOf() { return this._dataAsOf; },
+    set dataAsOf(val) {
+      this._dataAsOf = val;
+      if (typeof window !== 'undefined' && typeof window.updateScopeEditorUI === 'function') {
+        window.updateScopeEditorUI();
+      }
+    }
+  };
+
+  function parseIsoDate(isoStr) {
+    if (!isoStr) return null;
+    const clean = String(isoStr).split('T')[0].split(' ')[0].trim();
+    const parts = clean.split('-');
+    if (parts.length < 3) return null;
+    return {
+      year: parseInt(parts[0], 10),
+      month: parseInt(parts[1], 10),
+      day: parseInt(parts[2], 10)
+    };
+  }
+
+  function formatDisplayDate(isoStr) {
+    if (!isoStr) return '';
+    const d = parseIsoDate(isoStr);
+    if (!d || isNaN(d.year)) return isoStr;
+    const dd = String(d.day).padStart(2, '0');
+    const mm = String(d.month).padStart(2, '0');
+    return `${dd}/${mm}/${d.year}`;
+  }
+
+  function formatDateRange(startIso, endIso) {
+    if (!startIso || !endIso) return 'No time restriction';
+    return `${formatDisplayDate(startIso)}–${formatDisplayDate(endIso)}`;
+  }
+
+  function validateDateRange(startIso, endIso) {
+    if (!startIso || !endIso) {
+      return { valid: false, message: 'Please select both start and end dates.' };
+    }
+    if (startIso > endIso) {
+      const fmtStart = formatDisplayDate(startIso);
+      const fmtEnd = formatDisplayDate(endIso);
+      return { valid: false, message: `Start date (${fmtStart}) cannot be after end date (${fmtEnd}). Please select a valid range.` };
+    }
+    return { valid: true, message: '' };
+  }
+
+  function getQuarterDates(year, quarter) {
+    switch (quarter) {
+      case 1:
+        return { start: `${year}-01-01`, end: `${year}-03-31` };
+      case 2:
+        return { start: `${year}-04-01`, end: `${year}-06-30` };
+      case 3:
+        return { start: `${year}-07-01`, end: `${year}-09-30` };
+      case 4:
+      default:
+        return { start: `${year}-10-01`, end: `${year}-12-31` };
+    }
+  }
+
+  function resolvePresetDateRange(preset, demoContext = DEMO_CONTEXT) {
+    const d = parseIsoDate(demoContext.dataAsOf || '2026-09-28');
+    const currentQuarter = Math.ceil(d.month / 3);
+    const currentYear = d.year;
+
+    const p = String(preset || '').toLowerCase().trim();
+
+    if (p === 'current_quarter' || p === 'this quarter' || p === 'this_quarter') {
+      const dates = getQuarterDates(currentYear, currentQuarter);
+      return {
+        preset: 'current_quarter',
+        quarter: currentQuarter,
+        year: currentYear,
+        quarterKey: `${currentYear}-Q${currentQuarter}`,
+        start: dates.start,
+        end: dates.end,
+        label: `This calendar quarter (Q${currentQuarter} ${currentYear})`,
+        displayRange: formatDateRange(dates.start, dates.end)
+      };
+    }
+
+    if (p === 'previous_quarter' || p === 'last quarter' || p === 'last_quarter') {
+      const prevQuarter = currentQuarter > 1 ? currentQuarter - 1 : 4;
+      const prevYear = currentQuarter > 1 ? currentYear : currentYear - 1;
+      const dates = getQuarterDates(prevYear, prevQuarter);
+      return {
+        preset: 'previous_quarter',
+        quarter: prevQuarter,
+        year: prevYear,
+        quarterKey: `${prevYear}-Q${prevQuarter}`,
+        start: dates.start,
+        end: dates.end,
+        label: `Previous calendar quarter (Q${prevQuarter} ${prevYear})`,
+        displayRange: formatDateRange(dates.start, dates.end)
+      };
+    }
+
+    if (p === 'calendar_year' || p === 'this year' || p === 'this_year') {
+      const start = `${currentYear}-01-01`;
+      const end = `${currentYear}-12-31`;
+      return {
+        preset: 'calendar_year',
+        quarter: null,
+        year: currentYear,
+        quarterKey: `${currentYear}`,
+        start,
+        end,
+        label: `Calendar year ${currentYear}`,
+        displayRange: formatDateRange(start, end)
+      };
+    }
+
+    if (p === 'all_time' || p === 'all-time' || p === 'alltime') {
+      return {
+        preset: 'all_time',
+        quarter: null,
+        year: null,
+        quarterKey: 'all_time',
+        start: null,
+        end: null,
+        label: 'All time',
+        displayRange: 'All historical records'
+      };
+    }
+
+    // Auto / No time restriction
+    return {
+      preset: 'auto',
+      quarter: null,
+      year: null,
+      quarterKey: 'auto',
+      start: null,
+      end: null,
+      label: 'No time restriction',
+      displayRange: null
+    };
+  }
+
+  function parseQuestionScope(question) {
+    if (!question || typeof question !== 'string') return { domain: null, time: null };
+    const text = question.trim();
+    const lower = text.toLowerCase();
+
+    // 1. Domain Detection
+    let domain = null;
+    if (lower.includes('receivable') || lower.includes('overdue') || lower.includes('debt') || lower.includes('arrears') || lower.includes('balance sheet') || lower.includes('gl account') || lower.includes('collection rate')) {
+      domain = 'Finance';
+    } else if (lower.includes('procurement') || lower.includes('purchase order') || lower.includes('po sign') || lower.includes('steel') || lower.includes('concrete') || lower.includes('supplier spend') || lower.includes('lead time')) {
+      domain = 'Procurement';
+    } else if (lower.includes('construction') || lower.includes('progress') || lower.includes('delay') || lower.includes('handover') || lower.includes('liquidated damage') || lower.includes('contractor milestone')) {
+      domain = 'Construction';
+    } else if (lower.includes('occupan') || lower.includes('lease') || lower.includes('commercial propert') || lower.includes('nla') || lower.includes('wale') || lower.includes('work order') || lower.includes('tenant')) {
+      domain = 'Property Management';
+    } else if (lower.includes('skyline residences receivables by individual buyer') || lower.includes('buyer contract') || lower.includes('top 5 buyers') || lower.includes('sales contract value')) {
+      domain = 'Sales';
+    } else if (lower.includes('all contracts') || lower.includes('supplier contracts expiring') || lower.includes('contract expiring')) {
+      domain = 'Contracts';
+    } else if (lower.includes('project') || lower.includes('development') || lower.includes('budget') || lower.includes('capex') || lower.includes('asset portfolio')) {
+      domain = 'Projects';
+    }
+
+    // Explicit domain keyword check if question explicitly states domain
+    const explicitDomains = ['Sales', 'Finance', 'Projects', 'Procurement', 'Construction', 'Property Management', 'Contracts'];
+    for (const d of explicitDomains) {
+      const reg = new RegExp(`\\b(in|for|under)\\s+${d}\\b`, 'i');
+      if (reg.test(text)) {
+        domain = d;
+        break;
+      }
+    }
+
+    // 2. Time Intent Detection
+    let time = null;
+    const allTimeRegex = /\b(all\s+contracts|all-time|all\s+time|without\s+date\s+restriction|no\s+time\s+restriction|across\s+all\s+time|all\s+historical|entire\s+history)\b/i;
+
+    if (allTimeRegex.test(text)) {
+      time = {
+        isAllTime: true,
+        label: 'No time restriction',
+        quarterKey: 'all_time',
+        start: null,
+        end: null,
+        displayRange: null
+      };
+    } else {
+      const qYearMatch = text.match(/\b(q[1-4])\s*(?:of\s*)?(\d{4})\b/i) ||
+                         text.match(/\b(\d{4})\s*(?:-|\/)?\s*(q[1-4])\b/i) ||
+                         text.match(/\b(first|second|third|fourth|1st|2nd|3rd|4th)\s+quarter\s*(?:of\s*)?(\d{4})\b/i);
+
+      if (qYearMatch) {
+        let qNum = 1;
+        let yNum = 2026;
+        const p1 = qYearMatch[1].toLowerCase();
+        const p2 = qYearMatch[2].toLowerCase();
+
+        if (p1.startsWith('q')) {
+          qNum = parseInt(p1.replace('q', ''), 10);
+          yNum = parseInt(p2, 10);
+        } else if (p2.startsWith('q')) {
+          qNum = parseInt(p2.replace('q', ''), 10);
+          yNum = parseInt(p1, 10);
+        } else {
+          if (p1.includes('first') || p1.includes('1st')) qNum = 1;
+          else if (p1.includes('second') || p1.includes('2nd')) qNum = 2;
+          else if (p1.includes('third') || p1.includes('3rd')) qNum = 3;
+          else if (p1.includes('fourth') || p1.includes('4th')) qNum = 4;
+          yNum = parseInt(p2, 10);
+        }
+
+        const dates = getQuarterDates(yNum, qNum);
+        time = {
+          quarter: qNum,
+          year: yNum,
+          quarterKey: `${yNum}-Q${qNum}`,
+          start: dates.start,
+          end: dates.end,
+          label: `Q${qNum} ${yNum}`,
+          displayRange: formatDateRange(dates.start, dates.end)
+        };
+      } else {
+        const qOnlyMatch = text.match(/\b(q[1-4])\b/i);
+        if (qOnlyMatch) {
+          const qNum = parseInt(qOnlyMatch[1].toLowerCase().replace('q', ''), 10);
+          const d = parseIsoDate(DEMO_CONTEXT.dataAsOf || '2026-09-28');
+          const yNum = d.year;
+          const dates = getQuarterDates(yNum, qNum);
+          time = {
+            quarter: qNum,
+            year: yNum,
+            quarterKey: `${yNum}-Q${qNum}`,
+            start: dates.start,
+            end: dates.end,
+            label: `Q${qNum} ${yNum}`,
+            displayRange: formatDateRange(dates.start, dates.end)
+          };
+        } else if (/\bthis\s+quarter\b/i.test(text)) {
+          const p = resolvePresetDateRange('current_quarter', DEMO_CONTEXT);
+          time = {
+            quarter: p.quarter,
+            year: p.year,
+            quarterKey: p.quarterKey,
+            start: p.start,
+            end: p.end,
+            label: p.label,
+            displayRange: p.displayRange
+          };
+        } else if (/\b(last|previous)\s+quarter\b/i.test(text)) {
+          const p = resolvePresetDateRange('previous_quarter', DEMO_CONTEXT);
+          time = {
+            quarter: p.quarter,
+            year: p.year,
+            quarterKey: p.quarterKey,
+            start: p.start,
+            end: p.end,
+            label: p.label,
+            displayRange: p.displayRange
+          };
+        } else if (/\b(this\s+year|calendar\s+year\s+(\d{4})|in\s+(202[0-9]))\b/i.test(text)) {
+          const m = text.match(/\b(202[0-9])\b/);
+          const y = m ? parseInt(m[1], 10) : parseIsoDate(DEMO_CONTEXT.dataAsOf || '2026-09-28').year;
+          const start = `${y}-01-01`;
+          const end = `${y}-12-31`;
+          time = {
+            quarter: null,
+            year: y,
+            quarterKey: `${y}`,
+            start,
+            end,
+            label: `Calendar year ${y}`,
+            displayRange: formatDateRange(start, end)
+          };
+        }
+      }
+    }
+
+    return { domain, time };
+  }
+
+  function detectScopeConflicts(selectedScope, questionScope) {
+    if (!selectedScope || !questionScope) return null;
+
+    let domainConflict = null;
+    let timeConflict = null;
+
+    // 1. Check Domain Conflict
+    const selDomainMode = selectedScope.domain ? selectedScope.domain.mode : (selectedScope.domainScope === 'Auto' ? 'auto' : 'explicit');
+    const selDomainVal = selectedScope.domain ? selectedScope.domain.value : selectedScope.domainScope;
+
+    if (selDomainMode === 'explicit' && selDomainVal && selDomainVal !== 'Auto') {
+      if (questionScope.domain) {
+        const d1 = selDomainVal.toLowerCase();
+        const d2 = questionScope.domain.toLowerCase();
+        const isCompatible = (d1 === d2) || (d1 === 'sales' && d2 === 'contracts') || (d1 === 'contracts' && d2 === 'sales');
+        if (!isCompatible) {
+          domainConflict = {
+            selected: selDomainVal,
+            question: questionScope.domain
+          };
+        }
+      }
+    }
+
+    // 2. Check Time Conflict
+    let selTimeMode = 'auto';
+    let selTimePreset = 'auto';
+    let selTimeStart = null;
+    let selTimeEnd = null;
+
+    if (selectedScope.time) {
+      selTimeMode = selectedScope.time.mode || 'auto';
+      selTimePreset = selectedScope.time.preset || 'auto';
+      selTimeStart = selectedScope.time.start || null;
+      selTimeEnd = selectedScope.time.end || null;
+    } else if (selectedScope.timeRange) {
+      selTimeMode = selectedScope.timeRange === 'Auto' ? 'auto' : 'preset';
+      selTimePreset = selectedScope.timeRange;
+    }
+
+    if (selTimeMode === 'preset' && selTimePreset && selTimePreset !== 'auto') {
+      const resolvedSel = resolvePresetDateRange(selTimePreset, DEMO_CONTEXT);
+
+      if (questionScope.time) {
+        if (questionScope.time.isAllTime) {
+          if (resolvedSel.quarterKey !== 'all_time') {
+            timeConflict = {
+              selected: {
+                label: resolvedSel.label,
+                range: resolvedSel.displayRange,
+                start: resolvedSel.start,
+                end: resolvedSel.end,
+                quarterKey: resolvedSel.quarterKey
+              },
+              question: {
+                label: 'All contracts (No time restriction)',
+                range: 'No time restriction',
+                start: null,
+                end: null,
+                quarterKey: 'all_time',
+                isAllTime: true
+              }
+            };
+          }
+        } else {
+          if (questionScope.time.quarterKey && resolvedSel.quarterKey && questionScope.time.quarterKey !== resolvedSel.quarterKey) {
+            timeConflict = {
+              selected: {
+                label: resolvedSel.label,
+                range: resolvedSel.displayRange,
+                start: resolvedSel.start,
+                end: resolvedSel.end,
+                quarterKey: resolvedSel.quarterKey
+              },
+              question: {
+                label: questionScope.time.label,
+                range: questionScope.time.displayRange,
+                start: questionScope.time.start,
+                end: questionScope.time.end,
+                quarterKey: questionScope.time.quarterKey
+              }
+            };
+          }
+        }
+      }
+    } else if (selTimeMode === 'custom' && selTimeStart && selTimeEnd) {
+      if (questionScope.time) {
+        if (questionScope.time.isAllTime || (questionScope.time.start !== selTimeStart || questionScope.time.end !== selTimeEnd)) {
+          timeConflict = {
+            selected: {
+              label: `Custom range (${formatDateRange(selTimeStart, selTimeEnd)})`,
+              range: formatDateRange(selTimeStart, selTimeEnd),
+              start: selTimeStart,
+              end: selTimeEnd,
+              quarterKey: 'custom'
+            },
+            question: {
+              label: questionScope.time.label,
+              range: questionScope.time.displayRange,
+              start: questionScope.time.start,
+              end: questionScope.time.end,
+              quarterKey: questionScope.time.quarterKey || 'all_time'
+            }
+          };
+        }
+      }
+    }
+
+    if (domainConflict || timeConflict) {
+      return {
+        hasConflict: true,
+        domainConflict,
+        timeConflict
+      };
+    }
+
+    return null;
+  }
+
+  function resolveSelectedScope(selectedScope, questionScope, demoContext = DEMO_CONTEXT, confirmation = null) {
+    if (confirmation) {
+      const chosenDom = confirmation.domain || (confirmation.chosenScope && confirmation.chosenScope.domain ? (confirmation.chosenScope.domain.value || confirmation.chosenScope.domain) : null);
+      const chosenStart = confirmation.start !== undefined ? confirmation.start : (confirmation.chosenScope && confirmation.chosenScope.time ? confirmation.chosenScope.time.start : null);
+      const chosenEnd = confirmation.end !== undefined ? confirmation.end : (confirmation.chosenScope && confirmation.chosenScope.time ? confirmation.chosenScope.time.end : null);
+      const chosenLabel = confirmation.periodLabel || (confirmation.chosenScope && confirmation.chosenScope.time ? (confirmation.chosenScope.time.label || confirmation.chosenScope.time.quarterKey) : 'No time restriction');
+      return {
+        domain: chosenDom || null,
+        start: chosenStart,
+        end: chosenEnd,
+        periodLabel: chosenLabel,
+        calendarBasis: 'Calendar',
+        source: {
+          domain: confirmation.sourceDomain || 'Confirmed after conflict',
+          time: confirmation.sourceTime || 'Confirmed after conflict'
+        }
+      };
+    }
+
+    // Resolve Domain
+    let domain = null;
+    let domainSource = 'Default (No filter)';
+
+    const selDomainMode = selectedScope && selectedScope.domain ? selectedScope.domain.mode : (selectedScope && selectedScope.domainScope === 'Auto' ? 'auto' : 'explicit');
+    const selDomainVal = selectedScope && selectedScope.domain ? selectedScope.domain.value : (selectedScope ? selectedScope.domainScope : null);
+
+    if (selDomainMode === 'explicit' && selDomainVal && selDomainVal !== 'Auto') {
+      domain = selDomainVal;
+      domainSource = 'Selected by user';
+    } else if (questionScope && questionScope.domain) {
+      domain = questionScope.domain;
+      domainSource = 'Inferred from question';
+    }
+
+    // Resolve Time
+    let start = null;
+    let end = null;
+    let periodLabel = 'No time restriction';
+    let timeSource = 'No time restriction';
+
+    const selTimeMode = selectedScope && selectedScope.time ? selectedScope.time.mode : (selectedScope && selectedScope.timeRange === 'Auto' ? 'auto' : 'preset');
+    const selTimePreset = selectedScope && selectedScope.time ? selectedScope.time.preset : (selectedScope ? selectedScope.timeRange : 'auto');
+
+    if (selTimeMode === 'custom' && selectedScope.time.start && selectedScope.time.end) {
+      start = selectedScope.time.start;
+      end = selectedScope.time.end;
+      periodLabel = `Custom range (${formatDateRange(start, end)})`;
+      timeSource = 'Selected by user';
+    } else if (selTimeMode === 'preset' && selTimePreset && selTimePreset !== 'auto') {
+      const p = resolvePresetDateRange(selTimePreset, demoContext);
+      start = p.start;
+      end = p.end;
+      periodLabel = p.label;
+      timeSource = 'Selected by user';
+    } else if (questionScope && questionScope.time) {
+      if (questionScope.time.isAllTime) {
+        start = null;
+        end = null;
+        periodLabel = 'No time restriction';
+        timeSource = 'Inferred from question';
+      } else {
+        start = questionScope.time.start;
+        end = questionScope.time.end;
+        periodLabel = questionScope.time.label;
+        if (questionScope.time.displayRange && !periodLabel.includes('(')) {
+          periodLabel += ` (${questionScope.time.displayRange})`;
+        }
+        timeSource = 'Inferred from question';
+      }
+    }
+
+    return {
+      domain,
+      start,
+      end,
+      periodLabel,
+      calendarBasis: 'Calendar',
+      source: {
+        domain: domainSource,
+        time: timeSource
+      }
+    };
+  }
+
+  function applyScopeToMockResult(baseResult, resolvedScope, queryText = '') {
+    if (!baseResult) return baseResult;
+    // Deep clone so QUERY_RESPONSES is NEVER mutated
+    const result = JSON.parse(JSON.stringify(baseResult));
+
+    // Snapshot applied scope
+    result.appliedScope = {
+      domain: resolvedScope.domain || 'All Domains',
+      periodLabel: resolvedScope.periodLabel || 'No time restriction',
+      dateRange: (resolvedScope.start && resolvedScope.end) ? formatDateRange(resolvedScope.start, resolvedScope.end) : null,
+      calendarBasis: resolvedScope.calendarBasis || 'Calendar',
+      source: {
+        domain: resolvedScope.source ? resolvedScope.source.domain : 'Inferred from question',
+        time: resolvedScope.source ? resolvedScope.source.time : 'No time restriction'
+      }
+    };
+
+    const lowerQuery = (queryText || '').toLowerCase();
+    const periodStr = resolvedScope.periodLabel || '';
+
+    // Calendar evaluation flags (inclusive, strict boundary matching)
+    const isExactQ2 = (resolvedScope.start === '2026-04-01' && resolvedScope.end === '2026-06-30');
+    const isExactQ3 = (resolvedScope.start === '2026-07-01' && resolvedScope.end === '2026-09-30');
+    const isExactYear = (resolvedScope.start === '2026-01-01' && resolvedScope.end === '2026-12-31');
+
+    const isQ2 = periodStr.includes('Q2') || isExactQ2;
+    const isQ3 = (periodStr.includes('Q3') || isExactQ3) && !isQ2;
+    const isYear = (periodStr.includes('year') || isExactYear) && !isQ2 && !isQ3;
+    const isAllTime = (periodStr.includes('No time') || periodStr.includes('All time') || (!resolvedScope.start && !resolvedScope.end)) && !isQ2 && !isQ3 && !isYear;
+    const isCustom = !isExactQ2 && !isExactQ3 && !isExactYear && Boolean(resolvedScope.start && resolvedScope.end);
+    const isSpecificDomain = Boolean(resolvedScope.domain && resolvedScope.domain !== 'All Domains');
+    const activeDom = isSpecificDomain ? resolvedScope.domain : (result.domain && result.domain !== 'All Domains' && result.domain !== 'Projects' ? result.domain : 'All Domains');
+    result.domain = activeDom;
+
+    // -------------------------------------------------------------
+    // Case 0: Domain Conflict Resolution
+    // If user asked about receivables but confirmed domain = Sales
+    // -------------------------------------------------------------
+    if (activeDom === 'Sales' && (lowerQuery.includes('receivable') || (result.table && result.table.title && result.table.title.includes('Receivables')))) {
+      result.domain = 'Sales';
+      result.answer = 'In the **Sales** domain, receivables are monitored across executed buyer contracts. Pending commercial buyer installments total **$8.45M** at **Skyline Residences Tower B**, led by **Horizon Global Investment Trust ($3.40M)** for commercial penthouse milestones.';
+      result.table = {
+        title: `Sales Domain: Buyer Contract Receivables (${resolvedScope.periodLabel || 'Active Contracts'})`,
+        headers: ['Contract ID', 'Purchaser Name', 'Unit Allocation', 'Milestone Stage', 'Amount Due ($M)', 'Days Overdue'],
+        columns: ['id', 'buyer', 'units', 'milestone', 'amount', 'days'],
+        types: ['string', 'string', 'string', 'string', 'number', 'number'],
+        rows: [
+          { id: 'SC-SK-0104', buyer: 'Horizon Global Investment Trust', units: 'PH 01-04 & L42-45', milestone: 'Handover & MEP Cert', amount: 3.40, days: 78 },
+          { id: 'SC-SK-0089', buyer: 'Pacific Prime Real Estate SPV', units: 'Tower B - Floors 28-30', milestone: 'Façade Inspection', amount: 2.38, days: 64 },
+          { id: 'SC-SK-0112', buyer: 'Vanguard Capital Partners', units: 'Retail Podiums 1-3', milestone: 'Fitout Signoff', amount: 1.62, days: 42 },
+          { id: 'SC-SK-0074', buyer: 'Private Wealth Syndicate #12', units: 'Units 1201-1208', milestone: 'Final Settlement', amount: 1.05, days: 28 }
+        ]
+      };
+      result.chart = {
+        title: 'Outstanding Balance by Buyer ($ Millions)',
+        unit: '$M',
+        items: [
+          { label: 'Horizon Global', value: 3.40, color: '#e05252', highlight: true },
+          { label: 'Pacific Prime', value: 2.38, color: '#f59e0b' },
+          { label: 'Vanguard Cap', value: 1.62, color: '#3b82f6' },
+          { label: 'Private Wealth', value: 1.05, color: '#10b981' }
+        ]
+      };
+      result.sources = [
+        { name: 'sales_contracts', records: '3,890 contracts', description: 'Buyer purchase agreements.' },
+        { name: 'finance_receivables_ledger', records: '14,208 rows', description: 'Installment ledger.' }
+      ];
+      result.sql = `-- Aria NL-to-SQL Engine v2.4 (Domain: Sales, Scope: ${resolvedScope.periodLabel})\nSELECT sc.contract_id, sc.purchaser_name, sc.unit_allocation, r.milestone_name, ROUND(r.amount_due/1000000.0, 2) AS amount_due_mil, r.days_past_due\nFROM enterprise_dw.sales_contracts sc\nJOIN enterprise_dw.finance_receivables_ledger r ON sc.contract_id = r.contract_id\nWHERE sc.project_code = 'PRJ-SK-02' AND r.payment_status = 'OUTSTANDING';`;
+      if (result.interpretation) {
+        result.interpretation['Domain'] = 'Sales (Buyer Contracts & Unit Installments)';
+        result.interpretation['Period'] = resolvedScope.periodLabel || 'Active Contracts';
+      }
+      return result;
+    }
+
+    // -------------------------------------------------------------
+    // Case 1: RECEIVABLES QUERIES (Finance Domain)
+    // -------------------------------------------------------------
+    if (lowerQuery.includes('receivable') || (result.table && result.table.title && result.table.title.includes('Receivables'))) {
+      result.domain = 'Finance';
+      if (isQ2) {
+        result.answer = 'Across active developments in **Q2 2026**, **Grand Marina Bay Phase 2** held the highest outstanding receivables at **$7.10M**, followed by **Heritage Heights High-Rise** with **$5.40M**. Total overdue receivables (>60 days) were **$9.80M**, which was 18% lower than Q3 balances.';
+        if (result.answerConcise) {
+          result.answerConcise = '**Grand Marina Bay Phase 2** ($7.10M) and **Heritage Heights** ($5.40M) accounted for the highest Q2 2026 outstanding receivables.';
+        }
+        result.table = {
+          title: 'Top 5 Projects by Outstanding Receivables (Q2 2026)',
+          headers: ['Project Name', 'Project Code', 'Lead Contractor', 'Total Receivables ($M)', 'Overdue > 60d ($M)', 'Risk Status'],
+          columns: ['name', 'code', 'contractor', 'total', 'overdue', 'status'],
+          types: ['string', 'string', 'string', 'number', 'number', 'badge'],
+          rows: [
+            { name: 'Grand Marina Bay Phase 2', code: 'PRJ-GMB-02', contractor: 'Delta Marine Infra', total: 7.10, overdue: 3.80, status: 'Moderate' },
+            { name: 'Heritage Heights High-Rise', code: 'PRJ-HH-04', contractor: 'Apex Build Corp', total: 5.40, overdue: 2.95, status: 'High Risk' },
+            { name: 'Skyline Residences Tower B', code: 'PRJ-SK-02', contractor: 'Apex Build Corp', total: 4.25, overdue: 1.80, status: 'Normal' },
+            { name: 'Oasis Central Park Villas', code: 'PRJ-OCP-01', contractor: 'Vanguard Civil Engineering', total: 3.10, overdue: 0.90, status: 'Normal' },
+            { name: 'Riverside Logistics Hub', code: 'PRJ-RLH-01', contractor: 'Summit Infrastructure Ltd', total: 2.00, overdue: 0.35, status: 'Normal' }
+          ]
+        };
+        result.chart = {
+          title: 'Receivables Breakdown by Project ($ Millions) - Q2 2026',
+          unit: '$M',
+          items: [
+            { label: 'Grand Marina 2', value: 7.10, secondaryValue: 3.80, color: '#3b82f6', highlight: true },
+            { label: 'Heritage Hgts', value: 5.40, secondaryValue: 2.95, color: '#e05252' },
+            { label: 'Skyline Res. B', value: 4.25, secondaryValue: 1.80, color: '#f59e0b' },
+            { label: 'Oasis Central', value: 3.10, secondaryValue: 0.90, color: '#3b82f6' },
+            { label: 'Riverside Hub', value: 2.00, secondaryValue: 0.35, color: '#10b981' }
+          ]
+        };
+        result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Q2 2026)\nSELECT p.project_code, p.project_name, c.contractor_name,\n       ROUND(SUM(r.amount_due) / 1000000.0, 2) AS total_receivables_mil,\n       ROUND(SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / 1000000.0, 2) AS overdue_over_60d_mil,\n       CASE WHEN SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / SUM(r.amount_due) > 0.5 THEN 'High Risk'\n            WHEN SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / SUM(r.amount_due) > 0.3 THEN 'Moderate'\n            ELSE 'Normal' END AS risk_status\nFROM enterprise_dw.finance_receivables_ledger r\nINNER JOIN enterprise_dw.sales_contracts sc ON r.contract_id = sc.contract_id\nINNER JOIN enterprise_dw.dim_projects p ON sc.project_id = p.project_id\nLEFT JOIN enterprise_dw.dim_contractors c ON p.primary_contractor_id = c.contractor_id\nWHERE r.fiscal_quarter = '2026-Q2'\n  AND r.payment_status = 'OUTSTANDING'\nGROUP BY p.project_code, p.project_name, c.contractor_name\nORDER BY total_receivables_mil DESC\nLIMIT 5;`;
+        if (result.interpretation) {
+          result.interpretation['Period'] = 'Q2 2026 (01/04/2026–30/06/2026)';
+        }
+      } else if (isYear) {
+        result.answer = 'Across full calendar year **2026**, cumulative project receivables reached **$34.65M**, led by **Skyline Residences Tower B** ($12.70M) and **Grand Marina Bay Phase 2** ($10.50M).';
+        result.table = {
+          title: 'Top 5 Projects by Outstanding Receivables (Calendar Year 2026)',
+          headers: ['Project Name', 'Project Code', 'Lead Contractor', 'Total Receivables ($M)', 'Overdue > 60d ($M)', 'Risk Status'],
+          columns: ['name', 'code', 'contractor', 'total', 'overdue', 'status'],
+          types: ['string', 'string', 'string', 'number', 'number', 'badge'],
+          rows: [
+            { name: 'Skyline Residences Tower B', code: 'PRJ-SK-02', contractor: 'Apex Build Corp', total: 12.70, overdue: 7.58, status: 'High Risk' },
+            { name: 'Grand Marina Bay Phase 2', code: 'PRJ-GMB-02', contractor: 'Delta Marine Infra', total: 10.50, overdue: 4.30, status: 'Moderate' },
+            { name: 'Heritage Heights High-Rise', code: 'PRJ-HH-04', contractor: 'Apex Build Corp', total: 6.85, overdue: 3.40, status: 'Moderate' },
+            { name: 'Oasis Central Park Villas', code: 'PRJ-OCP-01', contractor: 'Vanguard Civil Engineering', total: 5.90, overdue: 1.70, status: 'Normal' },
+            { name: 'Riverside Logistics Hub', code: 'PRJ-RLH-01', contractor: 'Summit Infrastructure Ltd', total: 4.10, overdue: 0.65, status: 'Normal' }
+          ]
+        };
+        result.chart = {
+          title: 'Cumulative Receivables by Project ($ Millions) - Calendar Year 2026',
+          unit: '$M',
+          items: [
+            { label: 'Skyline Res. B', value: 12.70, color: '#e05252', highlight: true },
+            { label: 'Grand Marina 2', value: 10.50, color: '#3b82f6' },
+            { label: 'Heritage Hgts', value: 6.85, color: '#f59e0b' },
+            { label: 'Oasis Central', value: 5.90, color: '#3b82f6' },
+            { label: 'Riverside Hub', value: 4.10, color: '#10b981' }
+          ]
+        };
+        result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Calendar Year 2026)\nSELECT p.project_code, p.project_name, c.contractor_name,\n       ROUND(SUM(r.amount_due) / 1000000.0, 2) AS total_receivables_mil\nFROM enterprise_dw.finance_receivables_ledger r\nINNER JOIN enterprise_dw.sales_contracts sc ON r.contract_id = sc.contract_id\nINNER JOIN enterprise_dw.dim_projects p ON sc.project_id = p.project_id\nLEFT JOIN enterprise_dw.dim_contractors c ON p.primary_contractor_id = c.contractor_id\nWHERE EXTRACT(YEAR FROM r.due_date) = 2026\n  AND r.payment_status = 'OUTSTANDING'\nGROUP BY p.project_code, p.project_name, c.contractor_name\nORDER BY total_receivables_mil DESC\nLIMIT 5;`;
+        if (result.interpretation) {
+          result.interpretation['Period'] = 'Calendar year 2026 (01/01/2026–31/12/2026)';
+        }
+      } else if (isAllTime) {
+        result.answer = 'Across all enterprise developments without date restriction, total cumulative outstanding receivables stand at **$58.20M** across completed and active project phases.';
+        result.table = {
+          title: 'Historical Outstanding Receivables by Project (All Time)',
+          headers: ['Project Name', 'Project Code', 'Lead Contractor', 'Total Receivables ($M)', 'Overdue > 60d ($M)', 'Risk Status'],
+          columns: ['name', 'code', 'contractor', 'total', 'overdue', 'status'],
+          types: ['string', 'string', 'string', 'number', 'number', 'badge'],
+          rows: [
+            { name: 'Skyline Residences Tower B', code: 'PRJ-SK-02', contractor: 'Apex Build Corp', total: 18.40, overdue: 8.10, status: 'High Risk' },
+            { name: 'Grand Marina Bay Phase 2', code: 'PRJ-GMB-02', contractor: 'Delta Marine Infra', total: 15.20, overdue: 5.20, status: 'Moderate' },
+            { name: 'Heritage Heights High-Rise', code: 'PRJ-HH-04', contractor: 'Apex Build Corp', total: 9.80, overdue: 4.10, status: 'Moderate' },
+            { name: 'Oasis Central Park Villas', code: 'PRJ-OCP-01', contractor: 'Vanguard Civil Engineering', total: 8.50, overdue: 2.30, status: 'Normal' },
+            { name: 'Riverside Logistics Hub', code: 'PRJ-RLH-01', contractor: 'Summit Infrastructure Ltd', total: 6.30, overdue: 1.10, status: 'Normal' }
+          ]
+        };
+        result.chart = {
+          title: 'Historical Receivables by Project ($ Millions) - All Time',
+          unit: '$M',
+          items: [
+            { label: 'Skyline Res.', value: 18.40, color: '#e05252', highlight: true },
+            { label: 'Grand Marina', value: 15.20, color: '#3b82f6' },
+            { label: 'Heritage Hgts', value: 9.80, color: '#f59e0b' },
+            { label: 'Oasis Central', value: 8.50, color: '#3b82f6' },
+            { label: 'Riverside Hub', value: 6.30, color: '#10b981' }
+          ]
+        };
+        result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: All-Time Historical)\nSELECT p.project_code, p.project_name, c.contractor_name,\n       ROUND(SUM(r.amount_due) / 1000000.0, 2) AS total_receivables_mil\nFROM enterprise_dw.finance_receivables_ledger r\nINNER JOIN enterprise_dw.sales_contracts sc ON r.contract_id = sc.contract_id\nINNER JOIN enterprise_dw.dim_projects p ON sc.project_id = p.project_id\nLEFT JOIN enterprise_dw.dim_contractors c ON p.primary_contractor_id = c.contractor_id\nWHERE r.payment_status = 'OUTSTANDING'\nGROUP BY p.project_code, p.project_name, c.contractor_name\nORDER BY total_receivables_mil DESC\nLIMIT 5;`;
+        if (result.interpretation) {
+          result.interpretation['Period'] = 'No time restriction (All-time historical)';
+        }
+      } else if (isCustom) {
+        // Strict boundary: custom range outside verified boundaries returns clean no-mock-data state (P0 #3)
+        result.answer = `No mock transactional records found in synthetic ledger for the applied custom date range (**${formatDateRange(resolvedScope.start, resolvedScope.end)}**).`;
+        result.plainEnglishExplanation = `The prototype database currently holds verified benchmark records for Q3 2026 (01/07/2026–30/09/2026), Q2 2026 (01/04/2026–30/06/2026), Calendar Year 2026, and All-Time.`;
+        result.table = {
+          title: `Receivables Records (${formatDateRange(resolvedScope.start, resolvedScope.end)})`,
+          headers: ['Project Name', 'Date Range', 'Status', 'Message'],
+          columns: ['name', 'period', 'status', 'msg'],
+          types: ['string', 'string', 'badge', 'string'],
+          rows: []
+        };
+        result.chart = null;
+        result.sql = `-- Query returned 0 rows for applied custom date filter\nSELECT * FROM enterprise_dw.finance_receivables_ledger WHERE due_date BETWEEN '${resolvedScope.start}' AND '${resolvedScope.end}';`;
+        result.followUps = [
+          'Switch to This calendar quarter (01/07/2026–30/09/2026)',
+          'Switch to Previous calendar quarter (01/04/2026–30/06/2026)',
+          'Switch to All time'
+        ];
+        if (result.interpretation) {
+          result.interpretation['Period'] = `${formatDateRange(resolvedScope.start, resolvedScope.end)} (No mock data in range)`;
+        }
+      } else {
+        // Default Q3
+        result.table.title = 'Top 5 Projects by Outstanding Receivables this Quarter (2026-Q3)';
+        result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Q3 2026)\nSELECT p.project_code, p.project_name, c.contractor_name,\n       ROUND(SUM(r.amount_due) / 1000000.0, 2) AS total_receivables_mil,\n       ROUND(SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / 1000000.0, 2) AS overdue_over_60d_mil,\n       CASE WHEN SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / SUM(r.amount_due) > 0.5 THEN 'High Risk'\n            WHEN SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / SUM(r.amount_due) > 0.3 THEN 'Moderate'\n            ELSE 'Normal' END AS risk_status\nFROM enterprise_dw.finance_receivables_ledger r\nINNER JOIN enterprise_dw.sales_contracts sc ON r.contract_id = sc.contract_id\nINNER JOIN enterprise_dw.dim_projects p ON sc.project_id = p.project_id\nLEFT JOIN enterprise_dw.dim_contractors c ON p.primary_contractor_id = c.contractor_id\nWHERE r.fiscal_quarter = '2026-Q3'\n  AND r.payment_status = 'OUTSTANDING'\nGROUP BY p.project_code, p.project_name, c.contractor_name\nORDER BY total_receivables_mil DESC\nLIMIT 5;`;
+        if (result.interpretation) {
+          result.interpretation['Period'] = 'Q3 2026 (01/07/2026–30/09/2026)';
+        }
+      }
+      return result;
+    }
+
+    // -------------------------------------------------------------
+    // Case 2: PROCUREMENT QUERIES (Procurement Domain) (P0 #1)
+    // -------------------------------------------------------------
+    if (lowerQuery.includes('procurement') || (result.table && result.table.title && result.table.title.includes('Procurement'))) {
+      result.domain = 'Procurement';
+      if (isQ2) {
+        result.answer = 'In **Q2 2026**, aggregate expenditures across raw material suppliers totaled **$15.40M**. **Ready-mix concrete vendors** represented **$8.90M (57.8%)** across 4 approved vendors, whereas **structural and rebar steel suppliers** absorbed **$6.50M (42.2%)** across 3 vendors. **Holcim Building Solutions** led quarterly disbursements at **$4.80M** for preliminary site works at Heritage Heights.';
+        if (result.answerConcise) {
+          result.answerConcise = 'Q2 raw material procurement totaled **$15.40M**: Ready-mix concrete accounted for $8.90M (57.8%), and structural steel accounted for $6.50M (42.2%).';
+        }
+        result.table = {
+          title: 'Q2 Vendor Procurement Breakdown: Concrete vs Steel (Q2 2026)',
+          headers: ['Vendor Name', 'Material Category', 'POs Issued', 'Total Invoiced ($M)', 'Avg Lead Time (Days)', 'Contract Terms'],
+          columns: ['vendor', 'category', 'po_count', 'amount', 'lead_time', 'terms'],
+          types: ['string', 'badge', 'number', 'number', 'number', 'string'],
+          rows: [
+            { vendor: 'Holcim Building Solutions Ltd', category: 'Ready-Mix Concrete', po_count: 28, amount: 4.80, lead_time: 2, terms: 'Net 45' },
+            { vendor: 'Nippon Steel Direct Corp', category: 'Structural Steel', po_count: 14, amount: 3.90, lead_time: 22, terms: 'Net 60' },
+            { vendor: 'Siam City Cement Co', category: 'Ready-Mix Concrete', po_count: 18, amount: 2.75, lead_time: 3, terms: 'Net 30' },
+            { vendor: 'ArcelorMittal Rebar Div', category: 'Structural Steel', po_count: 10, amount: 2.60, lead_time: 19, terms: 'Net 45' },
+            { vendor: 'Pacific Ready-Mix Concrete', category: 'Ready-Mix Concrete', po_count: 12, amount: 1.35, lead_time: 2, terms: 'Net 30' }
+          ]
+        };
+        result.chart = {
+          title: 'Expenditure Distribution by Vendor ($ Millions) - Q2 2026',
+          unit: '$M',
+          items: [
+            { label: 'Holcim Solutions', value: 4.80, color: '#3b82f6', highlight: true },
+            { label: 'Nippon Steel', value: 3.90, color: '#6366f1' },
+            { label: 'Siam Cement', value: 2.75, color: '#3b82f6' },
+            { label: 'ArcelorMittal', value: 2.60, color: '#6366f1' },
+            { label: 'Pacific Conc', value: 1.35, color: '#3b82f6' }
+          ]
+        };
+        result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Q2 2026)\nSELECT v.vendor_name, v.commodity_group AS material_category, COUNT(DISTINCT po.po_id) AS total_pos_issued, ROUND(SUM(inv.invoice_amount) / 1000000.0, 2) AS total_invoiced_mil, ROUND(AVG(po.delivery_lead_time_days), 1) AS avg_lead_time_days, v.payment_terms\nFROM enterprise_dw.dim_vendors v\nINNER JOIN enterprise_dw.procurement_purchase_orders po ON v.vendor_id = po.vendor_id\nINNER JOIN enterprise_dw.finance_ap_invoices inv ON po.po_id = inv.po_id\nWHERE v.commodity_group IN ('Ready-Mix Concrete', 'Structural Steel')\n  AND inv.invoice_date BETWEEN '2026-04-01' AND '2026-06-30'\nGROUP BY v.vendor_name, v.commodity_group, v.payment_terms\nORDER BY total_invoiced_mil DESC;`;
+        if (result.interpretation) {
+          result.interpretation['Period'] = 'Q2 2026 (01/04/2026–30/06/2026)';
+        }
+      } else if (isYear) {
+        result.answer = 'Across full calendar year **2026**, cumulative procurement expenditures for raw materials reached **$62.80M**, with concrete vendors accounting for **$37.10M** and structural steel accounting for **$25.70M**.';
+        result.table = {
+          title: 'Vendor Procurement Breakdown: Concrete vs Steel (Calendar Year 2026)',
+          headers: ['Vendor Name', 'Material Category', 'POs Issued', 'Total Invoiced ($M)', 'Avg Lead Time (Days)', 'Contract Terms'],
+          columns: ['vendor', 'category', 'po_count', 'amount', 'lead_time', 'terms'],
+          types: ['string', 'badge', 'number', 'number', 'number', 'string'],
+          rows: [
+            { vendor: 'Holcim Building Solutions Ltd', category: 'Ready-Mix Concrete', po_count: 110, amount: 21.50, lead_time: 2, terms: 'Net 45' },
+            { vendor: 'Nippon Steel Direct Corp', category: 'Structural Steel', po_count: 58, amount: 15.20, lead_time: 23, terms: 'Net 60' },
+            { vendor: 'Siam City Cement Co', category: 'Ready-Mix Concrete', po_count: 72, amount: 11.20, lead_time: 3, terms: 'Net 30' },
+            { vendor: 'ArcelorMittal Rebar Div', category: 'Structural Steel', po_count: 42, amount: 10.50, lead_time: 19, terms: 'Net 45' },
+            { vendor: 'Pacific Ready-Mix Concrete', category: 'Ready-Mix Concrete', po_count: 40, amount: 4.40, lead_time: 2, terms: 'Net 30' }
+          ]
+        };
+        result.chart = {
+          title: 'Cumulative Expenditure by Vendor ($ Millions) - Calendar Year 2026',
+          unit: '$M',
+          items: [
+            { label: 'Holcim Solutions', value: 21.50, color: '#3b82f6', highlight: true },
+            { label: 'Nippon Steel', value: 15.20, color: '#6366f1' },
+            { label: 'Siam Cement', value: 11.20, color: '#3b82f6' },
+            { label: 'ArcelorMittal', value: 10.50, color: '#6366f1' },
+            { label: 'Pacific Conc', value: 4.40, color: '#3b82f6' }
+          ]
+        };
+        result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Calendar Year 2026)\nSELECT v.vendor_name, v.commodity_group AS material_category, COUNT(DISTINCT po.po_id) AS total_pos_issued, ROUND(SUM(inv.invoice_amount) / 1000000.0, 2) AS total_invoiced_mil, ROUND(AVG(po.delivery_lead_time_days), 1) AS avg_lead_time_days, v.payment_terms\nFROM enterprise_dw.dim_vendors v\nINNER JOIN enterprise_dw.procurement_purchase_orders po ON v.vendor_id = po.vendor_id\nINNER JOIN enterprise_dw.finance_ap_invoices inv ON po.po_id = inv.po_id\nWHERE v.commodity_group IN ('Ready-Mix Concrete', 'Structural Steel')\n  AND inv.invoice_date BETWEEN '2026-01-01' AND '2026-12-31'\nGROUP BY v.vendor_name, v.commodity_group, v.payment_terms\nORDER BY total_invoiced_mil DESC;`;
+        if (result.interpretation) {
+          result.interpretation['Period'] = 'Calendar year 2026 (01/01/2026–31/12/2026)';
+        }
+      } else if (isAllTime) {
+        result.answer = 'Across all enterprise historical records without date restriction, total cumulative procurement expenditures for concrete and structural steel stand at **$142.5M** across approved vendors.';
+        result.table = {
+          title: 'Historical Vendor Procurement Breakdown: Concrete vs Steel (All Time)',
+          headers: ['Vendor Name', 'Material Category', 'POs Issued', 'Total Invoiced ($M)', 'Avg Lead Time (Days)', 'Contract Terms'],
+          columns: ['vendor', 'category', 'po_count', 'amount', 'lead_time', 'terms'],
+          types: ['string', 'badge', 'number', 'number', 'number', 'string'],
+          rows: [
+            { vendor: 'Holcim Building Solutions Ltd', category: 'Ready-Mix Concrete', po_count: 240, amount: 48.50, lead_time: 2, terms: 'Net 45' },
+            { vendor: 'Nippon Steel Direct Corp', category: 'Structural Steel', po_count: 135, amount: 36.20, lead_time: 23, terms: 'Net 60' },
+            { vendor: 'Siam City Cement Co', category: 'Ready-Mix Concrete', po_count: 160, amount: 28.40, lead_time: 3, terms: 'Net 30' },
+            { vendor: 'ArcelorMittal Rebar Div', category: 'Structural Steel', po_count: 98, amount: 21.00, lead_time: 19, terms: 'Net 45' },
+            { vendor: 'Pacific Ready-Mix Concrete', category: 'Ready-Mix Concrete', po_count: 75, amount: 8.40, lead_time: 2, terms: 'Net 30' }
+          ]
+        };
+        result.chart = {
+          title: 'Historical Expenditure by Vendor ($ Millions) - All Time',
+          unit: '$M',
+          items: [
+            { label: 'Holcim Solutions', value: 48.50, color: '#3b82f6', highlight: true },
+            { label: 'Nippon Steel', value: 36.20, color: '#6366f1' },
+            { label: 'Siam Cement', value: 28.40, color: '#3b82f6' },
+            { label: 'ArcelorMittal', value: 21.00, color: '#6366f1' },
+            { label: 'Pacific Conc', value: 8.40, color: '#3b82f6' }
+          ]
+        };
+        result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: All-Time Historical)\nSELECT v.vendor_name, v.commodity_group AS material_category, COUNT(DISTINCT po.po_id) AS total_pos_issued, ROUND(SUM(inv.invoice_amount) / 1000000.0, 2) AS total_invoiced_mil, ROUND(AVG(po.delivery_lead_time_days), 1) AS avg_lead_time_days, v.payment_terms\nFROM enterprise_dw.dim_vendors v\nINNER JOIN enterprise_dw.procurement_purchase_orders po ON v.vendor_id = po.vendor_id\nINNER JOIN enterprise_dw.finance_ap_invoices inv ON po.po_id = inv.po_id\nWHERE v.commodity_group IN ('Ready-Mix Concrete', 'Structural Steel')\nGROUP BY v.vendor_name, v.commodity_group, v.payment_terms\nORDER BY total_invoiced_mil DESC;`;
+        if (result.interpretation) {
+          result.interpretation['Period'] = 'No time restriction (All-time historical)';
+        }
+      } else if (isCustom) {
+        result.answer = `No mock transactional records found in synthetic procurement ledger for the applied custom date range (**${formatDateRange(resolvedScope.start, resolvedScope.end)}**).`;
+        result.plainEnglishExplanation = `The prototype database currently holds verified benchmark records for Q3 2026 (01/07/2026–30/09/2026), Q2 2026 (01/04/2026–30/06/2026), Calendar Year 2026, and All-Time.`;
+        result.table = {
+          title: `Procurement Records (${formatDateRange(resolvedScope.start, resolvedScope.end)})`,
+          headers: ['Vendor Name', 'Material Category', 'Status', 'Message'],
+          columns: ['vendor', 'category', 'status', 'msg'],
+          types: ['string', 'badge', 'badge', 'string'],
+          rows: []
+        };
+        result.chart = null;
+        result.sql = `-- Query returned 0 rows for applied custom date filter\nSELECT * FROM enterprise_dw.finance_ap_invoices WHERE invoice_date BETWEEN '${resolvedScope.start}' AND '${resolvedScope.end}';`;
+        result.followUps = [
+          'Switch to This calendar quarter (01/07/2026–30/09/2026)',
+          'Switch to Previous calendar quarter (01/04/2026–30/06/2026)',
+          'Switch to All time'
+        ];
+        if (result.interpretation) {
+          result.interpretation['Period'] = `${formatDateRange(resolvedScope.start, resolvedScope.end)} (No mock data in range)`;
+        }
+      } else {
+        // Standard Q3
+        result.answer = 'In **Q3 2026**, aggregate expenditures across raw material suppliers totaled **$18.92M**. **Ready-mix concrete vendors** represented **$11.14M (58.9%)** across 4 approved vendors, whereas **structural and rebar steel suppliers** absorbed **$7.78M (41.1%)** across 3 vendors. **Holcim Building Solutions** was the single largest concrete recipient ($6.25M), driven by foundation works at Grand Marina Bay.';
+        result.table.title = 'Q3 Vendor Procurement Breakdown: Concrete vs Steel (Q3 2026)';
+        result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Q3 2026)\nSELECT v.vendor_name, v.commodity_group AS material_category, COUNT(DISTINCT po.po_id) AS total_pos_issued, ROUND(SUM(inv.invoice_amount) / 1000000.0, 2) AS total_invoiced_mil, ROUND(AVG(po.delivery_lead_time_days), 1) AS avg_lead_time_days, v.payment_terms\nFROM enterprise_dw.dim_vendors v\nINNER JOIN enterprise_dw.procurement_purchase_orders po ON v.vendor_id = po.vendor_id\nINNER JOIN enterprise_dw.finance_ap_invoices inv ON po.po_id = inv.po_id\nWHERE v.commodity_group IN ('Ready-Mix Concrete', 'Structural Steel')\n  AND inv.invoice_date BETWEEN '2026-07-01' AND '2026-09-30'\nGROUP BY v.vendor_name, v.commodity_group, v.payment_terms\nORDER BY total_invoiced_mil DESC;`;
+        if (result.interpretation) {
+          result.interpretation['Period'] = 'Q3 2026 (01/07/2026–30/09/2026)';
+        }
+      }
+      return result;
+    }
+
+    // -------------------------------------------------------------
+    // Case 3: CONTRACTS QUERIES (P0 #2)
+    // -------------------------------------------------------------
+    if (lowerQuery.includes('contract') && !lowerQuery.includes('receivable')) {
+      result.domain = 'Contracts';
+      if (isQ3) {
+        result.answer = 'Found **842 contracts executed in Q3 2026** (01/07/2026–30/09/2026), totaling **$78.4M** in quarterly contract value across residential and commercial developments.';
+        result.table = {
+          title: 'Enterprise Contracts Executed / Active in Q3 2026',
+          headers: ['Contract ID', 'Purchaser / Vendor', 'Project Code', 'Contract Type', 'Contract Value ($M)', 'Execution Date', 'Status'],
+          columns: ['id', 'buyer', 'project', 'type', 'val', 'date', 'status'],
+          types: ['string', 'string', 'string', 'string', 'number', 'string', 'badge'],
+          rows: [
+            { id: 'CTR-2026-0711', buyer: 'Horizon Global Trust', project: 'PRJ-SK-02', type: 'Commercial Sale', val: 14.50, date: '2026-07-11', status: 'Active' },
+            { id: 'CTR-2026-0814', buyer: 'Pacific Prime SPV', project: 'PRJ-GMB-02', type: 'Residential Purchase', val: 9.20, date: '2026-08-14', status: 'Active' },
+            { id: 'CTR-2026-0780', buyer: 'Holcim Solutions', project: 'PRJ-GMB-02', type: 'Materials Supply', val: 6.25, date: '2026-07-28', status: 'Active' },
+            { id: 'CTR-2026-0902', buyer: 'Nippon Steel Direct', project: 'PRJ-HH-04', type: 'Structural Steel', val: 4.80, date: '2026-09-02', status: 'Active' },
+            { id: 'CTR-2026-0820', buyer: 'Siam City Cement Co', project: 'PRJ-OCP-01', type: 'Materials Supply', val: 3.45, date: '2026-08-20', status: 'Active' }
+          ]
+        };
+        result.chart = {
+          title: 'Q3 Top Contract Values by Allocation ($ Millions)',
+          unit: '$M',
+          items: [
+            { label: 'Horizon Trust', value: 14.50, color: '#3b82f6', highlight: true },
+            { label: 'Pacific Prime', value: 9.20, color: '#6366f1' },
+            { label: 'Holcim Materials', value: 6.25, color: '#10b981' },
+            { label: 'Nippon Steel', value: 4.80, color: '#f59e0b' },
+            { label: 'Siam Cement', value: 3.45, color: '#6366f1' }
+          ]
+        };
+        result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Q3 2026 Contracts)\nSELECT contract_id, purchaser_name, project_code, contract_type, contract_value, execution_date, status\nFROM enterprise_dw.sales_contracts\nWHERE execution_date BETWEEN '2026-07-01' AND '2026-09-30';`;
+        if (result.interpretation) {
+          result.interpretation['Period'] = 'Q3 2026 (01/07/2026–30/09/2026)';
+        }
+      } else if (isQ2) {
+        result.answer = 'Found **715 contracts executed in Q2 2026** (01/04/2026–30/06/2026), totaling **$64.2M** in quarterly contract value.';
+        result.table = {
+          title: 'Enterprise Contracts Executed / Active in Q2 2026',
+          headers: ['Contract ID', 'Purchaser / Vendor', 'Project Code', 'Contract Type', 'Contract Value ($M)', 'Execution Date', 'Status'],
+          columns: ['id', 'buyer', 'project', 'type', 'val', 'date', 'status'],
+          types: ['string', 'string', 'string', 'string', 'number', 'string', 'badge'],
+          rows: [
+            { id: 'CTR-2026-0418', buyer: 'Apex Build Corp', project: 'PRJ-SK-02', type: 'Master EPC', val: 22.00, date: '2026-04-18', status: 'Active' },
+            { id: 'CTR-2026-0512', buyer: 'Vanguard Capital', project: 'PRJ-OCP-01', type: 'Commercial Sale', val: 8.40, date: '2026-05-12', status: 'Active' },
+            { id: 'CTR-2026-0604', buyer: 'Delta Marine Infra', project: 'PRJ-GMB-02', type: 'Marine Civil Works', val: 7.10, date: '2026-06-04', status: 'Active' },
+            { id: 'CTR-2026-0430', buyer: 'Holcim Solutions', project: 'PRJ-HH-04', type: 'Materials Supply', val: 4.80, date: '2026-04-30', status: 'Active' },
+            { id: 'CTR-2026-0525', buyer: 'Summit Infrastructure', project: 'PRJ-RLH-01', type: 'Logistics Framing', val: 3.50, date: '2026-05-25', status: 'Active' }
+          ]
+        };
+        result.chart = {
+          title: 'Q2 Top Contract Values by Allocation ($ Millions)',
+          unit: '$M',
+          items: [
+            { label: 'Apex EPC', value: 22.00, color: '#3b82f6', highlight: true },
+            { label: 'Vanguard Cap', value: 8.40, color: '#6366f1' },
+            { label: 'Delta Marine', value: 7.10, color: '#10b981' },
+            { label: 'Holcim Materials', value: 4.80, color: '#f59e0b' },
+            { label: 'Summit Infra', value: 3.50, color: '#6366f1' }
+          ]
+        };
+        result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Q2 2026 Contracts)\nSELECT contract_id, purchaser_name, project_code, contract_type, contract_value, execution_date, status\nFROM enterprise_dw.sales_contracts\nWHERE execution_date BETWEEN '2026-04-01' AND '2026-06-30';`;
+        if (result.interpretation) {
+          result.interpretation['Period'] = 'Q2 2026 (01/04/2026–30/06/2026)';
+        }
+      } else if (isYear) {
+        result.answer = 'Found **2,940 contracts executed in Calendar Year 2026**, totaling **$268.5M** in annual contract value across enterprise developments.';
+        result.table = {
+          title: 'Enterprise Contracts Executed / Active in Calendar Year 2026',
+          headers: ['Contract ID', 'Purchaser / Vendor', 'Project Code', 'Contract Type', 'Contract Value ($M)', 'Execution Date', 'Status'],
+          columns: ['id', 'buyer', 'project', 'type', 'val', 'date', 'status'],
+          types: ['string', 'string', 'string', 'string', 'number', 'string', 'badge'],
+          rows: [
+            { id: 'CTR-2026-0452', buyer: 'Apex Build Corp', project: 'PRJ-SK-02', type: 'Master EPC', val: 45.00, date: '2026-02-14', status: 'Active' },
+            { id: 'CTR-2026-0711', buyer: 'Horizon Global Trust', project: 'PRJ-SK-02', type: 'Commercial Sale', val: 14.50, date: '2026-07-11', status: 'Active' },
+            { id: 'CTR-2026-0814', buyer: 'Pacific Prime SPV', project: 'PRJ-GMB-02', type: 'Residential Purchase', val: 9.20, date: '2026-08-14', status: 'Active' },
+            { id: 'CTR-2026-0512', buyer: 'Vanguard Capital', project: 'PRJ-OCP-01', type: 'Commercial Sale', val: 8.40, date: '2026-05-12', status: 'Active' },
+            { id: 'CTR-2026-0604', buyer: 'Delta Marine Infra', project: 'PRJ-GMB-02', type: 'Marine Civil Works', val: 7.10, date: '2026-06-04', status: 'Active' }
+          ]
+        };
+        result.chart = {
+          title: 'Calendar Year 2026 Top Contract Values ($ Millions)',
+          unit: '$M',
+          items: [
+            { label: 'Apex EPC', value: 45.00, color: '#3b82f6', highlight: true },
+            { label: 'Horizon Trust', value: 14.50, color: '#6366f1' },
+            { label: 'Pacific Prime', value: 9.20, color: '#10b981' },
+            { label: 'Vanguard Cap', value: 8.40, color: '#f59e0b' },
+            { label: 'Delta Marine', value: 7.10, color: '#6366f1' }
+          ]
+        };
+        result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: Calendar Year 2026 Contracts)\nSELECT contract_id, purchaser_name, project_code, contract_type, contract_value, execution_date, status\nFROM enterprise_dw.sales_contracts\nWHERE execution_date BETWEEN '2026-01-01' AND '2026-12-31';`;
+        if (result.interpretation) {
+          result.interpretation['Period'] = 'Calendar year 2026 (01/01/2026–31/12/2026)';
+        }
+      } else if (isCustom) {
+        result.answer = `No mock contract records found in synthetic registry for the applied custom date range (**${formatDateRange(resolvedScope.start, resolvedScope.end)}**).`;
+        result.plainEnglishExplanation = `The prototype database currently holds verified benchmark records for Q3 2026 (01/07/2026–30/09/2026), Q2 2026 (01/04/2026–30/06/2026), Calendar Year 2026, and All-Time.`;
+        result.table = {
+          title: `Contracts Records (${formatDateRange(resolvedScope.start, resolvedScope.end)})`,
+          headers: ['Contract ID', 'Date Range', 'Status', 'Message'],
+          columns: ['id', 'period', 'status', 'msg'],
+          types: ['string', 'string', 'badge', 'string'],
+          rows: []
+        };
+        result.chart = null;
+        result.sql = `-- Query returned 0 rows for applied custom date filter\nSELECT * FROM enterprise_dw.sales_contracts WHERE execution_date BETWEEN '${resolvedScope.start}' AND '${resolvedScope.end}';`;
+        result.followUps = [
+          'Switch to This calendar quarter (01/07/2026–30/09/2026)',
+          'Switch to Previous calendar quarter (01/04/2026–30/06/2026)',
+          'Switch to All time'
+        ];
+        if (result.interpretation) {
+          result.interpretation['Period'] = `${formatDateRange(resolvedScope.start, resolvedScope.end)} (No mock data in range)`;
+        }
+      } else {
+        // All time
+        result.answer = 'Found **3,890 executed contracts** across enterprise developments without date restriction, totaling **$342.8M** in cumulative contract value.';
+        result.table = {
+          title: 'Enterprise Contracts Master Registry (All Time)',
+          headers: ['Contract ID', 'Purchaser / Vendor', 'Project Code', 'Contract Type', 'Contract Value ($M)', 'Status'],
+          columns: ['id', 'buyer', 'project', 'type', 'val', 'status'],
+          types: ['string', 'string', 'string', 'string', 'number', 'badge'],
+          rows: [
+            { id: 'CTR-2024-0104', buyer: 'Horizon Global Trust', project: 'PRJ-SK-02', type: 'Commercial Sale', val: 14.50, status: 'Active' },
+            { id: 'CTR-2024-0089', buyer: 'Pacific Prime SPV', project: 'PRJ-GMB-02', type: 'Residential Purchase', val: 9.20, status: 'Active' },
+            { id: 'CTR-2023-0452', buyer: 'Apex Build Corp', project: 'PRJ-SK-02', type: 'Master EPC', val: 45.00, status: 'Active' },
+            { id: 'CTR-2025-0112', buyer: 'Vanguard Capital', project: 'PRJ-OCP-01', type: 'Commercial Sale', val: 8.40, status: 'Active' },
+            { id: 'CTR-2024-0780', buyer: 'Holcim Solutions', project: 'PRJ-GMB-02', type: 'Materials Supply', val: 6.25, status: 'Active' }
+          ]
+        };
+        result.chart = {
+          title: 'Top Contract Values by Allocation ($ Millions)',
+          unit: '$M',
+          items: [
+            { label: 'Apex EPC', value: 45.00, color: '#3b82f6', highlight: true },
+            { label: 'Horizon Trust', value: 14.50, color: '#6366f1' },
+            { label: 'Pacific Prime', value: 9.20, color: '#10b981' },
+            { label: 'Vanguard Cap', value: 8.40, color: '#f59e0b' },
+            { label: 'Holcim Materials', value: 6.25, color: '#6366f1' }
+          ]
+        };
+        result.sql = `-- Aria NL-to-SQL Engine v2.4 (Scope: All Contracts, No Date Restriction)\nSELECT contract_id, purchaser_name, project_code, contract_type, contract_value, status\nFROM enterprise_dw.sales_contracts;`;
+        if (result.interpretation) {
+          result.interpretation['Period'] = 'No time restriction (All contracts)';
+        }
+      }
+      return result;
+    }
+
+    // -------------------------------------------------------------
+    // Case 4: General Fallback (P0 #5)
+    // -------------------------------------------------------------
+    if (result.answer && (result.answer.includes('period **Auto**') || result.answer.includes('period **Current Quarter**') || result.answer.includes('across enterprise tables for period') || result.answer.includes('Synthesized operational records'))) {
+      if (isAllTime) {
+        result.answer = `Synthesized operational records matching **"${queryText}"** across enterprise tables **without date restriction**:`;
+      } else {
+        result.answer = `Synthesized operational records matching **"${queryText}"** across enterprise tables for period **${resolvedScope.periodLabel}**:`;
+      }
+    }
+
+    if (result.table && result.table.rows && result.table.title && (result.table.title.includes('Records matching:') || result.table.title.includes('Query Records'))) {
+      const periodBadge = isAllTime ? 'All-time' : (resolvedScope.periodLabel || '2026-Q3');
+      const domainEntityMap = {
+        Finance: [
+          { entity: 'GL Account Ledger 1020 (AP Clearing)', domain: 'Finance', period: periodBadge, status: 'Reconciled', value: 5.40 },
+          { entity: 'Customer Installment Batch 09', domain: 'Finance', period: periodBadge, status: 'Approved', value: 3.15 },
+          { entity: 'Treasury Liquidity Cash Pool', domain: 'Finance', period: periodBadge, status: 'Active', value: 8.90 }
+        ],
+        Sales: [
+          { entity: 'Skyline Phase 2 Sales Registry', domain: 'Sales', period: periodBadge, status: 'Active', value: 6.20 },
+          { entity: 'Commercial Lease Agreement Tranche', domain: 'Sales', period: periodBadge, status: 'Signed', value: 4.80 },
+          { entity: 'Retail Concession Block A Lot 12', domain: 'Sales', period: periodBadge, status: 'Pending', value: 2.30 }
+        ],
+        Procurement: [
+          { entity: 'Bulk Rebar Sourcing Tranche 03', domain: 'Procurement', period: periodBadge, status: 'Dispatched', value: 4.50 },
+          { entity: 'HVAC Equipment Contract Pack', domain: 'Procurement', period: periodBadge, status: 'Under Review', value: 3.20 },
+          { entity: 'Ready-Mix Concrete Supply Batch #42', domain: 'Procurement', period: periodBadge, status: 'Delivered', value: 2.10 }
+        ],
+        Construction: [
+          { entity: 'Tower B Structural Framing Phase', domain: 'Construction', period: periodBadge, status: 'In Progress', value: 7.20 },
+          { entity: 'MEP Rough-in Subcontract Pkg 02', domain: 'Construction', period: periodBadge, status: 'On Track', value: 3.80 },
+          { entity: 'Façade Glazing Installation Cycle', domain: 'Construction', period: periodBadge, status: 'Delayed', value: 4.10 }
+        ],
+        'Property Management': [
+          { entity: 'Grade-A Commercial Tower Lease Pack', domain: 'Property Management', period: periodBadge, status: 'Occupied', value: 6.80 },
+          { entity: 'Retail Concourse Facility Service PO', domain: 'Property Management', period: periodBadge, status: 'Active', value: 3.40 },
+          { entity: 'Logistics Hub Escalation Index', domain: 'Property Management', period: periodBadge, status: 'Renewed', value: 5.10 }
+        ],
+        Projects: [
+          { entity: 'Core Operational Package 01', domain: 'Projects', period: periodBadge, status: 'Active', value: 4.20 },
+          { entity: 'Primary Subcontract Package 04', domain: 'Projects', period: periodBadge, status: 'Pending Review', value: 2.85 },
+          { entity: 'Residential Tower Phase 3', domain: 'Projects', period: periodBadge, status: 'On Track', value: 6.10 }
+        ]
+      };
+
+      if (isSpecificDomain && domainEntityMap[activeDom]) {
+        result.table.rows = domainEntityMap[activeDom];
+      } else {
+        // True All Domains - cross-domain operational representation
+        result.table.rows = [
+          { entity: 'Core Operational Package 01', domain: 'Projects', period: periodBadge, status: 'Active', value: 4.20 },
+          { entity: 'Bulk Rebar Sourcing Tranche 03', domain: 'Procurement', period: periodBadge, status: 'Dispatched', value: 4.50 },
+          { entity: 'Tower B Structural Framing Phase', domain: 'Construction', period: periodBadge, status: 'In Progress', value: 7.20 },
+          { entity: 'Customer Installment Batch 09', domain: 'Finance', period: periodBadge, status: 'Approved', value: 3.15 },
+          { entity: 'Commercial Lease Agreement Tranche', domain: 'Sales', period: periodBadge, status: 'Signed', value: 4.80 }
+        ];
+      }
+
+      // Proper date and domain where clause
+      let whereParts = [];
+      if (isSpecificDomain) {
+        whereParts.push(`p.domain = '${activeDom}'`);
+      }
+      if (isYear) {
+        whereParts.push(`gl.posting_date BETWEEN '2026-01-01' AND '2026-12-31'`);
+      } else if (isQ3) {
+        whereParts.push(`(gl.fiscal_quarter = '2026-Q3' OR gl.posting_date BETWEEN '2026-07-01' AND '2026-09-30')`);
+      } else if (isQ2) {
+        whereParts.push(`(gl.fiscal_quarter = '2026-Q2' OR gl.posting_date BETWEEN '2026-04-01' AND '2026-06-30')`);
+      } else if (resolvedScope.start && resolvedScope.end) {
+        whereParts.push(`gl.posting_date BETWEEN '${resolvedScope.start}' AND '${resolvedScope.end}'`);
+      }
+
+      const whereClause = whereParts.length > 0 ? `\nWHERE ${whereParts.join(' AND ')}` : '';
+      const domainScopeLabel = isSpecificDomain ? activeDom : 'All Domains';
+
+      result.sql = `-- Aria General NL-to-SQL Template (Scope: Domain=${domainScopeLabel}, Period=${periodBadge})\nSELECT p.project_name, p.asset_type, gl.fiscal_period, gl.status, SUM(gl.amount) AS total_val\nFROM enterprise_dw.dim_projects p\nJOIN enterprise_dw.general_ledger_summaries gl ON p.project_id = gl.project_id${whereClause}\nGROUP BY p.project_name, p.asset_type, gl.fiscal_period, gl.status\nLIMIT 5;`;
+    }
+
+    return result;
+  }
+
+  function buildConflictQuestionText(conflict) {
+    if (conflict.domainConflict && conflict.timeConflict) {
+      return `Scope conflict detected: Your question specifies domain "${conflict.domainConflict.question}" and period "${conflict.timeConflict.question.label}", but your UI scope is set to "${conflict.domainConflict.selected}" and "${conflict.timeConflict.selected.label}". Which scope would you like to apply?`;
+    }
+    if (conflict.timeConflict) {
+      return `Scope conflict detected: Your question specifies "${conflict.timeConflict.question.label}", but the current UI scope is set to "${conflict.timeConflict.selected.label}". Which time scope would you like to apply?`;
+    }
+    if (conflict.domainConflict) {
+      return `Scope conflict detected: Your question relates to domain "${conflict.domainConflict.question}", but the current UI scope is set to "${conflict.domainConflict.selected}". Which domain would you like to apply?`;
+    }
+    return 'Scope conflict detected between your question and the current filter settings.';
+  }
+
+  function buildConflictOptions(conflict, selectedScope, questionScope, originalQuery) {
+    const opts = [];
+
+    if (conflict.timeConflict && !conflict.domainConflict) {
+      const qTime = conflict.timeConflict.question;
+      const sTime = conflict.timeConflict.selected;
+      const domainVal = (selectedScope && selectedScope.domain && selectedScope.domain.value !== 'Auto') ? selectedScope.domain.value : (questionScope.domain || null);
+
+      opts.push({
+        id: 'use_question_time',
+        label: `Use ${qTime.label} from my question`,
+        payload: {
+          type: 'scope_resolution',
+          resolution: 'use_question',
+          domain: domainVal,
+          start: qTime.start,
+          end: qTime.end,
+          periodLabel: qTime.label + (qTime.range && !qTime.isAllTime && !qTime.label.includes('(') ? ` (${qTime.range})` : ''),
+          sourceDomain: 'Inferred from question',
+          sourceTime: 'Confirmed after conflict',
+          originalQuery
+        }
+      });
+
+      opts.push({
+        id: 'use_selected_time',
+        label: `Use selected ${sTime.label}`,
+        payload: {
+          type: 'scope_resolution',
+          resolution: 'use_selected',
+          domain: domainVal,
+          start: sTime.start,
+          end: sTime.end,
+          periodLabel: sTime.label + (sTime.range && !sTime.label.includes('(') ? ` (${sTime.range})` : ''),
+          sourceDomain: 'Inferred from question',
+          sourceTime: 'Confirmed after conflict',
+          originalQuery
+        }
+      });
+
+      opts.push({
+        id: 'edit_scope',
+        label: 'Edit scope',
+        isEditScope: true,
+        payload: {
+          type: 'scope_resolution',
+          resolution: 'edit_scope'
+        }
+      });
+    } else if (conflict.domainConflict && !conflict.timeConflict) {
+      const qDom = conflict.domainConflict.question;
+      const sDom = conflict.domainConflict.selected;
+
+      let timeInfo = { start: null, end: null, periodLabel: 'No time restriction' };
+      if (questionScope.time && !questionScope.time.isAllTime) {
+        timeInfo = { start: questionScope.time.start, end: questionScope.time.end, periodLabel: questionScope.time.label };
+      } else if (selectedScope && selectedScope.time && selectedScope.time.mode === 'preset' && selectedScope.time.preset !== 'auto') {
+        const p = resolvePresetDateRange(selectedScope.time.preset, DEMO_CONTEXT);
+        timeInfo = { start: p.start, end: p.end, periodLabel: p.label };
+      }
+
+      opts.push({
+        id: 'use_question_domain',
+        label: `Use ${qDom} from question`,
+        payload: {
+          type: 'scope_resolution',
+          resolution: 'use_question',
+          domain: qDom,
+          start: timeInfo.start,
+          end: timeInfo.end,
+          periodLabel: timeInfo.periodLabel,
+          sourceDomain: 'Confirmed after conflict',
+          sourceTime: 'Selected by user',
+          originalQuery
+        }
+      });
+
+      opts.push({
+        id: 'use_selected_domain',
+        label: `Use selected ${sDom}`,
+        payload: {
+          type: 'scope_resolution',
+          resolution: 'use_selected',
+          domain: sDom,
+          start: timeInfo.start,
+          end: timeInfo.end,
+          periodLabel: timeInfo.periodLabel,
+          sourceDomain: 'Confirmed after conflict',
+          sourceTime: 'Selected by user',
+          originalQuery
+        }
+      });
+
+      opts.push({
+        id: 'edit_scope',
+        label: 'Edit scope',
+        isEditScope: true,
+        payload: {
+          type: 'scope_resolution',
+          resolution: 'edit_scope'
+        }
+      });
+    } else {
+      opts.push({
+        id: 'use_question_scope',
+        label: `Use scope from my question (${conflict.domainConflict.question}, ${conflict.timeConflict.question.label})`,
+        payload: {
+          type: 'scope_resolution',
+          resolution: 'use_question',
+          domain: conflict.domainConflict.question,
+          start: conflict.timeConflict.question.start,
+          end: conflict.timeConflict.question.end,
+          periodLabel: conflict.timeConflict.question.label,
+          sourceDomain: 'Confirmed after conflict',
+          sourceTime: 'Confirmed after conflict',
+          originalQuery
+        }
+      });
+
+      opts.push({
+        id: 'use_selected_scope',
+        label: `Use selected scope (${conflict.domainConflict.selected}, ${conflict.timeConflict.selected.label})`,
+        payload: {
+          type: 'scope_resolution',
+          resolution: 'use_selected',
+          domain: conflict.domainConflict.selected,
+          start: conflict.timeConflict.selected.start,
+          end: conflict.timeConflict.selected.end,
+          periodLabel: conflict.timeConflict.selected.label,
+          sourceDomain: 'Confirmed after conflict',
+          sourceTime: 'Confirmed after conflict',
+          originalQuery
+        }
+      });
+
+      opts.push({
+        id: 'edit_scope',
+        label: 'Edit scope',
+        isEditScope: true,
+        payload: {
+          type: 'scope_resolution',
+          resolution: 'edit_scope'
+        }
+      });
+    }
+
+    return opts;
+  }
+
+  // =========================================================================
   // 11. ISOLATED AGENT INTERFACE: askAgent(question, onProgress, options)
   // =========================================================================
   /**
@@ -1688,7 +2907,7 @@ GROUP BY p.asset_sub_type;`,
    *
    * @param {string} question - The user query or clarification payload
    * @param {function} onProgress - Callback: onProgress(stageIndex, stageObj, isRetry)
-   * @param {object} options - Optional parameters: { user, clarificationPayload, domainScope, timeRange, signal }
+   * @param {object} options - Optional parameters: { user, clarificationPayload, domainScope, timeRange, selectedScope, scopeConfirmation, signal }
    * @returns {Promise<object>} - Resolves to structured result
    */
   function askAgent(question, onProgress, options = {}) {
@@ -1726,16 +2945,106 @@ GROUP BY p.asset_sub_type;`,
         return;
       }
 
+      // -------------------------------------------------------------
+      // Scope Conflict Detection & Resolution (R2-06 & R2-08)
+      // -------------------------------------------------------------
+      let resolvedScope = null;
+      let queryToExecute = trimmed;
+
+      if (options.scopeConfirmation) {
+        // User confirmed a conflict resolution choice
+        const conf = options.scopeConfirmation;
+        resolvedScope = resolveSelectedScope(options.selectedScope, null, DEMO_CONTEXT, conf);
+        if (conf.originalQuery) {
+          queryToExecute = conf.originalQuery;
+        }
+      } else if (options.clarificationPayload) {
+        // Business clarification payload (e.g. occupancy_by_asset_class)
+        const effectiveScope = options.selectedScope || {
+          domain: { mode: (options.domainScope && options.domainScope !== 'Auto') ? 'explicit' : 'auto', value: options.domainScope || 'Auto' },
+          time: { mode: (options.timeRange && options.timeRange !== 'Auto' && options.timeRange !== 'auto') ? 'preset' : 'auto', preset: options.timeRange || 'auto' }
+        };
+        resolvedScope = resolveSelectedScope(effectiveScope, null, DEMO_CONTEXT);
+      } else {
+        const questionScope = parseQuestionScope(trimmed);
+        const effectiveScope = options.selectedScope || {
+          domain: { mode: (options.domainScope && options.domainScope !== 'Auto') ? 'explicit' : 'auto', value: options.domainScope || 'Auto' },
+          time: { mode: (options.timeRange && options.timeRange !== 'Auto' && options.timeRange !== 'auto') ? 'preset' : 'auto', preset: options.timeRange || 'auto' }
+        };
+
+        const conflict = detectScopeConflicts(effectiveScope, questionScope);
+        if (conflict) {
+          // Scope conflict detected - STOP and ask clarification!
+          setTimeout(() => {
+            if (isCancelled) return;
+            const elapsed = Date.now() - startTime;
+            logQueryToObservability(trimmed, 'SCOPE_CONFLICT', elapsed, [], '', currentUser);
+            logAuditEvent(currentUser.name, currentUser.roleTitle, trimmed, 'SCOPE_CONFLICT_DETECTED', elapsed, 'Awaiting user scope resolution.');
+
+            resolve({
+              type: 'clarification',
+              subtype: 'scope_conflict',
+              conflictType: conflict.domainConflict && conflict.timeConflict ? 'both' : (conflict.timeConflict ? 'time' : 'domain'),
+              question: buildConflictQuestionText(conflict),
+              conflictDetails: conflict,
+              originalQuery: trimmed,
+              options: buildConflictOptions(conflict, effectiveScope, questionScope, trimmed)
+            });
+          }, 350);
+          return;
+        }
+
+        resolvedScope = resolveSelectedScope(effectiveScope, questionScope, DEMO_CONTEXT);
+      }
+
       // Find best match in mock responses
       let matchedData = (options && options.clarificationPayload && QUERY_RESPONSES[options.clarificationPayload])
         ? QUERY_RESPONSES[options.clarificationPayload]
-        : QUERY_RESPONSES[trimmed];
+        : QUERY_RESPONSES[queryToExecute];
 
       // Smart keyword matching for free-form user typing
       if (!matchedData) {
-        const lower = trimmed.toLowerCase();
+        const lower = queryToExecute.toLowerCase();
         if (lower.includes('receivable') || lower.includes('overdue') || lower.includes('debt') || lower.includes('arrears')) {
           matchedData = QUERY_RESPONSES['Which projects have the highest outstanding receivables this quarter?'];
+        } else if (lower.includes('all contracts') || (lower.includes('contract') && resolvedScope.periodLabel.includes('No time'))) {
+          matchedData = {
+            type: 'results',
+            domain: 'Contracts',
+            summary: 'Aggregated contract repository across all entities without time restriction',
+            answer: 'Found **3,890 executed contracts** across enterprise developments without date restriction, totaling **$342.8M** in cumulative contractual value.',
+            dataAsOf: '2026-09-28 00:00 UTC',
+            table: {
+              title: 'Enterprise Contracts Master Registry (All Time)',
+              headers: ['Contract ID', 'Purchaser / Vendor', 'Project Code', 'Contract Type', 'Contract Value ($M)', 'Status'],
+              columns: ['id', 'buyer', 'project', 'type', 'val', 'status'],
+              types: ['string', 'string', 'string', 'string', 'number', 'badge'],
+              rows: [
+                { id: 'CTR-2024-0104', buyer: 'Horizon Global Trust', project: 'PRJ-SK-02', type: 'Commercial Sale', val: 14.50, status: 'Active' },
+                { id: 'CTR-2024-0089', buyer: 'Pacific Prime SPV', project: 'PRJ-GMB-02', type: 'Residential Purchase', val: 9.20, status: 'Active' },
+                { id: 'CTR-2023-0452', buyer: 'Apex Build Corp', project: 'PRJ-SK-02', type: 'Master EPC', val: 45.00, status: 'Active' },
+                { id: 'CTR-2025-0112', buyer: 'Vanguard Capital', project: 'PRJ-OCP-01', type: 'Commercial Sale', val: 8.40, status: 'Active' },
+                { id: 'CTR-2024-0780', buyer: 'Holcim Solutions', project: 'PRJ-GMB-02', type: 'Materials Supply', val: 6.25, status: 'Active' }
+              ]
+            },
+            chart: {
+              title: 'Top Contract Values by Allocation ($ Millions)',
+              unit: '$M',
+              items: [
+                { label: 'Apex EPC', value: 45.00, color: '#3b82f6', highlight: true },
+                { label: 'Horizon Trust', value: 14.50, color: '#6366f1' },
+                { label: 'Pacific Prime', value: 9.20, color: '#10b981' },
+                { label: 'Vanguard Cap', value: 8.40, color: '#f59e0b' },
+                { label: 'Holcim Materials', value: 6.25, color: '#6366f1' }
+              ]
+            },
+            sources: [
+              { name: 'sales_contracts', records: '3,890 contracts', description: 'Executed buyer agreements.' },
+              { name: 'procurement_contracts', records: '840 contracts', description: 'Vendor master contracts.' }
+            ],
+            sql: `-- Aria NL-to-SQL Engine v2.4 (Scope: All Contracts, No Date Restriction)\nSELECT contract_id, purchaser_name, project_code, contract_type, contract_value, status\nFROM enterprise_dw.sales_contracts;`,
+            followUps: ['Filter by project or asset type', 'Export contracts summary to CSV']
+          };
         } else if (lower.includes('delay') || lower.includes('construction') || lower.includes('progress') || lower.includes('handover')) {
           matchedData = QUERY_RESPONSES['Show construction progress and delay risks across active residential developments'];
         } else if (lower.includes('procurement') || lower.includes('steel') || lower.includes('concrete') || lower.includes('vendor') || lower.includes('supplier spend')) {
@@ -1754,12 +3063,13 @@ GROUP BY p.asset_sub_type;`,
           matchedData = QUERY_RESPONSES['Show total internal marketing headcount budget variance for FY2021'];
         } else {
           // Dynamic fallback for any other general enterprise question
+          const fallbackDomain = (resolvedScope.domain && resolvedScope.domain !== 'All Domains') ? resolvedScope.domain : 'All Domains';
           matchedData = {
             type: 'results',
-            domain: options.domainScope && options.domainScope !== 'All' ? options.domainScope : 'Projects',
+            domain: fallbackDomain,
             summary: 'Understood intent, retrieved schema across 2 tables, generated and validated query (1.4s)',
-            answer: `Synthesized operational records matching **"${trimmed}"** across enterprise tables for period **${options.timeRange || 'Current Quarter'}**:`,
-            plainEnglishExplanation: `This query filters operational entities matching your query parameters in the ${options.domainScope || 'Projects'} domain.`,
+            answer: `Synthesized operational records matching **"${trimmed}"** across enterprise tables:`,
+            plainEnglishExplanation: (fallbackDomain !== 'All Domains') ? `This query filters operational entities matching your parameters in the ${fallbackDomain} domain.` : `This cross-domain query aggregates operational records across enterprise domains without domain restriction.`,
             dataAsOf: '2026-09-28 00:00 UTC',
             confidenceNote: 'Standard confidence (90%). Schema verified.',
             table: {
@@ -1841,6 +3151,9 @@ GROUP BY p.asset_sub_type;`,
         return;
       }
 
+      // Apply Scope to Results via Unified Scope Resolver
+      const finalResult = applyScopeToMockResult(matchedData, resolvedScope, queryToExecute);
+
       // Standard pipeline execution (5 stages)
       let stageIdx = 0;
       function runStage() {
@@ -1854,10 +3167,10 @@ GROUP BY p.asset_sub_type;`,
           setTimeout(runStage, delay);
         } else {
           const elapsed = Date.now() - startTime;
-          const tableNames = (matchedData.sources || []).map(s => s.name);
-          logQueryToObservability(trimmed, 'SUCCESS', elapsed, tableNames, matchedData.sql, currentUser);
-          logAuditEvent(currentUser.name, currentUser.roleTitle, trimmed, 'ANSWERED', elapsed, `Executed across ${tableNames.length} tables.`);
-          resolve(matchedData);
+          const tableNames = (finalResult.sources || []).map(s => s.name);
+          logQueryToObservability(trimmed, 'SUCCESS', elapsed, tableNames, finalResult.sql, currentUser);
+          logAuditEvent(currentUser.name, currentUser.roleTitle, trimmed, 'ANSWERED', elapsed, `Executed across ${tableNames.length} tables. Scope: ${resolvedScope.periodLabel}.`);
+          resolve(finalResult);
         }
       }
 
@@ -1868,6 +3181,22 @@ GROUP BY p.asset_sub_type;`,
   // =========================================================================
   // 12. EXPORT TO GLOBAL WINDOW OBJECT
   // =========================================================================
+  window.DEMO_CONTEXT = DEMO_CONTEXT;
+
+  window.AriaScope = {
+    DEMO_CONTEXT,
+    parseIsoDate,
+    formatDisplayDate,
+    formatDateRange,
+    validateDateRange,
+    getQuarterDates,
+    resolvePresetDateRange,
+    parseQuestionScope,
+    detectScopeConflicts,
+    resolveSelectedScope,
+    applyScopeToMockResult
+  };
+
   window.AriaMock = {
     USER_ROLES,
     PIPELINE_STAGES,
@@ -1877,6 +3206,14 @@ GROUP BY p.asset_sub_type;`,
     QUERY_RESPONSES,
     BENCHMARK_QUESTIONS,
     EVALUATION_STRATEGIES,
+    DEMO_CONTEXT,
+    AriaScope: window.AriaScope,
+    validateDateRange,
+    parseQuestionScope,
+    detectScopeConflicts,
+    resolveSelectedScope,
+    resolvePresetDateRange,
+    applyScopeToMockResult,
     getObservabilityStore,
     logQueryToObservability,
     recordFeedback,

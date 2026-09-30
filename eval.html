@@ -21,7 +21,7 @@
           <div class="brand-icon" aria-hidden="true" style="background: #0284c7;">E</div>
           <div class="brand-title">
             <span>Aria Evaluation</span>
-            <span class="brand-badge" style="background: #e0f2fe; color: #0369a1; border-color: #bae6fd;">Layer 7: Benchmark Engine</span>
+            <span class="demo-status-badge">Demo <span aria-hidden="true">&bull;</span> Synthetic data</span>
           </div>
         </div>
 
@@ -35,7 +35,7 @@
       <div class="header-right">
         <div class="user-badge" id="evalUserBadge">
           <div class="user-badge-dot" aria-hidden="true"></div>
-          <span id="evalUserLabel">Active Persona: <strong>Alex Thorne (Admin)</strong></span>
+          <span id="evalUserLabel">Demo persona: <strong>Alex Thorne</strong></span>
         </div>
         <button type="button" class="header-icon-btn" id="themeToggleBtn" aria-label="Toggle color theme"></button>
       </div>
@@ -193,9 +193,9 @@
       } catch (e) {}
       const evalUserLabel = document.getElementById('evalUserLabel');
       if (evalUserLabel && currentUser) {
-        evalUserLabel.innerHTML = `Active Persona: <strong>${currentUser.name} (${currentUser.roleTitle})</strong>`;
+        evalUserLabel.innerHTML = `Demo persona: <strong>${currentUser.name}</strong>`;
       } else if (evalUserLabel) {
-        evalUserLabel.innerHTML = `Active Persona: <strong>Alex Thorne (Admin) (Data / Admin team)</strong>`;
+        evalUserLabel.innerHTML = `Demo persona: <strong>Alex Thorne</strong>`;
       }
 
       // 2. Theme toggle
@@ -508,7 +508,12 @@
       // 9. Download CSV
       document.getElementById('downloadBenchmarkCsvBtn').addEventListener('click', () => {
         const questions = window.AriaMock.BENCHMARK_QUESTIONS || [];
-        const rows = [['ID', 'Category', 'Question', 'Expected Outcome', 'Latency (s)', 'Status']];
+        const rows = [
+          ['Demo • Synthetic data'],
+          ['Prototype export — access rules and masking are simulated'],
+          [],
+          ['ID', 'Category', 'Question', 'Expected Outcome', 'Latency (s)', 'Status']
+        ];
         questions.forEach((q) => {
           let passed = true;
           if (currentStrategyKey === 'full_schema') passed = q.fullSchemaPass;
