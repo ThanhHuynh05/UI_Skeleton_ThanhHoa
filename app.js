@@ -626,6 +626,194 @@
     return generateInterpretationHtml(scope, null);
   }
 
+  const RESULT_PATTERN_META = {
+    kpi: { label: 'KPI summary', description: 'Key measure and reporting period' },
+    ranking: { label: 'Ranking', description: 'Highest-impact items first' },
+    trend: { label: 'Trend', description: 'Progress and movement at a glance' },
+    record_list: { label: 'Record list', description: 'Actionable records matching the request' },
+    entity_detail: { label: 'Entity detail', description: 'Focused facts for one business entity' },
+    comparison: { label: 'Comparison', description: 'Side-by-side business performance' }
+  };
+
+  function inferResultPattern(res = {}) {
+    if (res.resultPattern && RESULT_PATTERN_META[res.resultPattern]) return res.resultPattern;
+    const title = ((res.table && res.table.title) || '').toLowerCase();
+    const metricKey = res.appliedScope && res.appliedScope.metric ? res.appliedScope.metric.key : '';
+    const breakdownKey = res.appliedScope && res.appliedScope.breakdown ? res.appliedScope.breakdown.key : '';
+
+    if (title.includes('delay penalty') || (res.table && res.table.rows && res.table.rows.length === 1)) return 'entity_detail';
+    if (title.includes('construction progress') || title.includes('milestone variance')) return 'trend';
+    if (title.includes('concrete vs steel') || title.includes('asset class') || title.includes('aging risk bucket')) return 'comparison';
+    if (title.includes('ranked') || title.includes('top 5') || title.includes('by region')) return 'ranking';
+    if (title.includes('expiring') || title.includes('pending executive') || title.includes('buyer contract') || title.includes('receivables by buyer')) return 'record_list';
+    if (title.includes('portfolio overview') || metricKey === 'contract_value' || metricKey === 'contract_count' || breakdownKey === 'portfolio_total') return 'kpi';
+    return res.chart ? 'comparison' : 'record_list';
+  }
+
+  function getResultState(res = {}) {
+    const answer = (res.answer || '').toLowerCase();
+    if (res.resultState === 'partial' || res.isPartial) return 'partial';
+    if (answer.startsWith('combination not supported') || res.resultState === 'unsupported') return 'unsupported';
+    if (res.resultState === 'no_data' || (res.table && Array.isArray(res.table.rows) && res.table.rows.length === 0)) return 'no_data';
+    return null;
+  }
+
+  function getDefaultResultView(pattern, res = {}) {
+    if (res.chart && (pattern === 'trend' || pattern === 'comparison')) return 'chart';
+    if (res.table) return 'table';
+    return res.chart ? 'chart' : 'none';
+  }
+
+  function getActiveResultView(msg, pattern, res) {
+    if (msg.viewUserSelected && msg.activeView) return msg.activeView;
+    if (msg.resultPattern && msg.activeView) return msg.activeView;
+    return getDefaultResultView(pattern, res);
+  }
+
+  function getAnswerHighlights(answer, scope) {
+    const matches = [...String(answer || '').matchAll(/\*\*([^*]+)\*\*/g)]
+      .map(m => m[1].trim())
+      .filter(v => /\d/.test(v));
+    const unique = [...new Set(matches)];
+    const metricKey = scope && scope.metric ? scope.metric.key : '';
+    let primary = unique[0] || '';
+
+    if (metricKey === 'contract_value' || metricKey === 'total_receivables' || metricKey === 'overdue_60d' || metricKey === 'total_invoiced_spend' || metricKey === 'allocated_value') {
+      primary = unique.find(v => v.includes('$')) || primary;
+    } else if (metricKey === 'occupancy_rate' || metricKey === 'construction_progress') {
+      primary = unique.find(v => v.includes('%')) || primary;
+    } else if (metricKey === 'contract_count') {
+      primary = unique.find(v => /contract|agreement/i.test(v)) || primary;
+    }
+
+    return {
+      primary,
+      secondary: unique.filter(v => v !== primary).slice(0, 2)
+    };
+  }
+
+  function renderResultHero(pattern, answerBody, scope) {
+    const meta = RESULT_PATTERN_META[pattern] || RESULT_PATTERN_META.record_list;
+    const highlights = getAnswerHighlights(answerBody, scope);
+    const period = scope && scope.time ? scope.time.label : (scope && scope.periodLabel ? scope.periodLabel : 'Current scope');
+    const metric = scope && scope.metric ? scope.metric.label : 'Business result';
+
+    return `
+      <section class="result-hero result-pattern-${pattern}">
+        <div class="result-hero-topline">
+          <span class="result-pattern-badge">${escapeHtml(meta.label)}</span>
+          <span class="result-period-badge">${escapeHtml(period)}</span>
+        </div>
+        ${pattern === 'kpi' && highlights.primary ? `
+          <div class="result-kpi-block">
+            <div class="result-kpi-value">${escapeHtml(highlights.primary)}</div>
+            <div class="result-kpi-definition">${escapeHtml(metric)}</div>
+          </div>
+        ` : ''}
+        <div class="result-headline">${formatMarkdownBold(answerBody || '')}</div>
+        ${pattern !== 'kpi' && highlights.primary ? `
+          <div class="result-highlight-row">
+            <span class="result-highlight-primary">${escapeHtml(highlights.primary)}</span>
+            ${highlights.secondary.map(v => `<span class="result-highlight-secondary">${escapeHtml(v)}</span>`).join('')}
+          </div>
+        ` : ''}
+        <div class="result-pattern-description">${escapeHtml(meta.description)}</div>
+      </section>
+    `;
+  }
+
+  function renderCompactScope(scope, msg) {
+    if (!scope) return '';
+    const metric = scope.metric ? scope.metric.label : 'Business metric';
+    const period = scope.time ? scope.time.label : (scope.periodLabel || 'Current scope');
+    const project = scope.projectScope ? scope.projectScope.label : 'All projects';
+    return `
+      <details class="result-scope-disclosure">
+        <summary>
+          <span class="result-scope-summary-label">Applied scope</span>
+          <span class="result-scope-summary-value">${escapeHtml(metric)} · ${escapeHtml(period)} · ${escapeHtml(project)}</span>
+          <span class="result-scope-summary-action">Review or edit</span>
+        </summary>
+        <div class="result-scope-expanded">${generateInterpretationHtml(scope, msg)}</div>
+      </details>
+    `;
+  }
+
+  function renderEntityDetailHtml(tableData) {
+    if (!tableData || !tableData.rows || tableData.rows.length === 0) return '';
+    const row = tableData.rows[0];
+    return `
+      <section class="entity-detail-panel">
+        <div class="evidence-section-heading">${escapeHtml(tableData.title || 'Entity details')}</div>
+        <div class="entity-detail-grid">
+          ${tableData.columns.map((column, idx) => `
+            <div class="entity-detail-field">
+              <span>${escapeHtml(tableData.headers[idx] || column)}</span>
+              <strong>${escapeHtml(String(row[column] !== undefined ? row[column] : '—'))}</strong>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderEvidenceHtml(res, msg, pattern, activeView) {
+    if (!res.table && !res.chart) return '';
+    if (pattern === 'entity_detail') return renderEntityDetailHtml(res.table);
+
+    const tableHtml = generateTableHtml(res.table, msg.id, activeView, msg.tablePage || 1, msg.tableSearch || '');
+    const chartHtml = generateChartHtml(res.chart, msg.id, msg.chartType || (pattern === 'trend' ? 'line' : 'bar'));
+    const hasBoth = Boolean(res.table && res.chart);
+    const toggle = hasBoth ? `
+      <div class="result-view-header">
+        <span class="evidence-section-heading">Supporting evidence</span>
+        <div class="table-view-toggle">
+          <button type="button" class="view-btn ${activeView === 'table' ? 'active' : ''}" data-view="table" data-msg-id="${msg.id}">Records</button>
+          <button type="button" class="view-btn ${activeView === 'chart' ? 'active' : ''}" data-view="chart" data-msg-id="${msg.id}">Visual</button>
+        </div>
+      </div>
+    ` : '';
+    const content = activeView === 'chart' ? chartHtml : tableHtml;
+
+    if (pattern === 'kpi') {
+      return `
+        <details class="supporting-evidence-disclosure">
+          <summary>View supporting evidence</summary>
+          <div class="supporting-evidence-content">${toggle}${content}</div>
+        </details>
+      `;
+    }
+
+    return `<section class="result-evidence">${toggle}${content}</section>`;
+  }
+
+  function renderResultStateHtml(msg, stateType) {
+    const res = msg.resultsData || {};
+    const scope = msg.appliedScope || res.appliedScope;
+    const config = stateType === 'no_data'
+      ? { label: 'No matching records', title: 'Nothing matched the applied scope', body: 'The query completed successfully, but the synthetic dataset contains no records for this combination of filters.', tone: 'neutral' }
+      : stateType === 'partial'
+        ? { label: 'Partial result', title: 'Some evidence is unavailable', body: res.partialReason || 'The available records are shown below. Some sources did not return data, so totals may be incomplete.', tone: 'warning' }
+        : { label: 'Unsupported question', title: 'This combination is not available in the demo', body: res.plainEnglishExplanation || 'The requested combination is outside the verified synthetic scenarios.', tone: 'warning' };
+
+    return `
+      <div class="chat-row agent-row" id="msg_row_${msg.id}">
+        <div class="agent-response-card result-state-card state-${config.tone}">
+          <div class="result-state-label">${escapeHtml(config.label)}</div>
+          <h3>${escapeHtml(config.title)}</h3>
+          <p>${escapeHtml(config.body)}</p>
+          ${res.answer ? `<div class="result-state-detail">${formatMarkdownBold(res.answer.replace(/^Combination Not Supported in Mock Ledger:\s*/i, ''))}</div>` : ''}
+          ${renderCompactScope(scope, msg)}
+          <div class="result-state-actions">
+            ${scope ? `<button type="button" class="action-tool-btn btn-edit-interpretation" data-msg-id="${msg.id}">Edit scope</button>` : ''}
+            <button type="button" class="action-tool-btn btn-regenerate" data-msg-id="${msg.id}">Try again</button>
+          </div>
+          ${stateType === 'partial' ? renderEvidenceHtml(res, msg, inferResultPattern(res), getActiveResultView(msg, inferResultPattern(res), res)) : ''}
+        </div>
+      </div>
+    `;
+  }
+
   function renderAgentMessageHtml(msg, msgIdx) {
     if (msg.type === 'blocked') {
       return renderBlockedSecurityHtml(msg);
@@ -633,17 +821,22 @@
     if (msg.type === 'clarification') {
       return renderClarificationHtml(msg);
     }
-    if (msg.type === 'error') {
+    if (msg.type === 'error' || msg.type === 'cancelled') {
       return renderErrorHtml(msg);
     }
 
     const res = msg.resultsData || {};
-    const tableHtml = generateTableHtml(res.table, msg.id, msg.activeView || 'table', msg.tablePage || 1, msg.tableSearch || '');
-    const chartHtml = generateChartHtml(res.chart, msg.id, msg.chartType || 'bar');
+    const resultState = getResultState(res);
+    if (resultState === 'no_data' || resultState === 'unsupported') {
+      return renderResultStateHtml(msg, resultState);
+    }
+    const pattern = inferResultPattern(res);
+    const activeView = getActiveResultView(msg, pattern, res);
+    const scope = msg.appliedScope || res.appliedScope;
     const formatBusinessSource = (name) => name.replace('enterprise_dw.', '').replace('dim_', '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     
     const sourcesHtml = (res.sources || []).map((s) => `
-      <button type="button" class="source-badge-btn" data-table-name="${escapeHtml(s.name)}" title="${escapeHtml(s.name)} - ${escapeHtml(s.description || 'Table schema & description')}">
+      <button type="button" class="source-badge-btn" data-table-name="${escapeHtml(s.name)}" title="Open business source definition">
         <svg width="10" height="10" fill="currentColor" viewBox="0 0 20 20"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2zM3 16a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z"/></svg>
         ${escapeHtml(formatBusinessSource(s.name))}
       </button>
@@ -657,7 +850,7 @@
 
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
-        <div class="agent-response-card">
+        <div class="agent-response-card result-canvas result-canvas-${pattern}">
           <!-- Superseded Notice (if this interpretation was later re-run) -->
           ${msg.isSuperseded ? `
             <div class="superseded-callout">
@@ -674,42 +867,42 @@
             </div>
           ` : ''}
 
-          <!-- Unified "How I interpreted your question" Card (R2-09) -->
-          ${generateInterpretationHtml(msg.appliedScope || (res && res.appliedScope), msg)}
-
-          <!-- Business Answer -->
-          <div class="grounded-answer-text">
-            ${formatMarkdownBold(answerBody)}
-          </div>
-
-          <!-- 2. Key Evidence/Visualization -->
-          ${(res.table || res.chart) ? `
-          <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
-            <div class="table-view-toggle">
-              ${res.table ? `<button type="button" class="view-btn ${(msg.activeView || 'table') === 'table' ? 'active' : ''}" data-view="table" data-msg-id="${msg.id}">Table View</button>` : ''}
-              ${res.chart ? `<button type="button" class="view-btn ${(msg.activeView || 'table') === 'chart' ? 'active' : ''}" data-view="chart" data-msg-id="${msg.id}">Chart View</button>` : ''}
+          ${resultState === 'partial' ? `
+            <div class="partial-result-banner">
+              <strong>Partial result</strong>
+              <span>${escapeHtml(res.partialReason || 'Some supporting sources were unavailable; available evidence is shown below.')}</span>
             </div>
-          </div>
           ` : ''}
-          ${(msg.activeView || 'table') === 'table' ? tableHtml : chartHtml}
 
-          <!-- 3. Actions -->
+          <!-- Answer and key conclusion come first -->
+          ${renderResultHero(pattern, answerBody, scope)}
+
+          <!-- Applied scope stays compact until requested -->
+          ${renderCompactScope(scope, msg)}
+
+          <!-- Pattern-specific evidence -->
+          ${renderEvidenceHtml(res, msg, pattern, activeView)}
+
+          <!-- Freshness and business sources -->
+          <div class="result-provenance-row">
+            <span class="result-freshness">Data as of <strong>${escapeHtml(res.dataAsOf || 'Yesterday 23:59 UTC')}</strong></span>
+            ${sourcesHtml ? `<div class="result-business-sources"><span>Sources</span>${sourcesHtml}</div>` : ''}
+          </div>
+
+          <!-- Pattern-aware actions -->
           <div class="response-actions-row">
             <div class="action-tools-group">
               <button type="button" class="action-tool-btn btn-copy-answer" data-answer="${escapeHtml(answerBody)}" title="Copy answer text">
-                📋 Copy Text
+                Copy answer
               </button>
-              <button type="button" class="action-tool-btn btn-copy-table" data-msg-id="${msg.id}" title="Copy table to clipboard">
-                📊 Copy Table
-              </button>
-              <button type="button" class="action-tool-btn btn-export-csv" data-msg-id="${msg.id}" title="Download table data as CSV">
-                📥 Download CSV
-              </button>
+              ${res.table ? `<button type="button" class="action-tool-btn btn-copy-table" data-msg-id="${msg.id}" title="Copy supporting data">${pattern === 'entity_detail' ? 'Copy details' : 'Copy records'}</button>` : ''}
+              ${(res.table && (pattern === 'ranking' || pattern === 'record_list' || pattern === 'comparison')) ? `<button type="button" class="action-tool-btn btn-export-csv" data-msg-id="${msg.id}" title="Download supporting records">Download CSV</button>` : ''}
+              ${(resultState === 'partial' && scope) ? `<button type="button" class="action-tool-btn btn-edit-interpretation" data-msg-id="${msg.id}">Edit scope</button>` : ''}
               <button type="button" class="action-tool-btn btn-pin-answer ${isPinned ? 'pinned' : ''}" data-msg-id="${msg.id}" title="${isPinned ? 'Remove from Saved' : 'Pin to Saved Insights'}">
-                ${isPinned ? '★ Saved' : '☆ Save Insight'}
+                ${isPinned ? 'Saved insight' : 'Save insight'}
               </button>
               <button type="button" class="action-tool-btn btn-regenerate" data-msg-id="${msg.id}" title="Regenerate this answer">
-                🔄 Regenerate
+                Run again
               </button>
             </div>
 
@@ -719,13 +912,13 @@
             </div>
           </div>
 
-          <!-- 4. Technical Details / Why this answer? -->
+          <!-- Technical evidence stays secondary -->
           <details class="technical-details-accordion" style="margin-top: 12px; font-size: 11.5px; border-top: 1px solid var(--border-color); padding-top: 8px;">
-            <summary style="cursor: pointer; font-weight: 600; color: var(--text-secondary);">⚙️ Technical details / Why this answer?</summary>
+            <summary style="cursor: pointer; font-weight: 600; color: var(--text-secondary);">Technical details / Why this answer?</summary>
             
             <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
               <div class="answer-meta-bar" style="border: none; padding: 0; background: transparent;">
-                <span class="answer-meta-item">🕒 Data as of: ${escapeHtml(res.dataAsOf || 'Yesterday 23:59 UTC')}</span>
+                <span class="answer-meta-item">Data as of: ${escapeHtml(res.dataAsOf || 'Yesterday 23:59 UTC')}</span>
                 <span class="answer-meta-item">Simulated access view: ${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Default')}</span>
               </div>
 
@@ -742,7 +935,7 @@
 
               ${res.plainEnglishExplanation ? `
                 <div class="explanation-details" style="margin: 0; padding: 8px; background: var(--bg-hover); border-radius: 4px;">
-                  <strong style="display:block; margin-bottom: 4px;">Pipeline / Query Strategy:</strong>
+                  <strong style="display:block; margin-bottom: 4px;">How the result was produced:</strong>
                   ${escapeHtml(res.plainEnglishExplanation)}
                 </div>
               ` : ''}
@@ -763,10 +956,10 @@
             </div>
           </details>
 
-          <!-- Suggested Follow-ups -->
+          <!-- Suggested next actions -->
           ${res.followUps && res.followUps.length > 0 ? `
             <div class="followups-container">
-              <div class="followups-label">Suggested Follow-ups</div>
+              <div class="followups-label">Next actions</div>
               <div class="followups-chips-list">
                 ${res.followUps.map((f) => `
                   <button type="button" class="followup-chip" data-query="${escapeHtml(f)}">
@@ -785,22 +978,14 @@
   function renderBlockedSecurityHtml(msg) {
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
-        <div class="agent-response-card">
-          <div class="error-card" style="border-color: var(--danger-border); background-color: var(--danger-bg); color: var(--danger-color);">
-            <div class="error-header">
-              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
-              <span>${escapeHtml(msg.title || 'Action Blocked by Security Gateway')}</span>
-            </div>
-            <div class="error-message">${escapeHtml(msg.message || '')}</div>
-            <div class="error-reason">
-              <strong>Security Policy:</strong> ${escapeHtml(msg.reason || '')}
-            </div>
-            ${msg.details ? `
-              <details class="explanation-details" style="margin-top: 6px;">
-                <summary class="explanation-summary">Why was this query blocked?</summary>
-                <div class="explanation-content">${escapeHtml(msg.details)}</div>
-              </details>
-            ` : ''}
+        <div class="agent-response-card result-state-card state-denied">
+          <div class="result-state-label">Request denied</div>
+          <h3>${escapeHtml(msg.title || 'This request cannot be completed')}</h3>
+          <p>${escapeHtml(msg.message || '')}</p>
+          <div class="result-state-detail"><strong>Why:</strong> ${escapeHtml(msg.reason || 'This action is outside the simulated access rules for the current demo persona.')}</div>
+          ${msg.details ? `<details class="state-details"><summary>More information</summary><p>${escapeHtml(msg.details)}</p></details>` : ''}
+          <div class="result-state-actions">
+            <button type="button" class="action-tool-btn btn-revise-question" data-msg-id="${msg.id}">Revise question</button>
           </div>
         </div>
       </div>
@@ -903,26 +1088,28 @@
 
   function renderErrorHtml(msg) {
     const err = msg.errorData || {};
+    const titleText = (err.title || '').toLowerCase();
+    const kind = err.kind || (msg.type === 'cancelled' ? 'cancelled' : (titleText.includes('not found') || titleText.includes('not available') ? 'unsupported_question' : 'service_error'));
+    const config = kind === 'cancelled'
+      ? { label: 'Cancelled', title: err.title || 'Request stopped', tone: 'neutral', reasonLabel: 'Status' }
+      : kind === 'unsupported_question'
+        ? { label: 'Unsupported question', title: err.title || 'Information is outside this demo', tone: 'warning', reasonLabel: 'Available boundary' }
+        : { label: 'Service error', title: err.title || 'The result could not be generated', tone: 'danger', reasonLabel: 'Technical status' };
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
-        <div class="agent-response-card">
-          <div class="error-card">
-            <div class="error-header">
-              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-              <span>${escapeHtml(err.title || 'Information Not Found')}</span>
+        <div class="agent-response-card result-state-card state-${config.tone}">
+          <div class="result-state-label">${escapeHtml(config.label)}</div>
+          <h3>${escapeHtml(config.title)}</h3>
+          <p>${escapeHtml(err.message || '')}</p>
+          ${err.reason ? `<div class="result-state-detail"><strong>${escapeHtml(config.reasonLabel)}:</strong> ${escapeHtml(err.reason)}</div>` : ''}
+          ${err.suggestedActions && err.suggestedActions.length > 0 ? `
+            <div class="state-suggestions">
+              <strong>What you can do</strong>
+              <ul>${err.suggestedActions.map((act) => `<li>${escapeHtml(act)}</li>`).join('')}</ul>
             </div>
-            <div class="error-message">${escapeHtml(err.message || '')}</div>
-            <div class="error-reason">
-              <strong>Context &amp; Boundary:</strong> ${escapeHtml(err.reason || '')}
-            </div>
-            ${err.suggestedActions && err.suggestedActions.length > 0 ? `
-              <div class="error-suggestions">
-                <strong>Recommended Next Steps:</strong>
-                <ul>
-                  ${err.suggestedActions.map((act) => `<li>${escapeHtml(act)}</li>`).join('')}
-                </ul>
-              </div>
-            ` : ''}
+          ` : ''}
+          <div class="result-state-actions">
+            <button type="button" class="action-tool-btn ${kind === 'unsupported_question' ? 'btn-revise-question' : 'btn-regenerate'}" data-msg-id="${msg.id}">${kind === 'cancelled' ? 'Ask again' : (kind === 'unsupported_question' ? 'Revise question' : 'Try again')}</button>
           </div>
         </div>
       </div>
@@ -1067,6 +1254,7 @@
       }
 
       // Append Agent Message
+      const resultPattern = result.type === 'results' ? inferResultPattern(result) : null;
       const agentMsg = {
         id: agentMsgId,
         role: 'agent',
@@ -1087,7 +1275,9 @@
         message: result.message || null,
         reason: result.reason || null,
         details: result.details || null,
-        activeView: 'table',
+        resultPattern,
+        activeView: result.type === 'results' ? getDefaultResultView(resultPattern, result) : null,
+        viewUserSelected: false,
         tablePage: 1,
         tableSearch: ''
       };
@@ -1108,14 +1298,15 @@
         conv.messages.push({
           id: agentMsgId,
           role: 'agent',
-          type: 'error',
+          type: 'cancelled',
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           timestamp: Date.now(),
           errorData: {
-            title: 'Generation Stopped',
-            message: 'Query synthesis was cancelled by user.',
-            reason: 'User triggered stop generating.',
-            suggestedActions: ['Submit another question or rephrase your inquiry.']
+            kind: 'cancelled',
+            title: 'Request stopped',
+            message: 'You stopped this request before a result was produced.',
+            reason: 'No result or data change was created.',
+            suggestedActions: ['Ask the question again when you are ready.']
           }
         });
       } else {
@@ -1126,6 +1317,7 @@
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           timestamp: Date.now(),
           errorData: {
+            kind: 'service_error',
             title: 'Execution Error',
             message: String(err),
             reason: 'Client-side processing exception.',
@@ -1824,6 +2016,19 @@
       });
     });
 
+    chatContainerEl.querySelectorAll('.btn-revise-question').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const msg = conv.messages.find(m => m.id === btn.getAttribute('data-msg-id'));
+        const text = msg ? findUserQueryForAgentMsg(conv, msg) : '';
+        if (text) {
+          chatInputEl.value = text;
+          chatInputEl.focus();
+          updateSendButtonState();
+          showToast('Question ready to revise.');
+        }
+      });
+    });
+
     // 4. Clarification Chips
     chatContainerEl.querySelectorAll('.clarification-chip').forEach((chip) => {
       chip.addEventListener('click', () => {
@@ -1897,6 +2102,8 @@
         const msg = conv.messages.find((m) => m.id === msgId);
         if (msg) {
           msg.activeView = view;
+          msg.viewUserSelected = true;
+          saveConversationsToStorage();
           renderActiveConversation();
         }
       });
