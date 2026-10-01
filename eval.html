@@ -73,7 +73,7 @@
           <p>Standardized test suite assessing NL-to-SQL semantic accuracy, retrieval latency, prompt token footprint, and security boundary guardrails across 15 enterprise queries.</p>
         </div>
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-          <button type="button" class="action-tool-btn" id="downloadBenchmarkCsvBtn" style="padding: 7px 12px; font-weight: 500;">
+          <button type="button" class="action-tool-btn" id="downloadBenchmarkCsvBtn" style="padding: 7px 12px; font-weight: 500;" disabled title="Run the simulated benchmark before downloading results">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             <span>Download CSV</span>
           </button>
@@ -85,6 +85,18 @@
       </div>
 
       <!-- Animated Progress Bar -->
+      <div class="simulated-benchmark-notice" role="note">
+        <strong>Simulated benchmark</strong>
+        <span>Sample prototype results are not measured production evidence. Run metadata is recorded only for this browser simulation.</span>
+      </div>
+      <div class="benchmark-run-metadata" aria-label="Benchmark run metadata">
+        <div><span>Status</span><strong id="runMetaStatus">Not run</strong></div>
+        <div><span>Model</span><strong>Prototype simulator</strong></div>
+        <div><span>Configuration</span><strong id="runMetaConfig">Not run</strong></div>
+        <div><span>Dataset</span><strong>Synthetic benchmark v1</strong></div>
+        <div><span>Run time</span><strong id="runMetaTime">Not run</strong></div>
+      </div>
+
       <div class="progress-bar-container" id="benchmarkProgressBar">
         <div class="progress-bar-fill" id="progressBarFill"></div>
       </div>
@@ -124,9 +136,10 @@
         <div class="kpi-card kpi-accent-amber">
           <div class="kpi-label">Est. Cost per 1k Queries</div>
           <div class="kpi-value" id="kpiCost">--</div>
-          <div class="kpi-meta" id="kpiCostMeta">Standard LLM pricing index</div>
+          <div class="kpi-meta" id="kpiCostMeta">Illustrative estimate; assumptions not validated</div>
         </div>
       </div>
+      <p class="benchmark-definition-note"><strong>Definitions:</strong> Accuracy is the share of 15 synthetic cases matching their expected outcome and guardrail behaviour. Cost is an illustrative per-1,000-query estimate from the prototype configuration, not a vendor invoice or measured saving.</p>
 
       <!-- Category Accuracy Bar Chart (Inline SVG) -->
       <div class="admin-card">
@@ -207,6 +220,7 @@
 
       let currentStrategyKey = 'retrieval_enriched';
       let isRunning = false;
+      let benchmarkHasRun = false;
 
       // 1. User Identity Display & Role Gate
       let currentUser = null;
@@ -287,11 +301,7 @@
             <div class="strategy-card ${isSelected ? 'selected' : ''}" data-strategy="${key}">
               <div class="strategy-title">${s.name}</div>
               <div class="strategy-desc">${s.description}</div>
-              <div class="strategy-metrics-row">
-                <span>Accuracy: <strong style="color: var(--accent-primary); font-size: 13px;">${s.accuracyPct}%</strong></span>
-                <span>Latency: <strong>${(s.avgLatencyMs / 1000).toFixed(2)}s</strong></span>
-                <span>Cost: <strong>${s.costPer1k}</strong></span>
-              </div>
+              <div class="strategy-metrics-row"><span>Configuration candidate</span><span>Run to view simulated output</span></div>
             </div>
           `;
         }).join('');
@@ -309,6 +319,21 @@
       function updateMetricsAndTable() {
         const strat = window.AriaMock.EVALUATION_STRATEGIES[currentStrategyKey];
 
+        document.getElementById('runMetaConfig').textContent = strat.name;
+        if (!benchmarkHasRun) {
+          document.getElementById('kpiAccuracy').textContent = 'Not run';
+          document.getElementById('kpiPassRatio').textContent = 'No run results';
+          document.getElementById('kpiLatency').textContent = 'Not run';
+          document.getElementById('kpiTokens').textContent = 'Not run';
+          document.getElementById('kpiCost').textContent = 'Not run';
+          document.getElementById('kpiLatencyMeta').textContent = 'Elapsed simulated request time';
+          document.getElementById('kpiTokensMeta').textContent = 'Context tokens per simulated query';
+          document.getElementById('kpiCostMeta').textContent = 'Illustrative estimate; assumptions not validated';
+          renderBenchmarkTable();
+          renderCategoryChart();
+          return;
+        }
+
         // Update KPIs
         document.getElementById('kpiAccuracy').textContent = strat.accuracyPct + '%';
         document.getElementById('kpiPassRatio').textContent = `${strat.passCount} of ${strat.totalCount} passed`;
@@ -317,17 +342,17 @@
         document.getElementById('kpiCost').textContent = strat.costPer1k;
 
         if (currentStrategyKey === 'full_schema') {
-          document.getElementById('kpiLatencyMeta').textContent = 'Baseline high latency';
-          document.getElementById('kpiTokensMeta').textContent = 'Full DDL schema dump';
-          document.getElementById('kpiCostMeta').textContent = 'Highest LLM token cost';
+          document.getElementById('kpiLatencyMeta').textContent = 'Simulated end-to-end latency';
+          document.getElementById('kpiTokensMeta').textContent = 'Simulated full-schema context';
+          document.getElementById('kpiCostMeta').textContent = 'Illustrative estimate';
         } else if (currentStrategyKey === 'schema_retrieval') {
-          document.getElementById('kpiLatencyMeta').textContent = '-46% vs Baseline';
-          document.getElementById('kpiTokensMeta').textContent = '-78% prompt reduction';
-          document.getElementById('kpiCostMeta').textContent = '77% cost reduction';
+          document.getElementById('kpiLatencyMeta').textContent = 'Simulated end-to-end latency';
+          document.getElementById('kpiTokensMeta').textContent = 'Simulated retrieved context';
+          document.getElementById('kpiCostMeta').textContent = 'Illustrative estimate';
         } else {
-          document.getElementById('kpiLatencyMeta').textContent = '-55% vs Baseline';
-          document.getElementById('kpiTokensMeta').textContent = '-83% prompt reduction';
-          document.getElementById('kpiCostMeta').textContent = '83% cost reduction';
+          document.getElementById('kpiLatencyMeta').textContent = 'Simulated end-to-end latency';
+          document.getElementById('kpiTokensMeta').textContent = 'Simulated enriched context';
+          document.getElementById('kpiCostMeta').textContent = 'Illustrative estimate';
         }
 
         renderBenchmarkTable();
@@ -353,6 +378,7 @@
         }
 
         const tbody = document.getElementById('benchmarkTableBody');
+        tbody.classList.toggle('benchmark-not-run', !benchmarkHasRun);
 
         if (filtered.length === 0) {
           tbody.innerHTML = `
@@ -485,6 +511,10 @@
       function renderCategoryChart() {
         const wrapper = document.getElementById('categoryChartWrapper');
         if (!wrapper) return;
+        if (!benchmarkHasRun) {
+          wrapper.innerHTML = '<div class="benchmark-chart-empty"><strong>Not run</strong><span>Run the simulated benchmark to populate category results.</span></div>';
+          return;
+        }
         const questions = window.AriaMock.BENCHMARK_QUESTIONS || [];
         const categories = ['Lookup', 'Aggregation', 'Multi-table join', 'Cross-domain', 'Ambiguous', 'Unsupported', 'Unsafe'];
 
@@ -554,6 +584,10 @@
               progressBar.style.display = 'none';
               isRunning = false;
               runBtn.disabled = false;
+              benchmarkHasRun = true;
+              document.getElementById('runMetaStatus').textContent = 'Simulated run complete';
+              document.getElementById('runMetaTime').textContent = new Date().toLocaleString();
+              document.getElementById('downloadBenchmarkCsvBtn').disabled = false;
               updateMetricsAndTable();
             }, 300);
           }

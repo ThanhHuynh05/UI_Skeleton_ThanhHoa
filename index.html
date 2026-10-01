@@ -279,12 +279,12 @@
        ========================================================================= -->
   <div class="app-drawer" id="dataExplorerDrawer" role="dialog" aria-label="Data Explorer">
     <div class="drawer-header">
-      <div style="font-weight: 700; font-size: 15px;">Schema Intelligence &amp; Data Explorer</div>
+      <div style="font-weight: 700; font-size: 15px;">Data Guide</div>
       <button type="button" class="header-icon-btn" id="closeExplorerBtn">✕</button>
     </div>
     <div class="drawer-body">
       <div class="explorer-tabs">
-        <button type="button" class="explorer-tab-btn active" id="tabTablesBtn">Tables Catalog (22)</button>
+        <button type="button" class="explorer-tab-btn active" id="tabTablesBtn">Prototype data entities (22)</button>
         <button type="button" class="explorer-tab-btn" id="tabGlossaryBtn">Business Glossary (8)</button>
       </div>
 
@@ -423,6 +423,35 @@
       </div>
       <div class="modal-body" id="sourceTableModalBody">
         <!-- Dynamically populated -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Clarification is a decision gate: no query runs until Confirm is pressed. -->
+  <div class="modal-backdrop" id="clarificationModalBackdrop">
+    <div class="app-modal clarification-modal" role="dialog" aria-modal="true" aria-labelledby="clarificationModalTitle" aria-describedby="clarificationModalReason">
+      <div class="modal-header">
+        <div>
+          <div class="modal-eyebrow">Clarification needed</div>
+          <div class="modal-title" id="clarificationModalTitle">Confirm what you mean</div>
+        </div>
+        <button type="button" class="header-icon-btn" id="closeClarificationModalBtn" aria-label="Cancel clarification">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="clarificationModalReason" class="clarification-reason">I need one choice before I can run this question with the correct scope.</p>
+        <div id="clarificationUnderstood" class="clarification-understood"></div>
+        <fieldset class="clarification-fieldset">
+          <legend id="clarificationQuestion"></legend>
+          <div id="clarificationOptions" class="clarification-modal-options"></div>
+        </fieldset>
+        <label class="clarification-other-label" for="clarificationOtherInput">Something else</label>
+        <input id="clarificationOtherInput" class="clarification-other-input" type="text" placeholder="Describe the scope or meaning you want">
+        <div class="clarification-modal-actions">
+          <button type="button" class="action-tool-btn" id="cancelClarificationBtn">Cancel</button>
+          <button type="button" class="action-tool-btn primary" id="confirmClarificationBtn" disabled>Confirm and run</button>
+        </div>
       </div>
     </div>
   </div>

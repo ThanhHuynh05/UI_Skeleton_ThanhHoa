@@ -116,6 +116,17 @@
   const closeSourceTableModalBtn = document.getElementById('closeSourceTableModalBtn');
   const sourceTableModalTitle = document.getElementById('sourceTableModalTitle');
   const sourceTableModalBody = document.getElementById('sourceTableModalBody');
+  const clarificationModalBackdrop = document.getElementById('clarificationModalBackdrop');
+  const closeClarificationModalBtn = document.getElementById('closeClarificationModalBtn');
+  const cancelClarificationBtn = document.getElementById('cancelClarificationBtn');
+  const confirmClarificationBtn = document.getElementById('confirmClarificationBtn');
+  const clarificationQuestionEl = document.getElementById('clarificationQuestion');
+  const clarificationOptionsEl = document.getElementById('clarificationOptions');
+  const clarificationOtherInput = document.getElementById('clarificationOtherInput');
+  const clarificationUnderstoodEl = document.getElementById('clarificationUnderstood');
+
+  let activeClarificationMessageId = null;
+  let activeClarificationTrigger = null;
 
   const domainScopeChipsEl = document.getElementById('domainScopeChips');
   const timeRangeSelectEl = document.getElementById('timeRangeSelect');
@@ -507,6 +518,10 @@
 
     // Attach dynamic handlers
     attachConversationEventHandlers(conv);
+    const pendingClarification = conv.messages.find((message) => message.type === 'clarification' && !message.resolvedAt && !message.resolvedPayload);
+    if (pendingClarification && clarificationModalBackdrop && !clarificationModalBackdrop.classList.contains('open')) {
+      requestAnimationFrame(() => openClarificationModal(pendingClarification.id, chatContainerEl.querySelector(`[data-msg-id="${pendingClarification.id}"]`)));
+    }
     scrollToBottom();
   }
 
@@ -835,6 +850,35 @@
     `;
   }
 
+  const BUSINESS_SOURCE_DEFINITIONS = {
+    finance_receivables_ledger: { label: 'Receivables Ledger', owner: 'Finance Operations', grain: 'One receivable balance per buyer contract and reporting date', cadence: 'Demo refresh: daily', definition: 'Open amounts due, aging and payment status as of the displayed data date.', exclusions: 'Paid balances are excluded from outstanding totals.' },
+    sales_contracts: { label: 'Sales Contracts', owner: 'Sales Operations', grain: 'One executed buyer contract', cadence: 'Demo refresh: daily', definition: 'Executed purchase agreements, buyer allocation and signed contract value.', exclusions: 'Draft and cancelled agreements are excluded.' },
+    dim_projects: { label: 'Project Master', owner: 'Project Controls', grain: 'One development project', cadence: 'Demo refresh: daily', definition: 'Canonical project names, codes, asset class and lifecycle status.', exclusions: 'Archived proposals are excluded from active-project views.' },
+    dim_vendors: { label: 'Supplier Directory', owner: 'Procurement', grain: 'One supplier account', cadence: 'Demo refresh: weekly', definition: 'Supplier identity, commodity group and commercial terms.', exclusions: 'Sensitive contacts remain restricted.' },
+    finance_ap_invoices: { label: 'Supplier Invoices', owner: 'Finance Operations', grain: 'One supplier invoice', cadence: 'Demo refresh: daily', definition: 'Invoice amounts and approval status linked to suppliers and purchase orders.', exclusions: 'Unsubmitted invoice drafts are excluded.' },
+    procurement_purchase_orders: { label: 'Purchase Orders', owner: 'Procurement', grain: 'One purchase order', cadence: 'Demo refresh: daily', definition: 'Approved and pending procurement commitments by supplier and project.', exclusions: 'Cancelled purchase orders are excluded.' },
+    construction_progress_log: { label: 'Construction Progress', owner: 'Project Controls', grain: 'One project progress observation per reporting date', cadence: 'Demo refresh: weekly', definition: 'Planned and actual construction progress used to identify schedule variance.', exclusions: 'Unapproved field estimates are excluded.' },
+    dim_property_assets: { label: 'Property Portfolio', owner: 'Property Management', grain: 'One managed property asset', cadence: 'Demo refresh: weekly', definition: 'Managed property attributes, asset class and portfolio grouping.', exclusions: 'Disposed assets are excluded from current portfolio metrics.' },
+    property_leases: { label: 'Lease Register', owner: 'Property Management', grain: 'One tenant lease', cadence: 'Demo refresh: daily', definition: 'Lease area, occupancy status, expiry and renewal information.', exclusions: 'Draft leases are excluded from occupancy.' }
+  };
+
+  function getBusinessSourceDefinition(name) {
+    const physicalName = String(name || '').replace('enterprise_dw.', '');
+    const tableDef = (window.AriaMock.SCHEMA_CATALOG || []).find((table) => table.name === physicalName || table.name === name);
+    const curated = BUSINESS_SOURCE_DEFINITIONS[physicalName];
+    if (curated) return { ...curated, physicalName, domain: tableDef ? tableDef.domain : 'Enterprise data' };
+    return {
+      physicalName,
+      label: tableDef ? tableDef.description.split(/[,.]/)[0] : 'Prototype business source',
+      domain: tableDef ? tableDef.domain : 'Enterprise data',
+      owner: 'Owner not specified in prototype',
+      grain: 'Record grain not yet documented',
+      cadence: 'Refresh cadence not yet documented',
+      definition: tableDef ? tableDef.description : 'Definition not yet documented for this prototype source.',
+      exclusions: 'No additional exclusions documented.'
+    };
+  }
+
   function renderAgentMessageHtml(msg, msgIdx) {
     if (msg.type === 'blocked') {
       return renderBlockedSecurityHtml(msg);
@@ -854,14 +898,20 @@
     const pattern = inferResultPattern(res);
     const activeView = getActiveResultView(msg, pattern, res);
     const scope = msg.appliedScope || res.appliedScope;
-    const formatBusinessSource = (name) => name.replace('enterprise_dw.', '').replace('dim_', '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-
     const sourcesHtml = (res.sources || []).map((s) => `
       <button type="button" class="source-badge-btn" data-table-name="${escapeHtml(s.name)}" title="Open business source definition">
         <svg width="10" height="10" fill="currentColor" viewBox="0 0 20 20"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2zM3 16a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z"/></svg>
-        ${escapeHtml(formatBusinessSource(s.name))}
+        ${escapeHtml(getBusinessSourceDefinition(s.name).label)}
       </button>
     `).join('');
+    const sourceDefinitionsHtml = (res.sources || []).map((source) => {
+      const definition = getBusinessSourceDefinition(source.name);
+      return `<article class="business-source-definition">
+        <div><strong>${escapeHtml(definition.label)}</strong><span>${escapeHtml(definition.domain)}</span></div>
+        <p>${escapeHtml(definition.definition)}</p>
+        <dl><div><dt>Grain</dt><dd>${escapeHtml(definition.grain)}</dd></div><div><dt>Refresh</dt><dd>${escapeHtml(definition.cadence)}</dd></div><div><dt>Owner</dt><dd>${escapeHtml(definition.owner)}</dd></div></dl>
+      </article>`;
+    }).join('');
 
     const answerBody = state.settings.detailLevel === 'concise' && res.answerConcise
       ? res.answerConcise
@@ -910,6 +960,12 @@
             ${sourcesHtml ? `<div class="result-business-sources"><span>Sources</span>${sourcesHtml}</div>` : ''}
           </div>
 
+          <details class="business-definitions" open>
+            <summary>Sources &amp; definitions</summary>
+            ${scope && scope.metric ? `<div class="metric-definition"><strong>${escapeHtml(scope.metric.label || 'Metric')}</strong><span>${escapeHtml(res.confidenceNote || 'Calculated for the applied scope and data date shown above.')}</span></div>` : ''}
+            <div class="business-source-definition-list">${sourceDefinitionsHtml || '<p>No business source metadata was supplied for this result.</p>'}</div>
+          </details>
+
           <!-- Pattern-aware actions -->
           <div class="response-actions-row">
             <div class="action-tools-group">
@@ -929,6 +985,20 @@
               <button type="button" class="action-tool-btn btn-regenerate" data-msg-id="${msg.id}" title="Regenerate this answer">
                 Run again
               </button>
+              <details class="result-more-menu">
+                <summary class="action-tool-btn" aria-label="More result actions">
+                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg><span>More</span>
+                </summary>
+                <div class="result-more-popover">
+                  <button type="button" class="btn-inspect-scope" data-msg-id="${msg.id}">Review scope &amp; sources</button>
+                  <button type="button" class="btn-copy-answer" data-answer="${escapeHtml(answerBody)}">Copy answer</button>
+                  ${res.table ? `<button type="button" class="btn-copy-table" data-msg-id="${msg.id}">${pattern === 'entity_detail' ? 'Copy details' : 'Copy records'}</button>` : ''}
+                  ${(resultState === 'partial' && scope) ? `<button type="button" class="btn-edit-interpretation" data-msg-id="${msg.id}">Edit scope</button>` : ''}
+                  <button type="button" class="btn-regenerate" data-msg-id="${msg.id}">Run again</button>
+                  <button type="button" class="btn-feedback-up" data-msg-id="${msg.id}">Mark helpful</button>
+                  <button type="button" class="btn-feedback-down" data-msg-id="${msg.id}">Report an issue</button>
+                </div>
+              </details>
             </div>
 
             <div class="feedback-buttons">
@@ -945,17 +1015,6 @@
               <div class="answer-meta-bar" style="border: none; padding: 0; background: transparent;">
                 <span class="answer-meta-item">Data as of: ${escapeHtml(res.dataAsOf || 'Yesterday 23:59 UTC')}</span>
                 <span class="answer-meta-item">Simulated access view: ${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Default')}</span>
-              </div>
-
-              ${res.confidenceNote ? `
-                <div class="limitations-note-box" style="margin: 0;">
-                  <strong>Grounding &amp; Scope Note:</strong> ${escapeHtml(res.confidenceNote)}
-                </div>
-              ` : ''}
-
-              <div class="sources-row" style="margin: 0;">
-                <span style="color: var(--text-muted); font-weight: 500;">Business Sources &amp; Definitions:</span>
-                ${sourcesHtml}
               </div>
 
               ${res.plainEnglishExplanation ? `
@@ -1001,16 +1060,24 @@
   }
 
   function renderBlockedSecurityHtml(msg) {
+    const combined = `${msg.title || ''} ${msg.message || ''} ${msg.reason || ''}`.toLowerCase();
+    const isWriteAction = /delete|update|insert|write|modify|change record/.test(combined);
+    const title = isWriteAction ? 'This workspace is read-only' : 'You do not have access to this data';
+    const explanation = isWriteAction
+      ? 'You can review and analyse records here, but this prototype cannot change business data.'
+      : 'The requested data is restricted for the current demo persona. The answer was not generated.';
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
         <div class="agent-response-card result-state-card state-denied">
-          <div class="result-state-label">Request denied</div>
-          <h3>${escapeHtml(msg.title || 'This request cannot be completed')}</h3>
-          <p>${escapeHtml(msg.message || '')}</p>
-          <div class="result-state-detail"><strong>Why:</strong> ${escapeHtml(msg.reason || 'This action is outside the simulated access rules for the current demo persona.')}</div>
+          <div class="result-state-label">Restricted</div>
+          <h3>${escapeHtml(title)}</h3>
+          <p>${escapeHtml(explanation)}</p>
+          <div class="result-state-detail"><strong>Available scope:</strong> Ask a read-only question within the business areas shown in Data Guide.</div>
           ${msg.details ? `<details class="state-details"><summary>More information</summary><p>${escapeHtml(msg.details)}</p></details>` : ''}
           <div class="result-state-actions">
             <button type="button" class="action-tool-btn btn-revise-question" data-msg-id="${msg.id}">Revise question</button>
+            <button type="button" class="action-tool-btn btn-access-guidance">View access guidance</button>
+            ${!isWriteAction ? '<button type="button" class="action-tool-btn" disabled title="Access requests are not connected in this prototype">Request access (not connected)</button>' : ''}
           </div>
         </div>
       </div>
@@ -1019,6 +1086,20 @@
 
   function renderClarificationHtml(msg) {
     const opts = msg.options || [];
+
+    const resolved = Boolean(msg.resolvedAt || msg.resolvedPayload);
+    return `
+      <div class="chat-row agent-row" id="msg_row_${msg.id}">
+        <div class="agent-response-card clarification-status-card ${resolved ? 'is-resolved' : ''}">
+          <div class="result-state-label">${resolved ? 'Clarification confirmed' : 'Clarification needed'}</div>
+          <h3>${escapeHtml(resolved ? (msg.resolvedChoice || 'Scope confirmed') : 'One choice is needed before I run this question')}</h3>
+          <p>${escapeHtml(msg.question || 'Please confirm the intended meaning or scope.')}</p>
+          ${resolved
+            ? `<div class="clarification-resolution"><strong>Selected:</strong> ${escapeHtml(msg.resolvedChoice || '')}</div>`
+            : `<button type="button" class="action-tool-btn primary btn-open-clarification" data-msg-id="${msg.id}">Answer clarification</button>`}
+        </div>
+      </div>
+    `;
 
     if (msg.subtype === 'scope_conflict') {
       return `
@@ -1111,6 +1192,85 @@
     `;
   }
 
+  function closeClarificationModal() {
+    if (!clarificationModalBackdrop) return;
+    clarificationModalBackdrop.classList.remove('open');
+    activeClarificationMessageId = null;
+    if (activeClarificationTrigger && document.contains(activeClarificationTrigger)) activeClarificationTrigger.focus();
+    activeClarificationTrigger = null;
+  }
+
+  function openClarificationModal(msgId, trigger) {
+    const conv = getActiveConversation();
+    const msg = conv && conv.messages.find((item) => item.id === msgId);
+    if (!msg || msg.resolvedAt || msg.resolvedPayload || !clarificationModalBackdrop) return;
+
+    activeClarificationMessageId = msgId;
+    activeClarificationTrigger = trigger || null;
+    clarificationQuestionEl.textContent = msg.question || 'Which interpretation should I use?';
+    const understood = msg.understoodFields || {};
+    const fieldLabel = (value) => value && typeof value === 'object' ? (value.label || value.value || value.key || '') : value;
+    const understoodItems = [
+      fieldLabel(understood.metric) && `Metric: ${fieldLabel(understood.metric)}`,
+      fieldLabel(understood.period) && `Period: ${fieldLabel(understood.period)}`,
+      fieldLabel(understood.domain) && `Business area: ${fieldLabel(understood.domain)}`,
+      fieldLabel(understood.projectScope) && `Project: ${fieldLabel(understood.projectScope)}`
+    ].filter(Boolean);
+    clarificationUnderstoodEl.innerHTML = understoodItems.length
+      ? `<strong>Understood so far</strong><span>${understoodItems.map(escapeHtml).join(' &middot; ')}</span>`
+      : '';
+    clarificationUnderstoodEl.hidden = understoodItems.length === 0;
+    clarificationOptionsEl.innerHTML = (msg.options || []).map((option, index) => {
+      const rawPayload = typeof option.payload === 'object' ? JSON.stringify(option.payload) : String(option.payload || option.label || '');
+      return `<label class="clarification-option">
+        <input type="radio" name="clarificationChoice" value="${escapeHtml(rawPayload)}" data-label="${escapeHtml(option.label)}" ${index === 0 ? '' : ''}>
+        <span>${escapeHtml(option.label)}</span>
+      </label>`;
+    }).join('');
+    clarificationOtherInput.value = '';
+    confirmClarificationBtn.disabled = true;
+    clarificationModalBackdrop.classList.add('open');
+    requestAnimationFrame(() => {
+      const firstOption = clarificationOptionsEl.querySelector('input');
+      (firstOption || clarificationOtherInput).focus();
+    });
+  }
+
+  function confirmClarification() {
+    const conv = getActiveConversation();
+    const msg = conv && conv.messages.find((item) => item.id === activeClarificationMessageId);
+    if (!msg || msg.resolvedAt || msg.resolvedPayload || state.isThinking) return;
+    const selected = clarificationOptionsEl.querySelector('input:checked');
+    const customText = clarificationOtherInput.value.trim();
+    if (!selected && !customText) return;
+
+    const rawPayload = customText || selected.value;
+    const label = customText || selected.getAttribute('data-label');
+    let parsedPayload = null;
+    try { parsedPayload = JSON.parse(rawPayload); } catch (e) { parsedPayload = null; }
+
+    if (parsedPayload && parsedPayload.resolution === 'edit_scope') {
+      closeClarificationModal();
+      if (scopeEditorBarEl) scopeEditorBarEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      if (timeRangeSelectEl) timeRangeSelectEl.focus();
+      showToast('Adjust the scope, then answer the clarification again.');
+      return;
+    }
+
+    msg.resolvedPayload = parsedPayload || rawPayload;
+    msg.resolvedChoice = label;
+    msg.resolvedAt = Date.now();
+    saveConversationsToStorage();
+    closeClarificationModal();
+    renderActiveConversation();
+
+    if (parsedPayload && parsedPayload.type === 'scope_resolution') {
+      processUserPrompt(label, { scopeConfirmation: parsedPayload });
+    } else {
+      processUserPrompt(label, { clarificationPayload: rawPayload });
+    }
+  }
+
   function renderErrorHtml(msg) {
     const err = msg.errorData || {};
     const titleText = (err.title || '').toLowerCase();
@@ -1175,13 +1335,43 @@
               <button type="button" class="example-card" data-query="${escapeHtml(ex.text)}">
                 <div class="example-card-header">
                   <span class="example-card-category">${escapeHtml(ex.category)}</span>
-                  <span class="brand-badge" style="font-size: 9px;">Verified</span>
+                  <span class="brand-badge capability-badge">Available in demo</span>
                 </div>
                 <div class="example-card-text">${escapeHtml(ex.text)}</div>
               </button>
             `).join('')}
           </div>
         </div>
+
+        <details class="audit-prompt-suite">
+          <summary>
+            <span>Audit test prompts</span>
+            <small>15 deterministic checks</small>
+          </summary>
+          <div class="audit-prompt-help">
+            Click a prompt to place it in the composer, then press Enter. Use a non-admin persona for the access-denied check.
+          </div>
+          ${['Result patterns', 'Decision states', 'Access states'].map((group) => `
+            <section class="audit-prompt-group">
+              <h2>${escapeHtml(group)}</h2>
+              <div class="audit-prompt-grid">
+                ${(window.AriaMock.AUDIT_TEST_PROMPTS || []).filter((item) => item.group === group).map((item) => `
+                  <button type="button" class="audit-prompt-card" data-query="${escapeHtml(item.text)}">
+                    <span>${escapeHtml(item.expected)}</span>
+                    <strong>${escapeHtml(item.text)}</strong>
+                  </button>
+                `).join('')}
+              </div>
+            </section>
+          `).join('')}
+          <div class="audit-manual-checks">
+            <strong>Two interaction checks</strong>
+            <ol>
+              <li>Select Q3 in Period, then ask a question containing Q2 to verify the scope-conflict modal.</li>
+              <li>Send any result prompt and press Stop while it is running to verify the Cancelled state.</li>
+            </ol>
+          </div>
+        </details>
       </section>
     `;
 
@@ -1189,6 +1379,13 @@
       card.addEventListener('click', () => {
         const q = card.getAttribute('data-query');
         chatInputEl.value = q;
+        chatInputEl.focus();
+        updateSendButtonState();
+      });
+    });
+    chatContainerEl.querySelectorAll('.audit-prompt-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        chatInputEl.value = card.getAttribute('data-query');
         chatInputEl.focus();
         updateSendButtonState();
       });
@@ -1483,7 +1680,7 @@
                     ${tableData.types[i] === 'masked' ? `
                       <div style="display:inline-flex; flex-direction:column; gap:2px;">
                         <span style="color:var(--danger-color);">🔒 Restricted</span>
-                        <span style="font-size:9px; color:var(--text-muted); font-weight:normal;">Masked by RBAC policy</span>
+                        <span class="restricted-column-reason">Hidden for this demo persona</span>
                       </div>
                     ` : escapeHtml(h)}
                   </th>
@@ -2054,7 +2251,20 @@
       });
     });
 
-    // 4. Clarification Chips
+    chatContainerEl.querySelectorAll('.btn-access-guidance').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        helpModalBackdrop.classList.add('open');
+        setActiveHelpTab(helpTabScopeBtn);
+        renderHelpTabContent('scope');
+      });
+    });
+
+    // 4. Clarification is resolved in a modal and can only be confirmed once.
+    chatContainerEl.querySelectorAll('.btn-open-clarification').forEach((btn) => {
+      btn.addEventListener('click', () => openClarificationModal(btn.getAttribute('data-msg-id'), btn));
+    });
+
+    // Legacy chips may exist in conversations saved by an older prototype build.
     chatContainerEl.querySelectorAll('.clarification-chip').forEach((chip) => {
       chip.addEventListener('click', () => {
         const rawPayload = chip.getAttribute('data-payload');
@@ -2382,23 +2592,26 @@
       columns: []
     };
 
-    sourceTableModalTitle.textContent = `Table: ${tableDef.name}`;
+    const businessSource = getBusinessSourceDefinition(tableName);
+    sourceTableModalTitle.textContent = businessSource.label;
     sourceTableModalBody.innerHTML = `
-      <div class="schema-table-card">
+      <div class="schema-table-card business-source-overview">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <span class="brand-badge">${escapeHtml(tableDef.domain)}</span>
-          <span style="font-size: 11px; color: var(--text-muted);">${tableDef.records} rows</span>
+          <span class="prototype-source-label">Prototype source</span>
         </div>
-        <p style="font-size: 12.5px; color: var(--text-secondary); margin-top: 4px;">
-          ${escapeHtml(tableDef.description)}
-        </p>
-        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-          Primary Key: <code>${tableDef.pk || 'id'}</code>
-        </div>
+        <p>${escapeHtml(businessSource.definition)}</p>
+        <dl class="source-definition-grid">
+          <div><dt>Business owner</dt><dd>${escapeHtml(businessSource.owner)}</dd></div>
+          <div><dt>Record grain</dt><dd>${escapeHtml(businessSource.grain)}</dd></div>
+          <div><dt>Refresh cadence</dt><dd>${escapeHtml(businessSource.cadence)}</dd></div>
+          <div><dt>Exclusions</dt><dd>${escapeHtml(businessSource.exclusions)}</dd></div>
+        </dl>
       </div>
 
-      <div>
-        <div style="font-weight: 600; font-size: 12px; margin-bottom: 6px;">Key Schema Columns</div>
+      <details class="technical-source-details">
+        <summary>Technical schema</summary>
+        <p class="technical-source-name">Physical table: <code>${escapeHtml(tableDef.name)}</code> &middot; ${escapeHtml(String(tableDef.records))} demo rows &middot; Primary key: <code>${escapeHtml(tableDef.pk || 'id')}</code></p>
         <div style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
           <table class="result-data-table" style="font-size: 11.5px;">
             <thead><tr><th>Column</th><th>Data Type</th><th>Attributes</th></tr></thead>
@@ -2413,11 +2626,11 @@
             </tbody>
           </table>
         </div>
-      </div>
+      </details>
 
       <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
         <button type="button" class="btn-new-chat ask-about-table-btn" data-query="${escapeHtml(tableDef.sampleQuery || `Describe records in ${tableDef.name}`)}" style="width: auto; padding: 6px 14px;">
-          Ask about this table
+          Ask about this source
         </button>
       </div>
     `;
@@ -2574,7 +2787,7 @@
           ${sources.length > 0 ? sources.map(s => `
             <button type="button" class="inspector-source-pill source-badge-btn" data-table-name="${escapeHtml(s.name)}" title="Review technical source definition">
               <svg width="12" height="12" fill="currentColor" viewBox="0 0 20 20"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2zM3 16a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z"/></svg>
-              <span>${escapeHtml(formatBusinessSource(s.name))}</span>
+              <span>${escapeHtml(getBusinessSourceDefinition(s.name).label)}</span>
             </button>
           `).join('') : '<span style="font-size: 12px; color: var(--text-muted);">Standard enterprise ledger</span>'}
         </div>
@@ -2655,11 +2868,11 @@
       explorerTabContent.innerHTML = tables.map((t) => `
         <div class="schema-table-card">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span class="schema-table-name">${escapeHtml(t.name)}</span>
-            <span class="brand-badge" style="font-size: 9.5px;">${escapeHtml(t.domain)}</span>
+            <span class="schema-table-name">${escapeHtml(getBusinessSourceDefinition(t.name).label)}</span>
+            <span class="brand-badge">${escapeHtml(t.domain)}</span>
           </div>
-          <p style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.4;">${escapeHtml(t.description)}</p>
-          <div style="font-size: 10.5px; color: var(--text-muted);">
+          <p>${escapeHtml(getBusinessSourceDefinition(t.name).definition)}</p>
+          <div class="technical-source-name" hidden>
             PK: <code>${t.pk}</code> • ${t.columns.length} columns • ${t.records} records
           </div>
           <button type="button" class="action-tool-btn ask-table-btn" data-query="${escapeHtml(t.sampleQuery)}" style="align-self: flex-start; margin-top: 4px;">
@@ -2695,7 +2908,7 @@
             <strong>Synonyms:</strong> ${escapeHtml(g.synonyms.join(', '))}
           </div>
           <div style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px;">
-            Mapped Tables: ${g.tables.map((tbl) => `<code>${tbl}</code>`).join(' ')}
+            Technical mappings: ${g.tables.map((tbl) => `<code>${tbl}</code>`).join(' ')}
           </div>
         </div>
       `).join('');
@@ -3460,13 +3673,13 @@
     if (tab === 'domains') {
       helpTabContent.innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12.5px;">
-          <p><strong>Aria supports natural-language queries across 6 core operational domains:</strong></p>
-          <div class="schema-table-card"><strong>Finance:</strong> Accounts receivable, overdue aging, vendor payments, AP invoices, GL summaries.</div>
-          <div class="schema-table-card"><strong>Construction:</strong> Milestone variances, schedule lags, critical path risks, safety audits, liquidated damages.</div>
-          <div class="schema-table-card"><strong>Procurement:</strong> Material spend (steel vs concrete), purchase orders, vendor master, contract expirations.</div>
-          <div class="schema-table-card"><strong>Sales:</strong> Executed purchase agreements, unit allocations, milestone payment schedules, buyer accounts.</div>
-          <div class="schema-table-card"><strong>Property Management:</strong> Commercial occupancy, Grade-A office vs retail renewal LOIs, WALE.</div>
-          <div class="schema-table-card"><strong>Projects:</strong> Capex budgets, master development schedules, zoning parcel boundaries.</div>
+          <div class="capability-assumption"><strong>Prototype capability map.</strong> Coverage below reflects synthetic fixtures, not connected production systems. CK1 schema coverage has not yet been validated.</div>
+          <div class="schema-table-card"><strong>Finance</strong> <span class="capability-status available">Available in demo</span><p>Receivables, aging and supplier invoice scenarios.</p></div>
+          <div class="schema-table-card"><strong>Sales</strong> <span class="capability-status available">Available in demo</span><p>Executed contracts, buyer ranking and payment schedules.</p></div>
+          <div class="schema-table-card"><strong>Property Management</strong> <span class="capability-status available">Available in demo</span><p>Occupancy and lease-renewal scenarios.</p></div>
+          <div class="schema-table-card"><strong>Projects</strong> <span class="capability-status limited">Limited demo</span><p>Project master and supporting scope data.</p></div>
+          <div class="schema-table-card"><strong>Procurement</strong> <span class="capability-status limited">Limited demo</span><p>Selected spend, purchase-order and supplier scenarios only.</p></div>
+          <div class="schema-table-card"><strong>Construction</strong> <span class="capability-status limited">Limited demo</span><p>Selected progress and damages scenarios only.</p></div>
         </div>
       `;
     } else if (tab === 'scope') {
@@ -3509,6 +3722,7 @@
     helpModalBackdrop.classList.remove('open');
     feedbackModalBackdrop.classList.remove('open');
     sourceTableModalBackdrop.classList.remove('open');
+    closeClarificationModal();
     if (editInterpretationModalBackdrop) editInterpretationModalBackdrop.classList.remove('open');
     closeScopeInspector();
     showBusinessWorkspaceView('ask');
@@ -3783,6 +3997,38 @@
     });
 
     closeSourceTableModalBtn.addEventListener('click', () => sourceTableModalBackdrop.classList.remove('open'));
+
+    if (closeClarificationModalBtn) closeClarificationModalBtn.addEventListener('click', closeClarificationModal);
+    if (cancelClarificationBtn) cancelClarificationBtn.addEventListener('click', closeClarificationModal);
+    if (confirmClarificationBtn) confirmClarificationBtn.addEventListener('click', confirmClarification);
+    if (clarificationOptionsEl) {
+      clarificationOptionsEl.addEventListener('change', () => {
+        clarificationOtherInput.value = '';
+        confirmClarificationBtn.disabled = false;
+      });
+    }
+    if (clarificationOtherInput) {
+      clarificationOtherInput.addEventListener('input', () => {
+        if (clarificationOtherInput.value.trim()) {
+          clarificationOptionsEl.querySelectorAll('input').forEach((input) => { input.checked = false; });
+        }
+        confirmClarificationBtn.disabled = !clarificationOtherInput.value.trim() && !clarificationOptionsEl.querySelector('input:checked');
+      });
+    }
+    if (clarificationModalBackdrop) {
+      clarificationModalBackdrop.addEventListener('click', (event) => {
+        if (event.target === clarificationModalBackdrop) closeClarificationModal();
+      });
+      clarificationModalBackdrop.addEventListener('keydown', (event) => {
+        if (event.key !== 'Tab') return;
+        const focusable = Array.from(clarificationModalBackdrop.querySelectorAll('button:not([disabled]), input:not([disabled])'));
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      });
+    }
 
     // Edit Interpretation Modal Listeners (R2-09)
     if (closeEditInterpretationModalBtn) {
