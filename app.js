@@ -91,10 +91,7 @@
   const explorerTabContent = document.getElementById('explorerTabContent');
   const explorerSearchInput = document.getElementById('explorerSearchInput');
 
-  const savedAnswersDrawer = document.getElementById('savedAnswersDrawer');
-  const savedAnswersBtn = document.getElementById('savedAnswersBtn');
-  const closeSavedAnswersBtn = document.getElementById('closeSavedAnswersBtn');
-  const savedAnswersList = document.getElementById('savedAnswersList');
+    const savedAnswersBtn = document.getElementById('savedAnswersBtn');
 
   const settingsDrawer = document.getElementById('settingsDrawer');
   const settingsBtn = document.getElementById('settingsBtn');
@@ -363,7 +360,7 @@
         saveConversationsToStorage();
         renderSidebarConversations();
         renderActiveConversation();
-        if (typeof updateRailActiveState === 'function') updateRailActiveState('ask');
+        if (typeof updateRailActiveState === 'function') showBusinessWorkspaceView('ask');
         if (window.innerWidth <= 820) sidebarEl.classList.remove('open');
       });
 
@@ -858,7 +855,7 @@
     const activeView = getActiveResultView(msg, pattern, res);
     const scope = msg.appliedScope || res.appliedScope;
     const formatBusinessSource = (name) => name.replace('enterprise_dw.', '').replace('dim_', '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-    
+
     const sourcesHtml = (res.sources || []).map((s) => `
       <button type="button" class="source-badge-btn" data-table-name="${escapeHtml(s.name)}" title="Open business source definition">
         <svg width="10" height="10" fill="currentColor" viewBox="0 0 20 20"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2zM3 16a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z"/></svg>
@@ -870,7 +867,7 @@
       ? res.answerConcise
       : res.answer;
 
-    const isPinned = window.AriaMock.getSavedAnswers(state.currentUser ? state.currentUser.id : 'default').some(a => a.id === msg.id);
+    const isPinned = window.AriaMock.getSavedInsights(state.currentUser ? state.currentUser.id : 'default').some(a => a.sourceMessageId === msg.id || a.id === msg.id);
 
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
@@ -943,7 +940,7 @@
           <!-- Technical evidence stays secondary -->
           <details class="technical-details-accordion" style="margin-top: 12px; font-size: 11.5px; border-top: 1px solid var(--border-color); padding-top: 8px;">
             <summary style="cursor: pointer; font-weight: 600; color: var(--text-secondary);">Technical details / Why this answer?</summary>
-            
+
             <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
               <div class="answer-meta-bar" style="border: none; padding: 0; background: transparent;">
                 <span class="answer-meta-item">Data as of: ${escapeHtml(res.dataAsOf || 'Yesterday 23:59 UTC')}</span>
@@ -2253,17 +2250,59 @@
     chatContainerEl.querySelectorAll('.btn-pin-answer').forEach((btn) => {
       btn.addEventListener('click', () => {
         const msgId = btn.getAttribute('data-msg-id');
-        const msg = conv.messages.find((m) => m.id === msgId);
-        if (msg && msg.resultsData) {
-          const isSaved = window.AriaMock.toggleSaveAnswer(state.currentUser ? state.currentUser.id : 'default', {
-            id: msg.id,
-            title: conv.title,
-            answer: msg.resultsData.answer,
-            sql: msg.resultsData.sql,
-            timestamp: msg.timestamp
-          });
-          showToast(isSaved ? 'Answer saved to bookmarks' : 'Answer removed from bookmarks');
-          renderActiveConversation();
+        const userId = state.currentUser ? state.currentUser.id : 'default';
+        const list = window.AriaMock.getSavedInsights(userId);
+
+        const existing = list.find(a => a.sourceMessageId === msgId);
+
+        if (existing) {
+          const removed = window.AriaMock.removeSavedInsight(userId, existing.id);
+          if (removed) {
+            showToast('Insight removed from saved');
+            renderActiveConversation();
+          } else {
+            showToast('Failed to remove insight');
+          }
+        } else {
+          const msgIdx = conv.messages.findIndex(m => m.id === msgId);
+          const msg = conv.messages[msgIdx];
+          if (msg && msg.resultsData) {
+            let question = conv.title || 'Saved Query';
+            for (let i = msgIdx - 1; i >= 0; i--) {
+              if (conv.messages[i].role === 'user') {
+                question = conv.messages[i].text;
+                break;
+              }
+            }
+
+            const scopeToSave = msg.appliedScope || msg.resultsData.appliedScope || { domain: 'Auto', timeRange: 'auto' };
+            const queryData = {
+              id: 'sq_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+              type: 'query',
+              title: question.substring(0, 50) + (question.length > 50 ? '...' : ''),
+              question: question,
+              scope: JSON.parse(JSON.stringify(scopeToSave)),
+              executionOptions: buildSavedExecutionOptions(scopeToSave),
+              latestResult: JSON.parse(JSON.stringify(msg.resultsData)),
+              resultPattern: msg.resultPattern || msg.pattern || 'default',
+              sourceMessageId: msg.id,
+              sourceConversationId: conv.id,
+              savedAt: Date.now(),
+              lastRefreshedAt: null,
+              dataAsOf: msg.resultsData.dataAsOf || Date.now(),
+              refreshCount: 0,
+              canRefresh: true,
+              legacy: false
+            };
+
+            const saved = window.AriaMock.saveQuery(userId, queryData);
+            if (saved) {
+              showToast('Query saved successfully');
+              renderActiveConversation();
+            } else {
+              showToast('Failed to save query');
+            }
+          }
         }
       });
     });
@@ -2389,7 +2428,7 @@
       chatInputEl.value = q;
       chatInputEl.focus();
       updateSendButtonState();
-      if (typeof updateRailActiveState === 'function') updateRailActiveState('ask');
+      if (typeof updateRailActiveState === 'function') showBusinessWorkspaceView('ask');
     });
 
     sourceTableModalBackdrop.classList.add('open');
@@ -2402,6 +2441,36 @@
     if (railAskBtn) railAskBtn.classList.toggle('active', activeItem === 'ask');
     if (savedAnswersBtn) savedAnswersBtn.classList.toggle('active', activeItem === 'saved');
     if (railDataGuideBtn) railDataGuideBtn.classList.toggle('active', activeItem === 'data_guide');
+  }
+
+  function showBusinessWorkspaceView(viewName) {
+    const chatViewport = document.getElementById('chatViewport');
+    const savedInsightsViewport = document.getElementById('savedInsightsViewport');
+
+    // Close drawers/inspectors if switching away
+    if (viewName === 'ask' || viewName === 'saved') {
+      if (typeof closeScopeInspector === 'function') closeScopeInspector();
+      if (dataExplorerDrawer && dataExplorerDrawer.classList.contains('open')) {
+        dataExplorerDrawer.classList.remove('open');
+      }
+      if (window.innerWidth <= 820 && sidebarEl) {
+        sidebarEl.classList.remove('open');
+      }
+    }
+
+    if (viewName === 'ask') {
+      if (chatViewport) chatViewport.style.display = 'flex';
+      if (savedInsightsViewport) savedInsightsViewport.style.display = 'none';
+      updateRailActiveState('ask');
+      if (chatInputEl && window.innerWidth > 820) chatInputEl.focus();
+    } else if (viewName === 'saved') {
+      if (chatViewport) chatViewport.style.display = 'none';
+      if (savedInsightsViewport) savedInsightsViewport.style.display = 'flex';
+      updateRailActiveState('saved');
+      if (typeof renderSavedInsights === 'function') renderSavedInsights();
+    } else if (viewName === 'data_guide') {
+      updateRailActiveState('data_guide');
+    }
   }
 
   // =========================================================================
@@ -2606,7 +2675,7 @@
           chatInputEl.value = query;
           chatInputEl.focus();
           updateSendButtonState();
-          updateRailActiveState('ask');
+          showBusinessWorkspaceView('ask');
         });
       });
     } else {
@@ -2634,36 +2703,314 @@
   }
 
   // =========================================================================
-  // 13. SAVED ANSWERS DRAWER (Group B)
+  // 13. SAVED INSIGHTS VIEW
   // =========================================================================
-  function renderSavedAnswers() {
-    const list = window.AriaMock.getSavedAnswers(state.currentUser ? state.currentUser.id : 'default');
+  function renderSavedInsights() {
+    const listContainer = document.getElementById('savedInsightsListContainer');
+    if (!listContainer) return;
+
+    const userId = state.currentUser ? state.currentUser.id : 'default';
+    const list = window.AriaMock.getSavedInsights(userId);
     if (list.length === 0) {
-      savedAnswersList.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 24px 0;">No saved answers yet.<br>Click "Save" on any query result to pin it here.</div>`;
+      listContainer.innerHTML = `
+        <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 48px 0; border: 1px dashed var(--border-color); border-radius: 8px;">
+          <div style="margin-bottom: 16px;">
+            <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="opacity: 0.5;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+          </div>
+          <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">No saved insights yet</div>
+          <p style="max-width: 320px; margin: 0 auto; line-height: 1.5;">
+            <strong>Save a query</strong> to re-run it with the same scope later.<br>
+            <strong>Save a snapshot</strong> to keep an immutable result at a point in time.
+          </p>
+          <div style="margin-top: 16px;">
+            Return to <strong>Ask</strong> and click "Save insight" on any result.
+          </div>
+        </div>
+      `;
       return;
     }
 
-    savedAnswersList.innerHTML = list.map((item) => `
-      <div class="schema-table-card">
-        <div style="font-weight: 600; font-size: 13px;">${escapeHtml(item.title)}</div>
-        <div style="font-size: 11px; color: var(--text-muted); margin: 4px 0;">Last refreshed: ${new Date(item.timestamp).toLocaleString()}</div>
-        <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">${escapeHtml(item.answer.substring(0, 160))}...</p>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
-          <div style="display: flex; gap: 8px;">
-            <button type="button" class="view-btn" style="padding: 2px 6px; font-size: 11px;" onclick="alert('Query refreshed.')">🔄 Refresh</button>
-            <button type="button" class="view-btn" style="padding: 2px 6px; font-size: 11px;" onclick="alert('Snapshot saved.')">💾 Save Snapshot</button>
-          </div>
-          <button type="button" class="conv-action-btn remove-saved-btn" data-id="${item.id}" style="color: var(--danger-color);">Remove</button>
-        </div>
-      </div>
-    `).join('');
+    listContainer.innerHTML = list.map((item) => {
+      const isSnapshot = item.type === 'snapshot';
+      const badgeColor = isSnapshot ? 'var(--info-color, #0ea5e9)' : 'var(--accent-primary)';
 
-    savedAnswersList.querySelectorAll('.remove-saved-btn').forEach((btn) => {
+      let scopeText = 'Auto';
+      if (item.scope) {
+        const parts = [];
+        if (item.scope.metric && item.scope.metric.label) parts.push('Metric: ' + item.scope.metric.label);
+        const domainLabel = item.scope.domain ? (item.scope.domain.label || item.scope.domain.value || item.scope.domain) : 'Auto';
+        if (domainLabel && domainLabel !== 'Auto') parts.push('Domain: ' + domainLabel);
+
+        if (item.scope.time && item.scope.time.label) parts.push('Period: ' + item.scope.time.label);
+        else if (item.scope.period) parts.push('Period: ' + item.scope.period);
+        if (item.scope.breakdown && item.scope.breakdown.label) parts.push('Breakdown: ' + item.scope.breakdown.label);
+
+        if (item.scope.projectScope && item.scope.projectScope.label) parts.push('Project: ' + item.scope.projectScope.label);
+        if (parts.length > 0) scopeText = parts.join(' • ');
+      }
+
+      const resultData = isSnapshot ? item.result : item.latestResult;
+      const escapedItemId = escapeHtml(String(item.id || ''));
+
+      let previewHtml = '';
+      if (resultData) {
+        const headline = resultData.headline || resultData.kpiHeadline || '';
+        const answer = String(resultData.answerConcise || resultData.answer || (resultData.table ? 'Tabular results available' : ''));
+        const val = resultData.kpiValue ? `<span style="font-weight:700; color:var(--text-primary);">${escapeHtml(resultData.kpiValue)}</span>` : '';
+        previewHtml = `
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-color); font-size: 12px;">
+          ${headline ? `<div style="font-weight: 600; margin-bottom: 4px;">${escapeHtml(headline)}</div>` : ''}
+          ${val ? `<div style="margin-bottom: 4px;">${val}</div>` : ''}
+          <div style="color: var(--text-secondary);">${escapeHtml(answer.substring(0, 150))}${answer.length > 150 ? '...' : ''}</div>
+        </div>
+        `;
+      }
+
+      return `
+      <div class="schema-table-card saved-insight-card" data-insight-id="${escapedItemId}" style="margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+          <div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 280px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="background: ${badgeColor}; color: white; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">
+                ${isSnapshot ? 'Snapshot' : 'Query'}
+              </span>
+              <div style="font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 6px;" class="insight-title-container">
+                <span class="insight-title-text">${escapeHtml(item.title)}</span>
+                <button type="button" class="header-icon-btn btn-rename-insight" data-id="${escapedItemId}" aria-label="Rename" style="padding: 2px; width: 20px; height: 20px;">
+                  <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                </button>
+              </div>
+              <div class="insight-rename-form" style="display: none; align-items: center; gap: 6px;">
+                <input type="text" value="${escapeHtml(item.title)}" aria-label="Saved insight title" style="font-size: 13px; padding: 2px 6px; border: 1px solid var(--border-color); border-radius: 4px; width: 200px;">
+                <button type="button" class="action-tool-btn btn-rename-save" data-id="${escapedItemId}">Save</button>
+                <button type="button" class="action-tool-btn btn-rename-cancel" data-id="${escapedItemId}">Cancel</button>
+              </div>
+            </div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+              <strong>Q:</strong> ${escapeHtml(item.question)}
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px;">
+              <span><strong>Scope:</strong> ${escapeHtml(scopeText)}</span>
+              <span><strong>Saved at:</strong> ${new Date(item.savedAt).toLocaleString()}</span>
+              ${!isSnapshot ? `<span><strong>Last refreshed:</strong> ${item.refreshCount > 0 && item.lastRefreshedAt ? new Date(item.lastRefreshedAt).toLocaleString() : 'Never'}</span>` : ''}
+              <span><strong>Data as of:</strong> ${typeof item.dataAsOf === 'number' ? new Date(item.dataAsOf).toLocaleString() : escapeHtml(String(item.dataAsOf))}</span>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px; flex-shrink: 0; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="action-tool-btn btn-open-insight" data-id="${escapedItemId}">Open</button>
+            ${!isSnapshot ? (item.canRefresh === false ? `<button type="button" class="action-tool-btn btn-refresh-query" data-id="${escapedItemId}" disabled title="${escapeHtml(item.refreshDisabledReason || 'Refresh not available')}">Refresh</button>` : `<button type="button" class="action-tool-btn btn-refresh-query" data-id="${escapedItemId}">Refresh</button>`) : ''}
+            ${!isSnapshot && item.latestResult ? `<button type="button" class="action-tool-btn btn-save-snapshot" data-id="${escapedItemId}">Save Snapshot</button>` : ''}
+            <button type="button" class="conv-action-btn btn-remove-insight" data-id="${escapedItemId}" style="color: var(--danger-color); font-size: 12px; padding: 4px 8px; border: 1px solid transparent; background: transparent; cursor: pointer; border-radius: 4px;">Remove</button>
+          </div>
+        </div>
+        ${previewHtml}
+      </div>
+      `;
+    }).join('');
+
+    // Attach Event Listeners
+    listContainer.querySelectorAll('.btn-remove-insight').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-id');
-        window.AriaMock.toggleSaveAnswer(state.currentUser ? state.currentUser.id : 'default', { id });
-        renderSavedAnswers();
-        showToast('Removed from saved answers');
+        const removed = window.AriaMock.removeSavedInsight(userId, id);
+        if (removed) {
+          renderSavedInsights();
+          showToast('Insight removed');
+          renderActiveConversation();
+        } else {
+          showToast('Failed to remove insight');
+        }
+      });
+    });
+
+    listContainer.querySelectorAll('.btn-rename-insight').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const card = btn.closest('.saved-insight-card');
+        if (!card) return;
+        const titleContainer = card.querySelector('.insight-title-container');
+        const renameForm = card.querySelector('.insight-rename-form');
+        const input = renameForm ? renameForm.querySelector('input') : null;
+        if (titleContainer) titleContainer.style.display = 'none';
+        if (renameForm) renameForm.style.display = 'flex';
+        if (input) input.focus();
+      });
+    });
+
+    listContainer.querySelectorAll('.btn-rename-cancel').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const card = btn.closest('.saved-insight-card');
+        if (!card) return;
+        const titleContainer = card.querySelector('.insight-title-container');
+        const renameForm = card.querySelector('.insight-rename-form');
+        if (renameForm) renameForm.style.display = 'none';
+        if (titleContainer) titleContainer.style.display = 'flex';
+      });
+    });
+
+    listContainer.querySelectorAll('.btn-rename-save').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const card = btn.closest('.saved-insight-card');
+        const input = card ? card.querySelector('.insight-rename-form input') : null;
+        if (!input) return;
+        const newTitle = input.value.trim();
+        if (newTitle !== '') {
+          const updated = window.AriaMock.renameSavedInsight(userId, id, newTitle);
+          if (updated) {
+            renderSavedInsights();
+            showToast('Insight renamed');
+          } else {
+            showToast('Failed to rename insight');
+          }
+        } else {
+          showToast('Title cannot be empty');
+        }
+      });
+    });
+
+    listContainer.querySelectorAll('.btn-open-insight').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const list = window.AriaMock.getSavedInsights(userId);
+        const item = list.find(x => x.id === id);
+        if (item) {
+          const targetConv = createNewConversation(item.title);
+
+          targetConv.messages.push({
+            id: 'msg_' + Date.now() + '_u',
+            role: 'user',
+            text: item.question,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            timestamp: Date.now()
+          });
+
+          const resultData = item.type === 'snapshot' ? item.result : item.latestResult;
+          if (resultData) {
+             targetConv.messages.push({
+                id: 'msg_' + Date.now() + '_a',
+                role: 'agent',
+                type: 'results',
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                timestamp: Date.now(),
+                resultsData: resultData,
+                resultPattern: item.resultPattern || 'default',
+                appliedScope: item.scope,
+                activeView: resultData.activeView || 'summary',
+                viewUserSelected: resultData.viewUserSelected || false,
+                tablePage: resultData.tablePage || 1,
+                tableSearch: resultData.tableSearch || ''
+             });
+          }
+
+          saveConversationsToStorage();
+          renderSidebarConversations();
+          showBusinessWorkspaceView('ask');
+          renderActiveConversation();
+        }
+      });
+    });
+
+    listContainer.querySelectorAll('.btn-refresh-query').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const list = window.AriaMock.getSavedInsights(userId);
+        const item = list.find(x => x.id === id);
+
+        if (item) {
+          if (item.canRefresh === false) {
+            showToast(item.refreshDisabledReason || 'Refresh is not available for this saved query');
+            return;
+          }
+          btn.innerText = 'Refreshing...';
+          btn.disabled = true;
+
+          const opts = isSavedExecutionOptionsValid(item.executionOptions)
+            ? item.executionOptions
+            : buildSavedExecutionOptions(item.scope);
+          item.executionOptions = JSON.parse(JSON.stringify(opts));
+          const q = item.question;
+
+          window.askAgent(q, () => {}, {
+            user: state.currentUser,
+            domainScope: opts.selectedScope && opts.selectedScope.domain
+              ? opts.selectedScope.domain.value
+              : 'Auto',
+            timeRange: opts.selectedScope && opts.selectedScope.time
+              ? opts.selectedScope.time.preset
+              : 'auto',
+            selectedScope: opts.selectedScope,
+            interpretationOverride: opts.interpretationOverride
+          }).then(result => {
+            let resultState = 'unknown';
+            if (typeof getResultState === 'function') {
+               resultState = getResultState(result) || 'success';
+            } else if (result.type === 'results') {
+               resultState = 'success';
+            } else {
+               resultState = result.type;
+            }
+
+            if (result.type === 'results' && (resultState === 'success' || resultState === 'partial')) {
+              if (result.table && state.currentUser) {
+                if (typeof applyRoleColumnMasking === 'function') applyRoleColumnMasking(result.table, state.currentUser.role);
+              }
+              item.latestResult = JSON.parse(JSON.stringify(result));
+              item.lastRefreshedAt = Date.now();
+              item.dataAsOf = result.dataAsOf || Date.now();
+              item.refreshCount = (item.refreshCount || 0) + 1;
+              // preserve partial state warning if any
+              item.latestResult.resultState = resultState;
+
+              const saved = window.AriaMock.updateSavedQuery(userId, item);
+              if (saved) {
+                showToast(resultState === 'partial' ? 'Query refreshed (partial data)' : 'Query refreshed successfully');
+                renderSavedInsights();
+              } else {
+                showToast('Failed to save refreshed query');
+              }
+            } else {
+              showToast('Refresh failed: ' + resultState);
+            }
+          }).catch(err => {
+             showToast('Refresh error: ' + err.message);
+          }).finally(() => {
+             btn.innerText = 'Refresh';
+             btn.disabled = false;
+          });
+        }
+      });
+    });
+
+    listContainer.querySelectorAll('.btn-save-snapshot').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const list = window.AriaMock.getSavedInsights(userId);
+        const item = list.find(x => x.id === id);
+
+        if (item && item.latestResult) {
+          const snapshot = JSON.parse(JSON.stringify(item));
+          snapshot.id = 'snap_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+          snapshot.type = 'snapshot';
+          snapshot.sourceQueryId = id;
+          snapshot.savedAt = Date.now();
+          snapshot.result = JSON.parse(JSON.stringify(snapshot.latestResult));
+          delete snapshot.latestResult;
+          delete snapshot.lastRefreshedAt;
+          delete snapshot.refreshCount;
+          delete snapshot.executionOptions;
+          delete snapshot.canRefresh;
+          delete snapshot.legacy;
+          delete snapshot.refreshDisabledReason;
+
+          const saved = window.AriaMock.saveSnapshot(userId, snapshot);
+          if (saved) {
+            showToast('Snapshot saved successfully');
+            renderSavedInsights();
+          } else {
+            showToast('Failed to save snapshot');
+          }
+        }
       });
     });
   }
@@ -2710,7 +3057,7 @@
     const currentVal = timeRangeSelectEl.value;
 
     timeRangeSelectEl.innerHTML = `
-      <option value="auto" ${currentVal === 'auto' ? 'selected' : ''}>Auto — No time restriction</option>
+      <option value="auto" ${currentVal === 'auto' ? 'selected' : ''}>Auto &mdash; No time restriction</option>
       <option value="current_quarter" ${currentVal === 'current_quarter' ? 'selected' : ''}>This calendar quarter (${curQ.displayRange})</option>
       <option value="previous_quarter" ${currentVal === 'previous_quarter' ? 'selected' : ''}>Previous calendar quarter (${prevQ.displayRange})</option>
       <option value="calendar_year" ${currentVal === 'calendar_year' ? 'selected' : ''}>Calendar year ${yr.year} (${yr.displayRange})</option>
@@ -2918,6 +3265,106 @@
   }
 
   // =========================================================================
+
+  // =========================================================================
+
+  function buildSavedExecutionOptions(appliedScope) {
+    const opts = {
+      selectedScope: {
+        domain: { mode: 'auto', value: 'Auto' },
+        time: { mode: 'auto', preset: 'auto', start: null, end: null }
+      },
+      interpretationOverride: {
+        metric: null,
+        breakdown: null,
+        domain: 'Auto',
+        projectScope: 'all',
+        period: 'auto',
+        startDate: '',
+        endDate: '',
+        assumptions: []
+      }
+    };
+
+    if (!appliedScope) return opts;
+
+    const domainValue = appliedScope.domain && typeof appliedScope.domain === 'object'
+      ? (appliedScope.domain.value || appliedScope.domain.label || 'Auto')
+      : (appliedScope.domain || 'Auto');
+    opts.selectedScope.domain = {
+      mode: domainValue && domainValue !== 'Auto' ? 'explicit' : 'auto',
+      value: domainValue || 'Auto'
+    };
+    opts.interpretationOverride.domain = domainValue || 'Auto';
+
+    const time = appliedScope.time || null;
+    if (time) {
+      const start = time.start || null;
+      const end = time.end || null;
+      const rawPreset = typeof time.preset === 'string'
+        ? time.preset
+        : (typeof time.key === 'string' ? time.key : 'auto');
+      const hasExplicitDates = Boolean(start && end);
+      const timeMode = hasExplicitDates
+        ? 'custom'
+        : (rawPreset && rawPreset !== 'auto' ? 'preset' : 'auto');
+      const periodKey = timeMode === 'custom' ? 'custom' : (rawPreset || 'auto');
+
+      opts.selectedScope.time = {
+        mode: timeMode,
+        preset: periodKey,
+        start,
+        end
+      };
+      opts.interpretationOverride.period = periodKey;
+      opts.interpretationOverride.startDate = start || '';
+      opts.interpretationOverride.endDate = end || '';
+    } else if (typeof appliedScope.period === 'string') {
+      const periodKey = appliedScope.period || 'auto';
+      opts.selectedScope.time = {
+        mode: periodKey === 'auto' ? 'auto' : 'preset',
+        preset: periodKey,
+        start: null,
+        end: null
+      };
+      opts.interpretationOverride.period = periodKey;
+    }
+
+    const metricKey = appliedScope.metric && typeof appliedScope.metric === 'object'
+      ? appliedScope.metric.key
+      : appliedScope.metric;
+    const breakdownSource = appliedScope.breakdown || appliedScope.grain;
+    const breakdownKey = breakdownSource && typeof breakdownSource === 'object'
+      ? breakdownSource.key
+      : breakdownSource;
+    const projectSource = appliedScope.projectScope || appliedScope.projects;
+    const projectKey = projectSource && typeof projectSource === 'object'
+      ? (projectSource.key || (Array.isArray(projectSource.values) ? projectSource.values[0] : null))
+      : projectSource;
+
+    opts.interpretationOverride.metric = metricKey || null;
+    opts.interpretationOverride.breakdown = breakdownKey || null;
+    opts.interpretationOverride.projectScope = projectKey || 'all';
+    opts.interpretationOverride.assumptions = Array.isArray(appliedScope.assumptions)
+      ? [...appliedScope.assumptions]
+      : [];
+
+    return opts;
+  }
+
+  function isSavedExecutionOptionsValid(options) {
+    if (!options || !options.selectedScope || !options.interpretationOverride) return false;
+    const domain = options.selectedScope.domain;
+    const time = options.selectedScope.time;
+    const override = options.interpretationOverride;
+    if (!domain || !['auto', 'explicit'].includes(domain.mode) || typeof domain.value !== 'string') return false;
+    if (!time || !['auto', 'preset', 'custom'].includes(time.mode) || typeof time.preset !== 'string') return false;
+    return ['metric', 'breakdown', 'domain', 'projectScope', 'period'].every((key) => {
+      const value = override[key];
+      return value === null || typeof value === 'string';
+    });
+  }
+
   // 15. SETTINGS, HELP MODAL & GLOBAL SHORTCUTS (Group H)
   // =========================================================================
   function initSettingsAndHelp() {
@@ -3058,14 +3505,13 @@
 
   function closeAllModalsAndDrawers() {
     dataExplorerDrawer.classList.remove('open');
-    savedAnswersDrawer.classList.remove('open');
-    settingsDrawer.classList.remove('open');
+        settingsDrawer.classList.remove('open');
     helpModalBackdrop.classList.remove('open');
     feedbackModalBackdrop.classList.remove('open');
     sourceTableModalBackdrop.classList.remove('open');
     if (editInterpretationModalBackdrop) editInterpretationModalBackdrop.classList.remove('open');
     closeScopeInspector();
-    updateRailActiveState('ask');
+    showBusinessWorkspaceView('ask');
     userMenuDropdownEl.classList.remove('open');
     closeTypeahead();
   }
@@ -3182,7 +3628,7 @@
     newChatBtnEl.addEventListener('click', () => {
       createNewConversation('New Conversation');
       showToast('Started new conversation');
-      if (typeof updateRailActiveState === 'function') updateRailActiveState('ask');
+      if (typeof updateRailActiveState === 'function') showBusinessWorkspaceView('ask');
     });
 
     // History Search
@@ -3241,10 +3687,9 @@
     if (railAskBtn) {
       railAskBtn.addEventListener('click', () => {
         dataExplorerDrawer.classList.remove('open');
-        savedAnswersDrawer.classList.remove('open');
-        settingsDrawer.classList.remove('open');
+                settingsDrawer.classList.remove('open');
         helpModalBackdrop.classList.remove('open');
-        updateRailActiveState('ask');
+        showBusinessWorkspaceView('ask');
         if (window.innerWidth <= 820 && sidebarEl) {
           sidebarEl.classList.remove('open');
         }
@@ -3254,8 +3699,7 @@
 
     if (railDataGuideBtn) {
       railDataGuideBtn.addEventListener('click', () => {
-        savedAnswersDrawer.classList.remove('open');
-        dataExplorerDrawer.classList.add('open');
+                dataExplorerDrawer.classList.add('open');
         renderDataExplorer();
         updateRailActiveState('data_guide');
         if (window.innerWidth <= 820 && sidebarEl) {
@@ -3282,14 +3726,13 @@
 
     // Drawers Open / Close
     navDataExplorerBtn.addEventListener('click', () => {
-      savedAnswersDrawer.classList.remove('open');
-      dataExplorerDrawer.classList.add('open');
+            dataExplorerDrawer.classList.add('open');
       renderDataExplorer();
       updateRailActiveState('data_guide');
     });
     closeExplorerBtn.addEventListener('click', () => {
       dataExplorerDrawer.classList.remove('open');
-      updateRailActiveState('ask');
+      showBusinessWorkspaceView('ask');
     });
 
     tabTablesBtn.addEventListener('click', () => {
@@ -3307,18 +3750,9 @@
     explorerSearchInput.addEventListener('input', renderDataExplorer);
 
     savedAnswersBtn.addEventListener('click', () => {
-      dataExplorerDrawer.classList.remove('open');
-      savedAnswersDrawer.classList.add('open');
-      renderSavedAnswers();
-      updateRailActiveState('saved');
-      if (window.innerWidth <= 820 && sidebarEl) {
-        sidebarEl.classList.remove('open');
-      }
+      showBusinessWorkspaceView('saved');
     });
-    closeSavedAnswersBtn.addEventListener('click', () => {
-      savedAnswersDrawer.classList.remove('open');
-      updateRailActiveState('ask');
-    });
+
 
     settingsBtn.addEventListener('click', () => settingsDrawer.classList.add('open'));
     closeSettingsBtn.addEventListener('click', () => settingsDrawer.classList.remove('open'));

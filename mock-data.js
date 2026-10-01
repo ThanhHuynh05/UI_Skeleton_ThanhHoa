@@ -654,13 +654,13 @@
         { name: 'contractor_disbursements', records: '820 records', description: 'Milestone payment certificates issued to primary contractors.' }
       ],
       sql: `-- Aria NL-to-SQL Engine v2.4 (Security: Read-Only, PII Masked)
-SELECT 
+SELECT
     p.project_code,
     p.project_name,
     c.contractor_name,
     ROUND(SUM(r.amount_due) / 1000000.0, 2) AS total_receivables_mil,
     ROUND(SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / 1000000.0, 2) AS overdue_over_60d_mil,
-    CASE 
+    CASE
         WHEN SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / SUM(r.amount_due) > 0.5 THEN 'High Risk'
         WHEN SUM(CASE WHEN r.days_past_due > 60 THEN r.amount_due ELSE 0 END) / SUM(r.amount_due) > 0.3 THEN 'Moderate'
         ELSE 'Normal'
@@ -722,13 +722,13 @@ LIMIT 5;`,
         { name: 'dim_projects', records: '104 projects', description: 'Core project metadata and construction status.' }
       ],
       sql: `-- Aria NL-to-SQL Engine v2.4 (Security: Read-Only)
-SELECT 
+SELECT
     p.project_name,
     p.target_handover_date,
     m.planned_progress_pct,
     m.actual_progress_pct,
     (m.actual_progress_pct - m.planned_progress_pct) AS variance_pct,
-    CASE 
+    CASE
         WHEN (m.actual_progress_pct - m.planned_progress_pct) < -10.0 THEN 'Critical'
         WHEN (m.actual_progress_pct - m.planned_progress_pct) < -5.0 THEN 'High'
         WHEN (m.actual_progress_pct - m.planned_progress_pct) < 0.0 THEN 'Medium'
@@ -788,7 +788,7 @@ ORDER BY variance_pct ASC;`,
         { name: 'finance_ap_invoices', records: '18,910 invoices', description: 'Accounts payable invoices matched with purchase orders.' }
       ],
       sql: `-- Aria NL-to-SQL Engine v2.4 (Security: Read-Only)
-SELECT 
+SELECT
     v.vendor_name,
     v.commodity_group AS material_category,
     COUNT(DISTINCT po.po_id) AS total_pos_issued,
@@ -863,7 +863,7 @@ ORDER BY total_invoiced_mil DESC;`,
         { name: 'dim_property_assets', records: '38 buildings', description: 'Physical property asset specifications and lettable areas.' }
       ],
       sql: `-- Aria NL-to-SQL Engine v2.4 (Resolved via Asset Class clarification)
-SELECT 
+SELECT
     p.asset_sub_type AS asset_class,
     SUM(p.net_lettable_area_sqm) AS total_nla_sqm,
     SUM(l.occupied_area_sqm) AS leased_area_sqm,
@@ -1532,39 +1532,129 @@ GROUP BY p.asset_sub_type;`,
     }
   }
 
-  function getSavedAnswers(userId) {
+
+  function getSavedInsights(userId) {
     try {
       const key = `aria_saved_answers_${userId || 'default'}`;
       const stored = localStorage.getItem(key);
-      if (stored) return JSON.parse(stored);
+      if (!stored) return [];
+      const list = JSON.parse(stored);
+      let migrated = false;
+      const normalized = list.map(item => {
+        if (!item.type) {
+          migrated = true;
+          return {
+            id: item.id || 'sq_' + Date.now() + Math.random(),
+            type: 'query',
+            title: item.title || item.question || 'Legacy Saved Insight',
+            question: item.question || 'Unknown question',
+            scope: item.scope || { domain: 'Auto' },
+            latestResult: {
+               headline: item.title,
+               value: item.answer || item.answerConcise,
+               sql: item.sql,
+               dataAsOf: item.timestamp || Date.now()
+            },
+            savedAt: item.timestamp || Date.now(),
+            lastRefreshedAt: null,
+            dataAsOf: item.timestamp || Date.now(),
+            refreshCount: 0,
+            canRefresh: false,
+            legacy: true,
+            refreshDisabledReason: 'Legacy query definition is not available'
+          };
+        }
+
+        if (item.type === 'query') {
+          const hasUsableQuestion = typeof item.question === 'string'
+            && item.question.trim().length > 0
+            && item.question.trim().toLowerCase() !== 'unknown question';
+          const normalizedItem = { ...item };
+
+          if (!hasUsableQuestion) {
+            if (normalizedItem.canRefresh !== false || !normalizedItem.legacy || !normalizedItem.refreshDisabledReason) {
+              migrated = true;
+            }
+            normalizedItem.canRefresh = false;
+            normalizedItem.legacy = true;
+            normalizedItem.refreshDisabledReason = 'Legacy query definition is not available';
+          } else {
+            if (normalizedItem.canRefresh !== true) migrated = true;
+            normalizedItem.canRefresh = true;
+            normalizedItem.legacy = false;
+            delete normalizedItem.refreshDisabledReason;
+          }
+
+          return normalizedItem;
+        }
+
+        return item;
+      });
+      if (migrated) {
+        _saveInsightsList(userId, normalized);
+      }
+      return normalized;
     } catch (e) {
-      console.warn('Could not read saved answers', e);
+      console.warn('Could not read saved insights', e);
     }
     return [];
   }
 
-  function toggleSaveAnswer(userId, answerObj) {
+  function _saveInsightsList(userId, list) {
     try {
       const key = `aria_saved_answers_${userId || 'default'}`;
-      let list = getSavedAnswers(userId);
-      const idx = list.findIndex(a => a.id === answerObj.id);
-      let isSaved = false;
-      if (idx >= 0) {
-        list.splice(idx, 1);
-        isSaved = false;
-      } else {
-        list.unshift(answerObj);
-        isSaved = true;
-      }
       localStorage.setItem(key, JSON.stringify(list));
-      return isSaved;
-    } catch (e) {
-      console.warn('Failed to toggle save answer', e);
+      return true;
+    } catch(e) {
+      console.error('Failed to save insights', e);
       return false;
     }
   }
 
-  // =========================================================================
+  function saveQuery(userId, queryData) {
+    const list = getSavedInsights(userId);
+    const existing = list.findIndex(x => x.id === queryData.id);
+    if (existing >= 0) {
+      list[existing] = queryData;
+    } else {
+      list.unshift(queryData);
+    }
+    const success = _saveInsightsList(userId, list);
+    return success ? queryData : null;
+  }
+
+  function updateSavedQuery(userId, queryData) {
+    return saveQuery(userId, queryData);
+  }
+
+  function saveSnapshot(userId, snapshotData) {
+    const list = getSavedInsights(userId);
+    list.unshift(snapshotData);
+    const success = _saveInsightsList(userId, list);
+    return success ? snapshotData : null;
+  }
+
+  function renameSavedInsight(userId, id, title) {
+    const list = getSavedInsights(userId);
+    const item = list.find(x => x.id === id);
+    if (item) {
+      item.title = title;
+      const success = _saveInsightsList(userId, list);
+      return success ? item : null;
+    }
+    return null;
+  }
+
+  function removeSavedInsight(userId, id) {
+    const list = getSavedInsights(userId);
+    const filtered = list.filter(x => x.id !== id);
+    if (filtered.length !== list.length) {
+      const success = _saveInsightsList(userId, filtered);
+      return success;
+    }
+    return false;
+  }
+
   // 10. OBSERVABILITY TELEMETRY STORE
   // =========================================================================
   const INITIAL_OBSERVABILITY_DATA = {
@@ -4927,8 +5017,13 @@ GROUP BY p.asset_sub_type;`,
     recordFeedback,
     getAuditTrail,
     logAuditEvent,
-    getSavedAnswers,
-    toggleSaveAnswer,
+    getSavedInsights,
+    saveQuery,
+    updateSavedQuery,
+    saveSnapshot,
+    renameSavedInsight,
+    removeSavedInsight,
+
     checkSecurityGateways,
     askAgent
   };

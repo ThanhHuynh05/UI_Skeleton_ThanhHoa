@@ -13,10 +13,10 @@
   --bg-active: #cbd5e1;
   --bg-code: #0f172a;
   --text-code: #f1f5f9;
-  
+
   --border-color: #e2e8f0;
   --border-strong: #cbd5e1;
-  
+
   --text-primary: #0f172a;
   --text-secondary: #334155;
   --text-muted: #64748b;
@@ -3418,5 +3418,28 @@ details[open] .sql-chevron { transform: rotate(180deg); }
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+}
+
+
+/* SAVED INSIGHTS SPECIFIC STYLES */
+.saved-insights-viewport {
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.insight-rename-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 600px) {
+  .insight-rename-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .insight-rename-form input {
+    width: 100% !important;
   }
 }

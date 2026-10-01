@@ -75,7 +75,7 @@
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
             <span>Ask</span>
           </button>
-          <button type="button" class="workspace-rail-item" id="savedAnswersBtn" aria-label="Saved insights drawer">
+          <button type="button" class="workspace-rail-item" id="savedAnswersBtn" aria-label="Saved Insights">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
             <span>Saved Insights</span>
           </button>
@@ -124,7 +124,7 @@
       </aside>
 
       <!-- Main Query / Chat Viewport -->
-      <main class="chat-viewport">
+      <main class="chat-viewport" id="chatViewport">
         <!-- Scrollable Messages Container -->
         <div class="chat-messages" id="chatMessages">
           <div class="chat-inner-container" id="chatContainer">
@@ -180,10 +180,10 @@
             <!-- Typeahead Dropdown -->
             <div class="typeahead-popup" id="typeaheadPopup"></div>
 
-            <input 
-              type="text" 
-              class="chat-input-field" 
-              id="chatInput" 
+            <input
+              type="text"
+              class="chat-input-field"
+              id="chatInput"
               placeholder="Ask a business question in plain English (e.g. Which projects have highest receivables?)..."
               aria-label="Natural-language business question input"
               autocomplete="off"
@@ -206,6 +206,19 @@
           </div>
         </footer>
       </main>
+
+      <main class="chat-viewport saved-insights-viewport" id="savedInsightsViewport" style="display: none;">
+        <div class="chat-messages" style="padding: 24px;">
+          <div style="max-width: 860px; margin: 0 auto;">
+            <h1 style="font-size: 24px; margin-bottom: 8px; color: var(--text-primary);">Saved Queries &amp; Insights</h1>
+            <p style="color: var(--text-secondary); margin-bottom: 24px;">Manage your saved queries (dynamic, can be refreshed) and snapshots (static points in time).</p>
+            <div id="savedInsightsListContainer">
+              <!-- List will be rendered here -->
+            </div>
+          </div>
+        </div>
+      </main>
+
 
       <!-- Backdrop for mobile drawer (Scope & Sources) -->
       <div class="scope-inspector-backdrop" id="scopeInspectorBackdrop"></div>
@@ -287,18 +300,7 @@
     </div>
   </div>
 
-  <!-- =========================================================================
-       SAVED INSIGHTS DRAWER (Group B)
-       ========================================================================= -->
-  <div class="app-drawer" id="savedAnswersDrawer" role="dialog" aria-label="Saved Insights">
-    <div class="drawer-header">
-      <div style="font-weight: 700; font-size: 15px;">Saved Queries &amp; Insights</div>
-      <button type="button" class="header-icon-btn" id="closeSavedAnswersBtn">✕</button>
-    </div>
-    <div class="drawer-body" id="savedAnswersList">
-      <!-- Dynamically rendered -->
-    </div>
-  </div>
+
 
   <!-- =========================================================================
        SETTINGS DRAWER (Group H)
