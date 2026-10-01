@@ -12,21 +12,20 @@
     <!-- Header Layer -->
     <header class="app-header">
       <div class="header-left">
-        <a href="index.html" class="header-action-btn" title="Return to Aria Natural Language Assistant">
+        <a href="index.html" class="header-action-btn" title="Return to Business Workspace">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-          <span>Back to Chat</span>
+          <span>Back to Business Workspace</span>
         </a>
 
         <div class="brand-wrapper" style="margin-left: 8px;">
-          <div class="brand-icon" aria-hidden="true" style="background: #475569;">O</div>
+          <div class="brand-icon" aria-hidden="true" style="background: #475569;">R</div>
           <div class="brand-title">
-            <span>Aria Observability</span>
+            <span>Aria Admin / Research</span>
             <span class="demo-status-badge">Demo <span aria-hidden="true">&bull;</span> Synthetic data</span>
           </div>
         </div>
 
-        <nav class="header-nav" aria-label="Main application sections">
-          <a href="index.html" class="header-nav-link">Chat Assistant</a>
+        <nav class="header-nav" aria-label="Admin &amp; Research Workspace sections">
           <a href="eval.html" class="header-nav-link">Evaluation</a>
           <a href="admin.html" class="header-nav-link active">Observability</a>
         </nav>
@@ -51,9 +50,17 @@
         <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;" id="restrictedExplanation">
           You are currently signed in with a non-admin role. The Agent Observability, Tracing, and Security Audit dashboard is restricted to the <strong>Data / Admin team</strong> persona.
         </p>
-        <button type="button" class="btn-new-chat" id="switchToAdminBtn" style="width: auto; background: var(--accent-primary); color: #fff; padding: 8px 20px;">
-          Switch to Data / Admin Role
-        </button>
+        <div style="display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: 14px;">
+          <a href="index.html" class="btn-new-chat" style="width: auto; background: var(--bg-surface); color: var(--text-primary); border-color: var(--border-color); padding: 8px 18px; text-decoration: none;">
+            Return to Business Workspace
+          </a>
+          <button type="button" class="btn-new-chat" id="switchToAdminBtn" style="width: auto; background: var(--accent-primary); color: #fff; padding: 8px 20px;">
+            Switch demo persona to Data / Admin
+          </button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+          Note: This switches the demo persona for prototype testing; it does not grant production credentials.
+        </p>
       </div>
     </div>
 
@@ -260,7 +267,9 @@
         adminUserLabel.innerHTML = `Demo persona: <strong>${currentUser.name}</strong>`;
       }
 
-      if (!currentUser || currentUser.role !== 'data_admin') {
+      const isAdmin = Boolean(currentUser && currentUser.role === 'data_admin');
+
+      if (!isAdmin) {
         restrictedView.classList.remove('hidden');
         adminWorkspace.classList.add('hidden');
         if (currentUser) {
@@ -297,7 +306,9 @@
             ? `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`
             : `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
         }
-        loadTelemetry();
+        if (isAdmin) {
+          loadTelemetry();
+        }
       }
       if (themeBtn) themeBtn.addEventListener('click', () => applyTheme(currentTheme === 'light' ? 'dark' : 'light'));
       applyTheme(currentTheme);
@@ -593,36 +604,36 @@
         document.getElementById('traceModalBackdrop').classList.remove('open');
       });
 
-      document.getElementById('refreshTracesBtn').addEventListener('click', loadTelemetry);
-      document.getElementById('auditSearchInput').addEventListener('input', renderAuditTable);
-      document.getElementById('auditRoleFilter').addEventListener('change', renderAuditTable);
-      document.getElementById('auditOutcomeFilter').addEventListener('change', renderAuditTable);
+      if (isAdmin) {
+        document.getElementById('refreshTracesBtn').addEventListener('click', loadTelemetry);
+        document.getElementById('auditSearchInput').addEventListener('input', renderAuditTable);
+        document.getElementById('auditRoleFilter').addEventListener('change', renderAuditTable);
+        document.getElementById('auditOutcomeFilter').addEventListener('change', renderAuditTable);
 
-      const tracesSearch = document.getElementById('tracesSearchInput');
-      if (tracesSearch) tracesSearch.addEventListener('input', renderTracesTable);
+        const tracesSearch = document.getElementById('tracesSearchInput');
+        if (tracesSearch) tracesSearch.addEventListener('input', renderTracesTable);
 
-      function exportCsv() {
-        const trail = window.AriaMock.getAuditTrail() || [];
-        const rows = [
-          ['Demo • Synthetic data'],
-          ['Prototype export — access rules and masking are simulated'],
-          [],
-          ['ID', 'Timestamp', 'User', 'Role', 'Question', 'Outcome', 'Latency(ms)', 'Details']
-        ];
-        trail.forEach(t => rows.push([t.id, t.timestamp, `"${t.user}"`, `"${t.role}"`, `"${t.question}"`, t.outcome, t.latencyMs, `"${t.details}"`]));
-        const csv = rows.map(r => r.join(',')).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'aria_security_audit_trail.csv';
-        a.click();
+        function exportCsv() {
+          const trail = window.AriaMock.getAuditTrail() || [];
+          const rows = [
+            ['Demo • Synthetic data'],
+            ['Prototype export — access rules and masking are simulated'],
+            [],
+            ['ID', 'Timestamp', 'User', 'Role', 'Question', 'Outcome', 'Latency(ms)', 'Details']
+          ];
+          trail.forEach(t => rows.push([t.id, t.timestamp, `"${t.user}"`, `"${t.role}"`, `"${t.question}"`, t.outcome, t.latencyMs, `"${t.details}"`]));
+          const csv = rows.map(r => r.join(',')).join('\n');
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'aria_security_audit_trail.csv';
+          a.click();
+        }
+
+        const exportTop = document.getElementById('exportAuditCsvBtnTop');
+        if (exportTop) exportTop.addEventListener('click', exportCsv);
       }
-
-      const exportTop = document.getElementById('exportAuditCsvBtnTop');
-      if (exportTop) exportTop.addEventListener('click', exportCsv);
-
-      loadTelemetry();
     })();
   </script>
 </body>

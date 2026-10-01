@@ -12,21 +12,20 @@
     <!-- Header Layer -->
     <header class="app-header">
       <div class="header-left">
-        <a href="index.html" class="header-action-btn" title="Return to Aria Natural Language Assistant">
+        <a href="index.html" class="header-action-btn" title="Return to Business Workspace">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-          <span>Back to Chat</span>
+          <span>Back to Business Workspace</span>
         </a>
 
         <div class="brand-wrapper" style="margin-left: 8px;">
-          <div class="brand-icon" aria-hidden="true" style="background: #0284c7;">E</div>
+          <div class="brand-icon" aria-hidden="true" style="background: #475569;">R</div>
           <div class="brand-title">
-            <span>Aria Evaluation</span>
+            <span>Aria Admin / Research</span>
             <span class="demo-status-badge">Demo <span aria-hidden="true">&bull;</span> Synthetic data</span>
           </div>
         </div>
 
-        <nav class="header-nav" aria-label="Main application sections">
-          <a href="index.html" class="header-nav-link">Chat Assistant</a>
+        <nav class="header-nav" aria-label="Admin &amp; Research Workspace sections">
           <a href="eval.html" class="header-nav-link active">Evaluation</a>
           <a href="admin.html" class="header-nav-link">Observability</a>
         </nav>
@@ -41,8 +40,32 @@
       </div>
     </header>
 
+    <!-- Restricted Screen for Non-Admin Roles -->
+    <div id="restrictedView" class="hidden" style="padding: 24px;">
+      <div class="admin-restricted-box">
+        <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--warning-bg); color: var(--warning-color); display: flex; align-items: center; justify-content: center; font-size: 24px;">
+          🔒
+        </div>
+        <h2 style="font-size: 18px; font-weight: 700;">Evaluation Suite Restricted to Admin / Research Role</h2>
+        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;" id="restrictedExplanation">
+          You are currently signed in with a business persona. The Model Evaluation Benchmark and Strategy Comparison workspace is restricted to the <strong>Data / Admin team</strong> persona.
+        </p>
+        <div style="display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: 14px;">
+          <a href="index.html" class="btn-new-chat" style="width: auto; background: var(--bg-surface); color: var(--text-primary); border-color: var(--border-color); padding: 8px 18px; text-decoration: none;">
+            Return to Business Workspace
+          </a>
+          <button type="button" class="btn-new-chat" id="switchToAdminBtn" style="width: auto; background: var(--accent-primary); color: #fff; padding: 8px 20px;">
+            Switch demo persona to Data / Admin
+          </button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
+          Note: This switches the demo persona for prototype testing; it does not grant production credentials.
+        </p>
+      </div>
+    </div>
+
     <!-- Main Workspace -->
-    <main class="eval-container">
+    <main class="eval-container" id="evalWorkspace">
       <!-- Title & Action Bar -->
       <div class="admin-header-row">
         <div class="admin-title-area">
@@ -185,17 +208,51 @@
       let currentStrategyKey = 'retrieval_enriched';
       let isRunning = false;
 
-      // 1. User Identity Display
+      // 1. User Identity Display & Role Gate
       let currentUser = null;
       try {
         const stored = localStorage.getItem('aria_user_profile');
         if (stored) currentUser = JSON.parse(stored);
       } catch (e) {}
+
+      const restrictedView = document.getElementById('restrictedView');
+      const evalWorkspace = document.getElementById('evalWorkspace');
       const evalUserLabel = document.getElementById('evalUserLabel');
+
       if (evalUserLabel && currentUser) {
         evalUserLabel.innerHTML = `Demo persona: <strong>${currentUser.name}</strong>`;
       } else if (evalUserLabel) {
-        evalUserLabel.innerHTML = `Demo persona: <strong>Alex Thorne</strong>`;
+        evalUserLabel.innerHTML = `Demo persona: <strong>Guest</strong>`;
+      }
+
+      const isAdmin = Boolean(currentUser && currentUser.role === 'data_admin');
+
+      if (!isAdmin) {
+        restrictedView.classList.remove('hidden');
+        evalWorkspace.classList.add('hidden');
+        if (currentUser) {
+          document.getElementById('restrictedExplanation').innerHTML = `
+            You are currently signed in as <strong>${currentUser.name} (${currentUser.roleTitle || currentUser.role})</strong>.<br>
+            The Model Evaluation Benchmark suite is restricted to the <strong>Data / Admin team</strong> persona.
+          `;
+        }
+      } else {
+        restrictedView.classList.add('hidden');
+        evalWorkspace.classList.remove('hidden');
+      }
+
+      const switchToAdminBtn = document.getElementById('switchToAdminBtn');
+      if (switchToAdminBtn) {
+        switchToAdminBtn.addEventListener('click', () => {
+          const adminProfile = {
+            id: 'data_admin',
+            name: 'Alex Thorne (Admin)',
+            role: 'data_admin',
+            roleTitle: 'Data / Admin team'
+          };
+          localStorage.setItem('aria_user_profile', JSON.stringify(adminProfile));
+          location.reload();
+        });
       }
 
       // 2. Theme toggle
@@ -210,7 +267,9 @@
             ? `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`
             : `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
         }
-        renderCategoryChart();
+        if (isAdmin) {
+          renderCategoryChart();
+        }
       }
       if (themeBtn) {
         themeBtn.addEventListener('click', () => applyTheme(currentTheme === 'light' ? 'dark' : 'light'));
@@ -530,8 +589,10 @@
         a.click();
       });
 
-      renderStrategyCards();
-      updateMetricsAndTable();
+      if (isAdmin) {
+        renderStrategyCards();
+        updateMetricsAndTable();
+      }
     })();
   </script>
 </body>

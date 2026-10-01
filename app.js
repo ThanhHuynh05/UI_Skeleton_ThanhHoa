@@ -65,6 +65,18 @@
   const resetDemoDataMenuItemEl = document.getElementById('resetDemoDataMenuItem');
   const toastContainerEl = document.getElementById('toastContainer');
 
+  // Workspace Rail Navigation (Requirement A)
+  const railAskBtn = document.getElementById('railAskBtn');
+  const railDataGuideBtn = document.getElementById('railDataGuideBtn');
+  const toggleRecentConvsBtn = document.getElementById('toggleRecentConvsBtn');
+  const sidebarConvCollapsible = document.getElementById('sidebarConvCollapsible');
+
+  // Scope & Sources Contextual Inspector (Requirement B)
+  const scopeInspectorPanel = document.getElementById('scopeInspectorPanel');
+  const closeScopeInspectorBtn = document.getElementById('closeScopeInspectorBtn');
+  const scopeInspectorBody = document.getElementById('scopeInspectorBody');
+  const scopeInspectorBackdrop = document.getElementById('scopeInspectorBackdrop');
+
   // Modals & Drawers
   const userProfileModalBackdrop = document.getElementById('userProfileModalBackdrop');
   const profileNameInput = document.getElementById('profileNameInput');
@@ -351,6 +363,7 @@
         saveConversationsToStorage();
         renderSidebarConversations();
         renderActiveConversation();
+        if (typeof updateRailActiveState === 'function') updateRailActiveState('ask');
         if (window.innerWidth <= 820) sidebarEl.classList.remove('open');
       });
 
@@ -727,6 +740,7 @@
     const metric = scope.metric ? scope.metric.label : 'Business metric';
     const period = scope.time ? scope.time.label : (scope.periodLabel || 'Current scope');
     const project = scope.projectScope ? scope.projectScope.label : 'All projects';
+    const msgId = msg ? msg.id : '';
     return `
       <details class="result-scope-disclosure">
         <summary>
@@ -734,7 +748,17 @@
           <span class="result-scope-summary-value">${escapeHtml(metric)} · ${escapeHtml(period)} · ${escapeHtml(project)}</span>
           <span class="result-scope-summary-action">Review or edit</span>
         </summary>
-        <div class="result-scope-expanded">${generateInterpretationHtml(scope, msg)}</div>
+        <div class="result-scope-expanded">
+          ${msgId ? `
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
+              <button type="button" class="action-tool-btn btn-inspect-scope" data-msg-id="${msgId}" style="font-size: 11.5px; padding: 4px 10px;">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <span>Open in Scope &amp; Sources panel</span>
+              </button>
+            </div>
+          ` : ''}
+          ${generateInterpretationHtml(scope, msg)}
+        </div>
       </details>
     `;
   }
@@ -892,6 +916,10 @@
           <!-- Pattern-aware actions -->
           <div class="response-actions-row">
             <div class="action-tools-group">
+              <button type="button" class="action-tool-btn btn-inspect-scope" data-msg-id="${msg.id}" title="Review scope parameters and business sources">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <span>Review scope &amp; sources</span>
+              </button>
               <button type="button" class="action-tool-btn btn-copy-answer" data-answer="${escapeHtml(answerBody)}" title="Copy answer text">
                 Copy answer
               </button>
@@ -2293,6 +2321,14 @@
         showToast('SQL query copied');
       });
     });
+
+    // 19. Review Scope & Sources Inspector
+    chatContainerEl.querySelectorAll('.btn-inspect-scope').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const msgId = btn.getAttribute('data-msg-id');
+        openScopeInspector(msgId, btn);
+      });
+    });
   }
 
   // =========================================================================
@@ -2353,9 +2389,185 @@
       chatInputEl.value = q;
       chatInputEl.focus();
       updateSendButtonState();
+      if (typeof updateRailActiveState === 'function') updateRailActiveState('ask');
     });
 
     sourceTableModalBackdrop.classList.add('open');
+  }
+
+  // =========================================================================
+  // WORKSPACE RAIL ACTIVE STATE CONTROLLER (Requirement A)
+  // =========================================================================
+  function updateRailActiveState(activeItem = 'ask') {
+    if (railAskBtn) railAskBtn.classList.toggle('active', activeItem === 'ask');
+    if (savedAnswersBtn) savedAnswersBtn.classList.toggle('active', activeItem === 'saved');
+    if (railDataGuideBtn) railDataGuideBtn.classList.toggle('active', activeItem === 'data_guide');
+  }
+
+  // =========================================================================
+  // SCOPE & SOURCES CONTEXTUAL INSPECTOR (Requirement B)
+  // =========================================================================
+  let activeScopeInspectorTriggerBtn = null;
+
+  function renderScopeInspectorContent(msg, conv) {
+    if (!scopeInspectorBody) return;
+    const res = msg.resultsData || {};
+    const scope = msg.appliedScope || res.appliedScope || {};
+
+    const userQuery = findUserQueryForAgentMsg(conv, msg) || 'Natural language question';
+
+    const metricLabel = (scope.metric && scope.metric.label) ? scope.metric.label : 'Enterprise Records';
+    const metricSource = (scope.metric && scope.metric.source) ? scope.metric.source : 'Inferred from question';
+
+    const domainLabel = (scope.domain && (scope.domain.label || scope.domain.value)) ? (scope.domain.label || scope.domain.value) : (scope.domain || 'All Domains');
+    const domainSource = (scope.domain && scope.domain.source) ? scope.domain.source : ((scope.source && scope.source.domain) ? scope.source.domain : 'Inferred from question');
+
+    const projectLabel = (scope.projectScope && scope.projectScope.label) ? scope.projectScope.label : 'All enterprise projects';
+    const projectSource = (scope.projectScope && scope.projectScope.source) ? scope.projectScope.source : 'All active portfolios';
+
+    const timeLabel = (scope.time && scope.time.label) ? scope.time.label : (scope.periodLabel || 'No time restriction');
+    const exactDates = (scope.time && scope.time.dateRange) ? scope.time.dateRange : (scope.dateRange || null);
+    const timeSource = (scope.time && scope.time.source) ? scope.time.source : ((scope.source && scope.source.time) ? scope.source.time : 'No time restriction');
+
+    const currencyLabel = scope.currency || ((scope.metric && scope.metric.unit) ? scope.metric.unit : 'USD millions');
+    const assumptions = scope.assumptions || [];
+    const dataFreshness = res.dataAsOf || 'Yesterday 23:59 UTC';
+    const calendarBasis = scope.calendarBasis || 'Calendar';
+
+    const formatBusinessSource = (name) => {
+      return name.replace('enterprise_dw.', '').replace('dim_', '').replace('fct_', '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    };
+
+    const sources = res.sources || [];
+
+    scopeInspectorBody.innerHTML = `
+      <div class="inspector-section">
+        <div class="inspector-section-label">Contextual Result</div>
+        <div class="inspector-query-title">${escapeHtml(userQuery)}</div>
+      </div>
+
+      <div class="inspector-section">
+        <div class="inspector-section-label">Scope Parameters</div>
+        <div class="inspector-fields-list">
+          <div class="inspector-field">
+            <span class="inspector-field-label">Metric</span>
+            <strong class="inspector-field-val">${escapeHtml(metricLabel)}</strong>
+            <span class="scope-source-tag ${getInterpSourceClass(metricSource)}">${escapeHtml(metricSource)}</span>
+          </div>
+
+          <div class="inspector-field">
+            <span class="inspector-field-label">Business Area</span>
+            <strong class="inspector-field-val">${escapeHtml(domainLabel)}</strong>
+            <span class="scope-source-tag ${getInterpSourceClass(domainSource)}">${escapeHtml(domainSource)}</span>
+          </div>
+
+          <div class="inspector-field">
+            <span class="inspector-field-label">Project Scope</span>
+            <strong class="inspector-field-val">${escapeHtml(projectLabel)}</strong>
+            <span class="scope-source-tag ${getInterpSourceClass(projectSource)}">${escapeHtml(projectSource)}</span>
+          </div>
+
+          <div class="inspector-field">
+            <span class="inspector-field-label">Period &amp; Exact Dates</span>
+            <strong class="inspector-field-val">${escapeHtml(timeLabel)}${exactDates && !timeLabel.includes(exactDates) ? ` · <small>(${escapeHtml(exactDates)})</small>` : ''}</strong>
+            <span class="scope-source-tag ${getInterpSourceClass(timeSource)}">${escapeHtml(timeSource)}</span>
+          </div>
+
+          <div class="inspector-field">
+            <span class="inspector-field-label">Currency / Unit</span>
+            <strong class="inspector-field-val">${escapeHtml(currencyLabel)}</strong>
+            <span class="scope-source-tag source-standard">System standard</span>
+          </div>
+        </div>
+      </div>
+
+      ${assumptions.length > 0 ? `
+        <div class="inspector-section">
+          <div class="inspector-section-label">Assumptions (${assumptions.length})</div>
+          <ul class="inspector-assumptions-list">
+            ${assumptions.map(a => `<li>${escapeHtml(a)}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+
+      <div class="inspector-section">
+        <div class="inspector-section-label">Data Freshness &amp; Basis</div>
+        <div class="inspector-freshness-box">
+          <div>Data freshness: <strong>${escapeHtml(dataFreshness)}</strong></div>
+          <div>Calendar basis: <strong>${escapeHtml(calendarBasis)}</strong></div>
+        </div>
+      </div>
+
+      <div class="inspector-section">
+        <div class="inspector-section-label">Business Sources (${sources.length})</div>
+        <p class="inspector-section-help">Click any verified source below to review its business definition and schema details:</p>
+        <div class="inspector-sources-list">
+          ${sources.length > 0 ? sources.map(s => `
+            <button type="button" class="inspector-source-pill source-badge-btn" data-table-name="${escapeHtml(s.name)}" title="Review technical source definition">
+              <svg width="12" height="12" fill="currentColor" viewBox="0 0 20 20"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2zM3 16a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z"/></svg>
+              <span>${escapeHtml(formatBusinessSource(s.name))}</span>
+            </button>
+          `).join('') : '<span style="font-size: 12px; color: var(--text-muted);">Standard enterprise ledger</span>'}
+        </div>
+      </div>
+
+      <div class="inspector-actions">
+        <button type="button" class="action-tool-btn btn-edit-interpretation" data-msg-id="${msg.id}" style="width: 100%; justify-content: center; padding: 8px 12px;">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          <span>Edit scope parameters</span>
+        </button>
+      </div>
+    `;
+
+    // Attach listeners inside inspector
+    scopeInspectorBody.querySelectorAll('.source-badge-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tableName = btn.getAttribute('data-table-name');
+        openSourceTableModal(tableName);
+      });
+    });
+
+    scopeInspectorBody.querySelectorAll('.btn-edit-interpretation').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const msgId = btn.getAttribute('data-msg-id');
+        openEditInterpretationModal(conv, msgId);
+      });
+    });
+  }
+
+  function openScopeInspector(msgId, triggerBtn = null) {
+    activeScopeInspectorTriggerBtn = triggerBtn;
+    const conv = getActiveConversation();
+    if (!conv) return;
+    const msg = conv.messages.find(m => m.id === msgId);
+    if (!msg) return;
+
+    renderScopeInspectorContent(msg, conv);
+
+    if (scopeInspectorPanel) {
+      scopeInspectorPanel.classList.add('open');
+      scopeInspectorPanel.setAttribute('aria-hidden', 'false');
+    }
+    if (scopeInspectorBackdrop) {
+      scopeInspectorBackdrop.classList.add('open');
+    }
+    if (closeScopeInspectorBtn) {
+      closeScopeInspectorBtn.focus();
+    }
+  }
+
+  function closeScopeInspector() {
+    if (scopeInspectorPanel) {
+      scopeInspectorPanel.classList.remove('open');
+      scopeInspectorPanel.setAttribute('aria-hidden', 'true');
+    }
+    if (scopeInspectorBackdrop) {
+      scopeInspectorBackdrop.classList.remove('open');
+    }
+    if (activeScopeInspectorTriggerBtn && typeof activeScopeInspectorTriggerBtn.focus === 'function') {
+      try { activeScopeInspectorTriggerBtn.focus(); } catch (e) {}
+    }
+    activeScopeInspectorTriggerBtn = null;
   }
 
   // =========================================================================
@@ -2394,6 +2606,7 @@
           chatInputEl.value = query;
           chatInputEl.focus();
           updateSendButtonState();
+          updateRailActiveState('ask');
         });
       });
     } else {
@@ -2851,6 +3064,8 @@
     feedbackModalBackdrop.classList.remove('open');
     sourceTableModalBackdrop.classList.remove('open');
     if (editInterpretationModalBackdrop) editInterpretationModalBackdrop.classList.remove('open');
+    closeScopeInspector();
+    updateRailActiveState('ask');
     userMenuDropdownEl.classList.remove('open');
     closeTypeahead();
   }
@@ -2967,6 +3182,7 @@
     newChatBtnEl.addEventListener('click', () => {
       createNewConversation('New Conversation');
       showToast('Started new conversation');
+      if (typeof updateRailActiveState === 'function') updateRailActiveState('ask');
     });
 
     // History Search
@@ -3021,12 +3237,60 @@
 
     saveProfileBtn.addEventListener('click', saveUserProfile);
 
+    // Workspace Rail Navigation (Requirement A)
+    if (railAskBtn) {
+      railAskBtn.addEventListener('click', () => {
+        dataExplorerDrawer.classList.remove('open');
+        savedAnswersDrawer.classList.remove('open');
+        settingsDrawer.classList.remove('open');
+        helpModalBackdrop.classList.remove('open');
+        updateRailActiveState('ask');
+        if (window.innerWidth <= 820 && sidebarEl) {
+          sidebarEl.classList.remove('open');
+        }
+        if (chatInputEl) chatInputEl.focus();
+      });
+    }
+
+    if (railDataGuideBtn) {
+      railDataGuideBtn.addEventListener('click', () => {
+        savedAnswersDrawer.classList.remove('open');
+        dataExplorerDrawer.classList.add('open');
+        renderDataExplorer();
+        updateRailActiveState('data_guide');
+        if (window.innerWidth <= 820 && sidebarEl) {
+          sidebarEl.classList.remove('open');
+        }
+      });
+    }
+
+    if (toggleRecentConvsBtn && sidebarConvCollapsible) {
+      toggleRecentConvsBtn.addEventListener('click', () => {
+        const isCollapsed = sidebarConvCollapsible.classList.toggle('collapsed');
+        toggleRecentConvsBtn.classList.toggle('collapsed', isCollapsed);
+        toggleRecentConvsBtn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+      });
+    }
+
+    // Scope & Sources Inspector Close Handlers (Requirement B)
+    if (closeScopeInspectorBtn) {
+      closeScopeInspectorBtn.addEventListener('click', closeScopeInspector);
+    }
+    if (scopeInspectorBackdrop) {
+      scopeInspectorBackdrop.addEventListener('click', closeScopeInspector);
+    }
+
     // Drawers Open / Close
     navDataExplorerBtn.addEventListener('click', () => {
+      savedAnswersDrawer.classList.remove('open');
       dataExplorerDrawer.classList.add('open');
       renderDataExplorer();
+      updateRailActiveState('data_guide');
     });
-    closeExplorerBtn.addEventListener('click', () => dataExplorerDrawer.classList.remove('open'));
+    closeExplorerBtn.addEventListener('click', () => {
+      dataExplorerDrawer.classList.remove('open');
+      updateRailActiveState('ask');
+    });
 
     tabTablesBtn.addEventListener('click', () => {
       explorerActiveTab = 'tables';
@@ -3043,10 +3307,18 @@
     explorerSearchInput.addEventListener('input', renderDataExplorer);
 
     savedAnswersBtn.addEventListener('click', () => {
+      dataExplorerDrawer.classList.remove('open');
       savedAnswersDrawer.classList.add('open');
       renderSavedAnswers();
+      updateRailActiveState('saved');
+      if (window.innerWidth <= 820 && sidebarEl) {
+        sidebarEl.classList.remove('open');
+      }
     });
-    closeSavedAnswersBtn.addEventListener('click', () => savedAnswersDrawer.classList.remove('open'));
+    closeSavedAnswersBtn.addEventListener('click', () => {
+      savedAnswersDrawer.classList.remove('open');
+      updateRailActiveState('ask');
+    });
 
     settingsBtn.addEventListener('click', () => settingsDrawer.classList.add('open'));
     closeSettingsBtn.addEventListener('click', () => settingsDrawer.classList.remove('open'));
