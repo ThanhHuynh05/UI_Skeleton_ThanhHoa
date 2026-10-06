@@ -155,6 +155,14 @@ UI_Skeleton/
 - **Category Accuracy Bar Chart**: Pure inline SVG showing per-category success rates.
 - **Download Benchmark CSV**: One-click download of test results.
 
+### CK1 synthetic data fixtures
+
+- `ck1-schema-data.js` contains the CK1 v2.1 schema catalog.
+- `ck1-mock-data.js` contains 53 synthetic, relationally consistent rows across 16 CK1 tables.
+- The fixtures cover projects, units, sales contracts, buyer installments, construction progress, leases, service contracts, vendors, access policies and audit logs.
+- Suggested questions are limited to CK1-supported joins and metrics. Data Guide labels fixture-backed tables and provides a three-row preview.
+- Fixture results are labelled synthetic and must not be interpreted as production measurements.
+
 ### GROUP G: Observability & Audit Console (`admin.html`)
 - **Role Gating**: Restricted to `data_admin`. Non-admin roles see a permission screen with a switch-role button.
 - **KPI Cards**: Average latency, success rate, total queries processed, retry counts, and blocked security events.

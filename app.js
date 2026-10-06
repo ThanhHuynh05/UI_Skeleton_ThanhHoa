@@ -6,7 +6,7 @@
  * 1. Conversation History (Multi-turn conversations, pinned, grouped, search, export)
  * 2. Role-Based Identity & "Who is Using" blocking modal
  * 3. Answer Tools (Table/Chart toggle, SVG bar/line/pie, CSV download, print, SQL explanation)
- * 4. Input Helpers (Typeahead, Domain scope chips, Voice STT, Time range)
+ * 4. Input Helpers (Typeahead, multi-domain search scope, Voice STT, Time range)
  * 5. Schema Intelligence (Data Explorer drawer, Business Glossary, Relationships)
  * 6. Security & Governance (Masking, AST write blocking, Injection blocking, Audit log)
  * 7. Settings, Preferences, Help, and Toast Notifications
@@ -35,7 +35,7 @@
     activeDomainScope: 'Auto',
     activeTimeRange: 'Auto',
     selectedScope: {
-      domain: { mode: 'auto', value: 'Auto' },
+      domain: { mode: 'auto', value: 'Auto', values: [] },
       time: { mode: 'auto', preset: 'auto', start: null, end: null }
     },
     searchQuery: '',
@@ -64,6 +64,8 @@
   const switchUserMenuItemEl = document.getElementById('switchUserMenuItem');
   const resetDemoDataMenuItemEl = document.getElementById('resetDemoDataMenuItem');
   const toastContainerEl = document.getElementById('toastContainer');
+  const appStatusLiveEl = document.getElementById('appStatusLive');
+  const appAlertLiveEl = document.getElementById('appAlertLive');
 
   // Workspace Rail Navigation (Requirement A)
   const railAskBtn = document.getElementById('railAskBtn');
@@ -87,6 +89,7 @@
   const navDataExplorerBtn = document.getElementById('navDataExplorerBtn');
   const closeExplorerBtn = document.getElementById('closeExplorerBtn');
   const tabTablesBtn = document.getElementById('tabTablesBtn');
+  const tabCapabilitiesBtn = document.getElementById('tabCapabilitiesBtn');
   const tabGlossaryBtn = document.getElementById('tabGlossaryBtn');
   const explorerTabContent = document.getElementById('explorerTabContent');
   const explorerSearchInput = document.getElementById('explorerSearchInput');
@@ -118,17 +121,40 @@
   const sourceTableModalBody = document.getElementById('sourceTableModalBody');
   const clarificationModalBackdrop = document.getElementById('clarificationModalBackdrop');
   const closeClarificationModalBtn = document.getElementById('closeClarificationModalBtn');
+  const clarificationModalTitleEl = document.getElementById('clarificationModalTitle');
   const cancelClarificationBtn = document.getElementById('cancelClarificationBtn');
   const confirmClarificationBtn = document.getElementById('confirmClarificationBtn');
   const clarificationQuestionEl = document.getElementById('clarificationQuestion');
+  const clarificationReasonEl = document.getElementById('clarificationModalReason');
+  const clarificationOriginalQuestionEl = document.getElementById('clarificationOriginalQuestion');
+  const clarificationOriginalQuestionTextEl = document.getElementById('clarificationOriginalQuestionText');
   const clarificationOptionsEl = document.getElementById('clarificationOptions');
-  const clarificationOtherInput = document.getElementById('clarificationOtherInput');
   const clarificationUnderstoodEl = document.getElementById('clarificationUnderstood');
+  const clearHistoryModalBackdrop = document.getElementById('clearHistoryModalBackdrop');
+  const closeClearHistoryModalBtn = document.getElementById('closeClearHistoryModalBtn');
+  const cancelClearHistoryBtn = document.getElementById('cancelClearHistoryBtn');
+  const confirmClearHistoryBtn = document.getElementById('confirmClearHistoryBtn');
+  const clearHistoryConversationCount = document.getElementById('clearHistoryConversationCount');
+  let clearHistoryTrigger = null;
+  const csvExportModalBackdrop = document.getElementById('csvExportModalBackdrop');
+  const closeCsvExportModalBtn = document.getElementById('closeCsvExportModalBtn');
+  const cancelCsvExportBtn = document.getElementById('cancelCsvExportBtn');
+  const confirmCsvExportBtn = document.getElementById('confirmCsvExportBtn');
+  const csvExportAllLabel = document.getElementById('csvExportAllLabel');
+  const csvExportFilteredOption = document.getElementById('csvExportFilteredOption');
+  const csvExportFilteredLabel = document.getElementById('csvExportFilteredLabel');
+  const csvExportFilterDescription = document.getElementById('csvExportFilterDescription');
+  const csvExportContextPreview = document.getElementById('csvExportContextPreview');
+  let pendingCsvExport = null;
 
   let activeClarificationMessageId = null;
   let activeClarificationTrigger = null;
 
-  const domainScopeChipsEl = document.getElementById('domainScopeChips');
+  const domainScopeSelectEl = document.getElementById('domainScopeSelect');
+  const domainScopeSelectLabelEl = document.getElementById('domainScopeSelectLabel');
+  const domainScopeMenuEl = document.getElementById('domainScopeMenu');
+  const domainScopeImpactEl = document.getElementById('domainScopeImpact');
+  const resetDomainScopeBtnEl = document.getElementById('resetDomainScopeBtn');
   const timeRangeSelectEl = document.getElementById('timeRangeSelect');
   const scopeEditorBarEl = document.getElementById('scopeEditorBar');
   const customDateRangeBarEl = document.getElementById('customDateRangeBar');
@@ -193,16 +219,16 @@
       const r = roles[key];
       const isSelected = key === selectedRoleKey;
       return `
-        <div class="role-select-card ${isSelected ? 'selected' : ''}" data-role-key="${key}" tabindex="0" role="button">
+        <button type="button" class="role-select-card ${isSelected ? 'selected' : ''}" data-role-key="${key}" aria-pressed="${isSelected ? 'true' : 'false'}">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div class="role-card-title">${escapeHtml(r.title)}</div>
-            <span class="brand-badge" style="font-size: 10px;">${escapeHtml(r.category)}</span>
+            <span class="brand-badge" style="font-size: 12px;">${escapeHtml(r.category)}</span>
           </div>
           <div class="role-card-desc">${escapeHtml(r.description)}</div>
-          <div style="font-size: 10.5px; color: var(--text-muted); margin-top: 4px;">
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
             Allowed: ${r.allowedDomains.join(', ')}
           </div>
-        </div>
+        </button>
       `;
     }).join('');
 
@@ -214,6 +240,8 @@
           profileNameInput.value = roleDef.defaultName;
         }
         renderRoleCards();
+        const selectedCard = roleCardsGrid.querySelector(`[data-role-key="${selectedRoleKey}"]`);
+        if (selectedCard) selectedCard.focus();
       });
     });
   }
@@ -237,6 +265,8 @@
     renderSidebarConversations();
     renderActiveConversation();
     showToast(`Demo persona changed to ${userObj.name}`);
+    announceAppStatus(`Onboarding complete. ${userObj.name} is using the ${roleDef.title} demo persona. Ask a business question.`);
+    requestAnimationFrame(() => chatInputEl.focus());
   }
 
   function updateUserBadge() {
@@ -324,7 +354,7 @@
 
     if (convs.length === 0) {
       sidebarConversationsListEl.innerHTML = `
-        <div style="padding: 16px 8px; text-align: center; color: var(--text-muted); font-size: 11.5px;">
+        <div style="padding: 16px 8px; text-align: center; color: var(--text-muted); font-size: 12px;">
           ${query ? 'No matching conversations.' : 'No conversations yet.<br>Click "New Chat" to begin.'}
         </div>
       `;
@@ -516,9 +546,143 @@
 
     chatContainerEl.innerHTML = html;
 
+  function openEvidenceDesk(msg) {
+    const res = msg.resultsData || {};
+    const scope = msg.appliedScope || res.appliedScope || {};
+    
+    const evidenceDesk = document.getElementById('scopeInspectorPanel');
+    const body = document.getElementById('scopeInspectorBody');
+    if (!evidenceDesk || !body) return;
+    
+    // We will render three separate divs for the tab contents
+    
+    // Understanding tab uses the same complete Applied Scope component as the result card.
+    let understandingHtml = '<div id="evidence-tab-understanding" class="evidence-tab-content">';
+    understandingHtml += '<h3 style="font-family: var(--font-serif); font-size: 20px; margin-bottom: 16px;">Applied Scope</h3>';
+    understandingHtml += '<div style="margin-bottom: 24px; color: var(--text-secondary); font-size: 14px; line-height: 1.6;">';
+    understandingHtml += generateAppliedScopeHtml(scope);
+    understandingHtml += '<button type="button" class="action-tool-btn evidence-edit-interpretation-btn" style="margin-top: 12px;">Edit interpretation</button>';
+    understandingHtml += '</div></div>';
+
+    // Evidence tab
+    let evidenceHtml = '<div id="evidence-tab-evidence" class="evidence-tab-content" style="display: none;">';
+    evidenceHtml += '<h3 style="font-family: var(--font-serif); font-size: 20px; margin-bottom: 16px;">Sources &amp; Definitions</h3>';
+    evidenceHtml += '<div style="margin-bottom: 24px; color: var(--text-secondary); font-size: 14px; line-height: 1.6;">';
+    const sources = res.sources || [];
+    const sourceHtml = sources.length > 0
+      ? sources.map((source) => {
+          const definition = getBusinessSourceDefinition(source.name);
+          return `<article class="business-source-card">
+            <button type="button" class="business-source-title evidence-source-btn" data-table-name="${escapeHtml(source.name)}">${escapeHtml(definition.label)}</button>
+            <p>${escapeHtml(definition.definition)}</p>
+            <dl class="source-definition-grid">
+              <div><dt>Owner</dt><dd>${escapeHtml(definition.owner)}</dd></div>
+              <div><dt>Domain</dt><dd>${escapeHtml(definition.domain)}</dd></div>
+              <div><dt>Grain</dt><dd>${escapeHtml(definition.grain)}</dd></div>
+              <div><dt>Refresh</dt><dd>${escapeHtml(definition.cadence)}</dd></div>
+              <div class="source-definition-wide"><dt>Metric calculation</dt><dd>${escapeHtml(definition.calculation)}</dd></div>
+              <div class="source-definition-wide"><dt>Exclusions</dt><dd>${escapeHtml(definition.exclusions)}</dd></div>
+            </dl>
+          </article>`;
+        }).join('')
+      : '<p>Enterprise business records. A more specific source definition is not available for this result.</p>';
+    evidenceHtml += '<div class="evidence-business-summary"><span>Data freshness</span><strong>' + escapeHtml(res.dataAsOf || 'Not provided') + '</strong></div>';
+    evidenceHtml += '<div class="evidence-source-list">' + sourceHtml + '</div>';
+    evidenceHtml += '</div></div>';
+
+    // Technical tab
+    let technicalHtml = '<div id="evidence-tab-technical" class="evidence-tab-content" style="display: none;">';
+    technicalHtml += '<h3 style="font-family: var(--font-serif); font-size: 20px; margin-bottom: 16px;">Technical Trace</h3>';
+    technicalHtml += '<div style="margin-bottom: 24px; color: var(--text-secondary); font-size: 14px; line-height: 1.6;">';
+    const generatedSql = res.sql || res.queryGenerated || '';
+    technicalHtml += '<p><strong>Execution details:</strong> ' + escapeHtml(res.summary || 'Completed successfully') + '</p>';
+    technicalHtml += '<p><strong>Validation:</strong> Role authorization passed. AST check completed with no destructive operations detected.</p>';
+    if (sources.length > 0) {
+      technicalHtml += '<h4 style="margin-top: 16px; margin-bottom: 8px;">Physical schema</h4>';
+      technicalHtml += sources.map((source) => {
+        const physicalName = String(source.name || '').replace('enterprise_dw.', '');
+        const tableDef = (window.AriaMock.SCHEMA_CATALOG || []).find(table => table.name === physicalName);
+        return `<details class="technical-source-details">
+          <summary><code>${escapeHtml(physicalName)}</code></summary>
+          <p>${escapeHtml(tableDef ? tableDef.description : 'Physical source used by the generated query.')}</p>
+          ${tableDef && Array.isArray(tableDef.columns) ? `<div class="technical-column-list">${tableDef.columns.map(column => `<code>${escapeHtml(column.name)}</code>`).join(' ')}</div>` : ''}
+        </details>`;
+      }).join('');
+    }
+    if (generatedSql) {
+       technicalHtml += '<h4 style="margin-top: 16px; margin-bottom: 8px;">Generated SQL</h4>';
+       technicalHtml += '<pre class="sql-code-block" style="margin-top: 8px;"><code>' + escapeHtml(generatedSql) + '</code></pre>';
+       technicalHtml += '<button type="button" class="action-tool-btn evidence-copy-sql-btn" style="margin-top: 10px;">Copy SQL</button>';
+    }
+    technicalHtml += '</div></div>';
+    
+    body.innerHTML = understandingHtml + evidenceHtml + technicalHtml;
+
+    body.querySelectorAll('.evidence-source-btn').forEach((button) => {
+      button.addEventListener('click', () => openSourceTableModal(button.getAttribute('data-table-name')));
+    });
+
+    const copySqlButton = body.querySelector('.evidence-copy-sql-btn');
+    if (copySqlButton) {
+      copySqlButton.addEventListener('click', () => {
+        navigator.clipboard.writeText(generatedSql);
+        showToast('SQL query copied');
+      });
+    }
+
+    const editInterpretationButton = body.querySelector('.evidence-edit-interpretation-btn');
+    if (editInterpretationButton) {
+      editInterpretationButton.addEventListener('click', () => {
+        const conv = getActiveConversation();
+        if (!conv) return;
+        evidenceDesk.classList.remove('open');
+        openEditInterpretationModal(conv, msg.id);
+      });
+    }
+    
+    // Reset tabs
+    const tabs = evidenceDesk.querySelectorAll('.drawer-tab');
+    tabs.forEach((t, i) => {
+      t.classList.toggle('active', i === 0);
+      t.style.borderBottom = i === 0 ? '2px solid var(--accent-primary)' : 'none';
+      t.style.color = i === 0 ? 'var(--accent-primary)' : 'inherit';
+      
+      // Remove old event listeners by replacing the node
+      const newTab = t.cloneNode(true);
+      t.parentNode.replaceChild(newTab, t);
+      
+      newTab.addEventListener('click', () => {
+        // Deactivate all
+        evidenceDesk.querySelectorAll('.drawer-tab').forEach(nt => {
+          nt.classList.remove('active');
+          nt.style.borderBottom = 'none';
+          nt.style.color = 'inherit';
+        });
+        evidenceDesk.querySelectorAll('.evidence-tab-content').forEach(c => c.style.display = 'none');
+        
+        // Activate this
+        newTab.classList.add('active');
+        newTab.style.borderBottom = '2px solid var(--accent-primary)';
+        newTab.style.color = 'var(--accent-primary)';
+        
+        const contentId = ['evidence-tab-understanding', 'evidence-tab-evidence', 'evidence-tab-technical'][i];
+        document.getElementById(contentId).style.display = 'block';
+      });
+    });
+    
+    evidenceDesk.classList.add('open');
+  }
+
+    chatContainerEl.querySelectorAll('.btn-open-evidence').forEach((button) => {
+      button.addEventListener('click', () => {
+        const msg = conv.messages.find((item) => item.id === button.getAttribute('data-msg-id'));
+        if (msg) openEvidenceDesk(msg);
+      });
+    });
+
     // Attach dynamic handlers
     attachConversationEventHandlers(conv);
-    const pendingClarification = conv.messages.find((message) => message.type === 'clarification' && !message.resolvedAt && !message.resolvedPayload);
+    const pendingClarification = conv.messages.find((message) => message.type === 'clarification' && !message.resolvedAt && !message.resolvedPayload && !message.clarificationDismissedAt);
     if (pendingClarification && clarificationModalBackdrop && !clarificationModalBackdrop.classList.contains('open')) {
       requestAnimationFrame(() => openClarificationModal(pendingClarification.id, chatContainerEl.querySelector(`[data-msg-id="${pendingClarification.id}"]`)));
     }
@@ -526,10 +690,18 @@
   }
 
   function renderUserMessageHtml(msg, isLastUserTurn) {
+    const rerunScope = msg.scopeEditSummary;
     return `
       <div class="chat-row user-row" id="msg_row_${msg.id}">
         <div class="user-bubble-container">
+          <div class="conversation-turn-label question-turn-label">${msg.isScopeRerun ? 'Re-run with edited scope' : 'Your question'}</div>
           <div class="user-bubble">${escapeHtml(msg.text)}</div>
+          ${rerunScope ? `
+            <div class="user-scope-rerun-summary" aria-label="Edited scope applied to this re-run">
+              <strong>Updated applied scope</strong>
+              <span>${escapeHtml(rerunScope)}</span>
+            </div>
+          ` : ''}
           <div class="user-bubble-meta">
             <span>${msg.time || ''}</span>
             ${isLastUserTurn ? `<span class="user-edit-btn" data-msg-id="${msg.id}" data-text="${escapeHtml(msg.text)}">Edit</span>` : ''}
@@ -554,11 +726,16 @@
     const metricLabel = (scope.metric && scope.metric.label) ? scope.metric.label : 'Enterprise Records';
     const metricSource = (scope.metric && scope.metric.source) ? scope.metric.source : 'Inferred from question';
 
-    const breakdownLabel = (scope.breakdown && scope.breakdown.label) ? scope.breakdown.label : 'Standard business breakdown';
-    const breakdownSource = (scope.breakdown && scope.breakdown.source) ? scope.breakdown.source : 'Inferred from question';
+    const grain = scope.grain || scope.breakdown;
+    const grainLabel = (grain && grain.label) ? grain.label : 'Standard business grain';
+    const grainSource = (grain && grain.source) ? grain.source : 'Inferred from question';
 
     const domainLabel = (scope.domain && (scope.domain.label || scope.domain.value)) ? (scope.domain.label || scope.domain.value) : (scope.domain || 'All Domains');
     const domainSource = (scope.domain && scope.domain.source) ? scope.domain.source : ((scope.source && scope.source.domain) ? scope.source.domain : 'Inferred from question');
+    const domainValues = scope.domain && Array.isArray(scope.domain.values) && scope.domain.values.length > 0
+      ? scope.domain.values
+      : [domainLabel];
+    const hasDomainLimits = scope.domain && Array.isArray(scope.domain.values) && scope.domain.values.length > 0 && domainSource.toLowerCase().includes('limited');
 
     const projectLabel = (scope.projectScope && scope.projectScope.label) ? scope.projectScope.label : 'All enterprise projects';
     const projectSource = (scope.projectScope && scope.projectScope.source) ? scope.projectScope.source : 'All active portfolios';
@@ -580,7 +757,7 @@
             <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
             </svg>
-            <span class="interpretation-card-title">How I interpreted your question</span>
+            <span class="interpretation-card-title">Applied scope</span>
           </div>
           <div class="interpretation-header-actions">
             <span class="interpretation-basis">Basis: <strong>${escapeHtml(calendarBasis)}</strong></span>
@@ -602,15 +779,16 @@
           </div>
 
           <div class="interpretation-item">
-            <span class="interpretation-item-label">Breakdown</span>
-            <span class="interpretation-item-val">${escapeHtml(breakdownLabel)}</span>
-            <span class="scope-source-tag ${getInterpSourceClass(breakdownSource)}">${escapeHtml(breakdownSource)}</span>
+            <span class="interpretation-item-label">Grain</span>
+            <span class="interpretation-item-val">${escapeHtml(grainLabel)}</span>
+            <span class="scope-source-tag ${getInterpSourceClass(grainSource)}">${escapeHtml(grainSource)}</span>
           </div>
 
           <div class="interpretation-item">
-            <span class="interpretation-item-label">Business area</span>
-            <span class="interpretation-item-val">${escapeHtml(domainLabel)}</span>
+            <span class="interpretation-item-label">${hasDomainLimits ? 'Search domains' : 'Business area'}</span>
+            <span class="applied-domain-chips">${domainValues.map(domain => `<span class="applied-domain-chip">${escapeHtml(domain)}</span>`).join('')}</span>
             <span class="scope-source-tag ${getInterpSourceClass(domainSource)}">${escapeHtml(domainSource)}</span>
+            ${hasDomainLimits ? '<span class="domain-access-note">Search boundary only · access policies are evaluated separately</span>' : ''}
           </div>
 
           <div class="interpretation-item">
@@ -628,21 +806,19 @@
           <div class="interpretation-item">
             <span class="interpretation-item-label">Currency / Unit</span>
             <span class="interpretation-item-val">${escapeHtml(currencyLabel)}</span>
-            <span class="scope-source-tag source-standard">System standard</span>
+            <span class="scope-source-tag ${getInterpSourceClass(scope.currencyObj && scope.currencyObj.source)}">${escapeHtml((scope.currencyObj && scope.currencyObj.source) || 'System standard')}</span>
           </div>
         </div>
 
-        ${assumptions.length > 0 ? `
-          <div class="interpretation-assumptions-block">
+        <div class="interpretation-assumptions-block">
             <div class="interpretation-assumptions-title">
               <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
               <span>Assumptions:</span>
             </div>
-            <ul class="interpretation-assumptions-list">
-              ${assumptions.map(a => `<li>${escapeHtml(a)}</li>`).join('')}
-            </ul>
-          </div>
-        ` : ''}
+            ${assumptions.length > 0
+              ? `<ul class="interpretation-assumptions-list">${assumptions.map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ul>`
+              : '<div class="interpretation-assumptions-empty">No additional assumptions applied.</div>'}
+        </div>
       </div>
     `;
   }
@@ -684,9 +860,37 @@
   }
 
   function getDefaultResultView(pattern, res = {}) {
-    if (res.chart && (pattern === 'trend' || pattern === 'comparison')) return 'chart';
-    if (res.table) return 'table';
-    return res.chart ? 'chart' : 'none';
+    return getResultVisualDecision(pattern, res).kind === 'table' ? 'table' : 'chart';
+  }
+
+  function hasTemporalChartLabels(items = []) {
+    const temporalLabel = /(^|\b)(q[1-4]|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|fy\s*\d{2,4}|\d{4}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})(\b|$)/i;
+    return items.length > 1 && items.every(item => temporalLabel.test(String(item.label || '')));
+  }
+
+  function getResultVisualDecision(pattern, res = {}) {
+    const chart = res.chart;
+    const items = chart && Array.isArray(chart.items) ? chart.items : [];
+    const values = items.map(item => Number(item.value));
+    const allPlottedValues = items.flatMap(item => [item.value, item.targetValue, item.secondaryValue]
+      .filter(value => value !== undefined && value !== null)
+      .map(value => Number(value)));
+    const hasInvalidValue = allPlottedValues.some(value => !Number.isFinite(value));
+    const hasNegativeValue = allPlottedValues.some(value => value < 0);
+    const semantic = chart && String(chart.semantic || chart.relationship || '').toLowerCase();
+
+    if (!chart || !items.length || hasInvalidValue) return { kind: 'table', reason: 'No valid chart series is available.' };
+    if (hasNegativeValue) return { kind: 'table', reason: 'Negative values are shown in a table to preserve their sign and meaning.' };
+    if (semantic === 'composition' || semantic === 'part-to-whole') {
+      const total = values.reduce((sum, value) => sum + value, 0);
+      return total > 0
+        ? { kind: 'pie', reason: 'The values form a valid part-to-whole composition.' }
+        : { kind: 'table', reason: 'A composition chart requires a positive total.' };
+    }
+    if (pattern === 'trend' && hasTemporalChartLabels(items)) return { kind: 'line', reason: 'Values are ordered over time.' };
+    if (pattern === 'ranking') return { kind: 'bar', reason: 'Categories are ranked by one comparable measure.' };
+    if (pattern === 'comparison' && semantic === 'ranking') return { kind: 'bar', reason: 'Categories are ranked by one comparable measure.' };
+    return { kind: 'table', reason: 'This result does not have a chart relationship that can be represented safely.' };
   }
 
   function getActiveResultView(msg, pattern, res) {
@@ -750,20 +954,24 @@
   function renderCompactScope(scope, msg) {
     if (!scope) return '';
     const metric = scope.metric ? scope.metric.label : 'Business metric';
+    const grain = scope.grain || scope.breakdown;
+    const grainLabel = grain ? grain.label : 'Standard business grain';
     const period = scope.time ? scope.time.label : (scope.periodLabel || 'Current scope');
     const project = scope.projectScope ? scope.projectScope.label : 'All projects';
+    const domain = scope.domain ? (scope.domain.label || scope.domain.value || scope.domain) : 'All domains';
+    const currency = scope.currencyObj ? scope.currencyObj.label : (scope.currency || 'Not specified');
     const msgId = msg ? msg.id : '';
     return `
       <details class="result-scope-disclosure">
         <summary>
           <span class="result-scope-summary-label">Applied scope</span>
-          <span class="result-scope-summary-value">${escapeHtml(metric)} · ${escapeHtml(period)} · ${escapeHtml(project)}</span>
+          <span class="result-scope-summary-value">${escapeHtml(metric)} · ${escapeHtml(grainLabel)} · ${escapeHtml(period)} · ${escapeHtml(project)} / ${escapeHtml(domain)} · ${escapeHtml(currency)}</span>
           <span class="result-scope-summary-action">Review or edit</span>
         </summary>
         <div class="result-scope-expanded">
           ${msgId ? `
             <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
-              <button type="button" class="action-tool-btn btn-inspect-scope" data-msg-id="${msgId}" style="font-size: 11.5px; padding: 4px 10px;">
+              <button type="button" class="action-tool-btn btn-inspect-scope" data-msg-id="${msgId}" style="font-size: 12px; padding: 4px 10px;">
                 <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                 <span>Open in Scope &amp; Sources panel</span>
               </button>
@@ -797,30 +1005,44 @@
     if (!res.table && !res.chart) return '';
     if (pattern === 'entity_detail') return renderEntityDetailHtml(res.table);
 
-    const tableHtml = generateTableHtml(res.table, msg.id, activeView, msg.tablePage || 1, msg.tableSearch || '');
-    const chartHtml = generateChartHtml(res.chart, msg.id, msg.chartType || (pattern === 'trend' ? 'line' : 'bar'));
-    const hasBoth = Boolean(res.table && res.chart);
-    const toggle = hasBoth ? `
-      <div class="result-view-header">
-        <span class="evidence-section-heading">Supporting evidence</span>
-        <div class="table-view-toggle">
-          <button type="button" class="view-btn ${activeView === 'table' ? 'active' : ''}" data-view="table" data-msg-id="${msg.id}">Records</button>
-          <button type="button" class="view-btn ${activeView === 'chart' ? 'active' : ''}" data-view="chart" data-msg-id="${msg.id}">Visual</button>
-        </div>
-      </div>
-    ` : '';
-    const content = activeView === 'chart' ? chartHtml : tableHtml;
+    const visualDecision = getResultVisualDecision(pattern, res);
+    const fallbackTable = res.table || (res.chart && res.chart.items ? {
+      title: `${res.chart.title || 'Result'} — table view`,
+      headers: ['Business category', `Value${res.chart.unit ? ` (${res.chart.unit})` : ''}`],
+      columns: ['label', 'value'],
+      types: ['string', 'number'],
+      rows: res.chart.items.map(item => ({ label: item.label, value: item.value }))
+    } : null);
+    const tableHtml = generateTableHtml(fallbackTable, msg.id, activeView, msg.tablePage || 1, msg.tableSearch || '');
+    const chartHtml = visualDecision.kind !== 'table' ? generateChartHtml(res.chart, msg.id, visualDecision.kind) : '';
+    const content = visualDecision.kind === 'table' ? tableHtml : chartHtml;
+    const heading = `<div class="result-view-header"><span class="evidence-section-heading">Supporting evidence</span><span class="visual-choice-note" title="${escapeHtml(visualDecision.reason)}">${visualDecision.kind === 'table' ? 'Table' : `${visualDecision.kind.charAt(0).toUpperCase() + visualDecision.kind.slice(1)} chart`}</span></div>`;
 
     if (pattern === 'kpi') {
       return `
         <details class="supporting-evidence-disclosure">
           <summary>View supporting evidence</summary>
-          <div class="supporting-evidence-content">${toggle}${content}</div>
+          <div class="supporting-evidence-content">${heading}${content}</div>
         </details>
       `;
     }
 
-    return `<section class="result-evidence">${toggle}${content}</section>`;
+    return `<section class="result-evidence">${heading}${content}</section>`;
+  }
+
+  function renderRunMetadata(msg, scope) {
+    const domain = scope && scope.domain ? (scope.domain.label || scope.domain.value || scope.domain) : 'Auto';
+    const period = scope && scope.time ? scope.time.label : (scope && scope.periodLabel ? scope.periodLabel : 'No added time filter');
+    const project = scope && scope.projectScope ? (scope.projectScope.label || scope.projectScope.value || scope.projectScope) : 'All applicable projects';
+    const runAt = new Date(msg.timestamp || Date.now()).toLocaleString();
+    const runNumber = Number(msg.runNumber) || 1;
+    return `
+      <div class="answer-run-metadata" aria-label="Answer run metadata">
+        <span><strong>Run:</strong> ${runNumber}</span>
+        <span><strong>Last run:</strong> ${escapeHtml(runAt)}</span>
+        <span><strong>Scope:</strong> ${escapeHtml(`${domain} · ${period} · ${project}`)}</span>
+      </div>
+    `;
   }
 
   function renderResultStateHtml(msg, stateType) {
@@ -838,11 +1060,15 @@
           <div class="result-state-label">${escapeHtml(config.label)}</div>
           <h3>${escapeHtml(config.title)}</h3>
           <p>${escapeHtml(config.body)}</p>
+          ${renderRunMetadata(msg, scope)}
           ${res.answer ? `<div class="result-state-detail">${formatMarkdownBold(res.answer.replace(/^Combination Not Supported in Mock Ledger:\s*/i, ''))}</div>` : ''}
           ${renderCompactScope(scope, msg)}
+          ${renderBusinessProvenance(res)}
           <div class="result-state-actions">
             ${scope ? `<button type="button" class="action-tool-btn btn-edit-interpretation" data-msg-id="${msg.id}">Edit scope</button>` : ''}
-            <button type="button" class="action-tool-btn btn-regenerate" data-msg-id="${msg.id}">Try again</button>
+            ${stateType === 'unsupported'
+              ? '<span class="result-action-note">The previous scope remains on this historical result. Applying a new scope creates a new version.</span>'
+              : `<button type="button" class="action-tool-btn btn-run-again" data-msg-id="${msg.id}">Run again with this scope</button>`}
           </div>
           ${stateType === 'partial' ? renderEvidenceHtml(res, msg, inferResultPattern(res), getActiveResultView(msg, inferResultPattern(res), res)) : ''}
         </div>
@@ -851,32 +1077,61 @@
   }
 
   const BUSINESS_SOURCE_DEFINITIONS = {
-    finance_receivables_ledger: { label: 'Receivables Ledger', owner: 'Finance Operations', grain: 'One receivable balance per buyer contract and reporting date', cadence: 'Demo refresh: daily', definition: 'Open amounts due, aging and payment status as of the displayed data date.', exclusions: 'Paid balances are excluded from outstanding totals.' },
-    sales_contracts: { label: 'Sales Contracts', owner: 'Sales Operations', grain: 'One executed buyer contract', cadence: 'Demo refresh: daily', definition: 'Executed purchase agreements, buyer allocation and signed contract value.', exclusions: 'Draft and cancelled agreements are excluded.' },
-    dim_projects: { label: 'Project Master', owner: 'Project Controls', grain: 'One development project', cadence: 'Demo refresh: daily', definition: 'Canonical project names, codes, asset class and lifecycle status.', exclusions: 'Archived proposals are excluded from active-project views.' },
-    dim_vendors: { label: 'Supplier Directory', owner: 'Procurement', grain: 'One supplier account', cadence: 'Demo refresh: weekly', definition: 'Supplier identity, commodity group and commercial terms.', exclusions: 'Sensitive contacts remain restricted.' },
-    finance_ap_invoices: { label: 'Supplier Invoices', owner: 'Finance Operations', grain: 'One supplier invoice', cadence: 'Demo refresh: daily', definition: 'Invoice amounts and approval status linked to suppliers and purchase orders.', exclusions: 'Unsubmitted invoice drafts are excluded.' },
-    procurement_purchase_orders: { label: 'Purchase Orders', owner: 'Procurement', grain: 'One purchase order', cadence: 'Demo refresh: daily', definition: 'Approved and pending procurement commitments by supplier and project.', exclusions: 'Cancelled purchase orders are excluded.' },
-    construction_progress_log: { label: 'Construction Progress', owner: 'Project Controls', grain: 'One project progress observation per reporting date', cadence: 'Demo refresh: weekly', definition: 'Planned and actual construction progress used to identify schedule variance.', exclusions: 'Unapproved field estimates are excluded.' },
-    dim_property_assets: { label: 'Property Portfolio', owner: 'Property Management', grain: 'One managed property asset', cadence: 'Demo refresh: weekly', definition: 'Managed property attributes, asset class and portfolio grouping.', exclusions: 'Disposed assets are excluded from current portfolio metrics.' },
-    property_leases: { label: 'Lease Register', owner: 'Property Management', grain: 'One tenant lease', cadence: 'Demo refresh: daily', definition: 'Lease area, occupancy status, expiry and renewal information.', exclusions: 'Draft leases are excluded from occupancy.' }
+    finance_receivables_ledger: { label: 'Receivables Ledger', owner: 'Finance Operations', grain: 'One receivable balance per buyer contract and reporting date', cadence: 'Daily', definition: 'Open amounts due, aging and payment status as of the displayed data date.', calculation: 'Outstanding receivables are summed from open amount due; aging metrics use days past due.', exclusions: 'Paid balances and inter-company transfers are excluded.' },
+    sales_contracts: { label: 'Sales Contracts', owner: 'Sales Operations', grain: 'One executed buyer contract', cadence: 'Daily', definition: 'Executed purchase agreements, buyer allocation and signed contract value.', calculation: 'Contract value is summed from active signed agreements; contract count uses distinct agreements.', exclusions: 'Draft, cancelled and terminated agreements are excluded.' },
+    dim_projects: { label: 'Project Portfolio', owner: 'Project Controls', grain: 'One development project', cadence: 'Daily', definition: 'Canonical project identity, code, asset class and lifecycle status used to group results.', calculation: 'Provides project attributes and grouping; it does not contribute monetary values directly.', exclusions: 'Archived proposals are excluded from active-project views.' },
+    dim_vendors: { label: 'Supplier Directory', owner: 'Procurement', grain: 'One supplier account', cadence: 'Weekly', definition: 'Supplier identity, commodity group, rating and commercial terms.', calculation: 'Provides supplier and commodity classifications used to group procurement measures.', exclusions: 'Inactive suppliers and sensitive contact details are excluded.' },
+    finance_ap_invoices: { label: 'Supplier Invoices', owner: 'Finance Operations', grain: 'One supplier invoice', cadence: 'Daily', definition: 'Invoice amounts and approval status linked to suppliers and purchase orders.', calculation: 'Invoiced spend is the sum of approved invoice amounts within the applied period.', exclusions: 'Draft, rejected and unsubmitted invoices are excluded.' },
+    procurement_purchase_orders: { label: 'Purchase Orders', owner: 'Procurement', grain: 'One purchase order', cadence: 'Daily', definition: 'Approved and pending procurement commitments by supplier and project.', calculation: 'PO value is summed from order totals; lead time is averaged from issue to delivery.', exclusions: 'Cancelled purchase orders are excluded.' },
+    procurement_contracts: { label: 'Supplier Contracts', owner: 'Procurement', grain: 'One supplier agreement', cadence: 'Daily', definition: 'Commercial agreements with suppliers, including status, value and expiry.', calculation: 'Counts active agreements and sums their signed value within the applied scope.', exclusions: 'Draft, terminated and superseded agreements are excluded.' },
+    construction_progress_log: { label: 'Construction Progress', owner: 'Project Controls', grain: 'One project progress observation per reporting date', cadence: 'Weekly', definition: 'Planned and actual construction progress used to identify schedule variance.', calculation: 'Progress is the latest approved completion percentage; variance compares actual with plan.', exclusions: 'Unapproved field estimates are excluded.' },
+    construction_milestones: { label: 'Construction Milestones', owner: 'Project Controls', grain: 'One approved milestone per project', cadence: 'Weekly', definition: 'Baseline and actual milestone dates for active construction projects.', calculation: 'Schedule variance is calculated from approved baseline and actual or forecast dates.', exclusions: 'Cancelled and unapproved milestones are excluded.' },
+    construction_contracts: { label: 'Construction Contracts', owner: 'Commercial & Contracts', grain: 'One active construction agreement', cadence: 'Daily', definition: 'Signed construction contracts, contractual values and damages terms.', calculation: 'Contract value uses signed face value; damages use the active contractual rate and approved delay.', exclusions: 'Draft, terminated and superseded contracts are excluded.' },
+    contractor_delay_notices: { label: 'Contractor Delay Notices', owner: 'Project Controls', grain: 'One submitted delay notice', cadence: 'Daily', definition: 'Submitted and assessed contractor delay events and approved delay days.', calculation: 'Delay exposure uses approved delay days; unapproved claims remain informational only.', exclusions: 'Withdrawn notices are excluded.' },
+    contractor_disbursements: { label: 'Contractor Disbursements', owner: 'Finance Operations', grain: 'One certified contractor payment', cadence: 'Daily', definition: 'Certified amounts, retention and settlement status for contractor payments.', calculation: 'Disbursed value sums certified payments net of withheld retention where applicable.', exclusions: 'Uncertified claims and voided payments are excluded.' },
+    contractor_milestones: { label: 'Contractor Milestones', owner: 'Project Controls', grain: 'One contractor milestone assessment', cadence: 'Weekly', definition: 'Contractor delivery milestones and completion status against approved plans.', calculation: 'Completion uses the latest approved milestone assessment for each contract.', exclusions: 'Superseded and unapproved assessments are excluded.' },
+    dim_property_assets: { label: 'Property Portfolio', owner: 'Property Management', grain: 'One managed property asset', cadence: 'Weekly', definition: 'Managed property attributes, asset class and portfolio grouping.', calculation: 'Provides lettable-area and asset classifications used in occupancy calculations.', exclusions: 'Disposed assets are excluded from current portfolio metrics.' },
+    property_leases: { label: 'Lease Register', owner: 'Property Management', grain: 'One tenant lease', cadence: 'Daily', definition: 'Lease area, occupancy status, expiry and renewal information.', calculation: 'Occupancy is occupied area divided by net lettable area for active leases.', exclusions: 'Draft, expired and cancelled leases are excluded from current occupancy.' }
+    ,projects: { label: 'Project Portfolio', owner: 'Project Controls', grain: 'One real-estate project', cadence: 'Synthetic fixture', definition: 'CK1 project identity, lifecycle, type, cost and delivery attributes.', calculation: 'Provides project grouping for contract, construction and property measures.', exclusions: 'No fixture rows are excluded unless the applied scope specifies a status.' }
+    ,units: { label: 'Property Units', owner: 'Property Operations', grain: 'One physical property unit', cadence: 'Synthetic fixture', definition: 'CK1 unit inventory linked to project, building and phase.', calculation: 'Occupied-unit rate uses Occupied divided by Occupied plus Vacant units.', exclusions: 'Sold inventory is excluded from the occupancy denominator.' }
+    ,payment_schedules: { label: 'Buyer Payment Schedules', owner: 'Finance Operations', grain: 'One payment schedule per sales contract', cadence: 'Synthetic fixture', definition: 'Contract-level installment plan and payment frequency.', calculation: 'Links buyer contracts to their scheduled installments.', exclusions: 'No additional fixture exclusions.' }
+    ,payment_installments: { label: 'Buyer Installments', owner: 'Finance Operations', grain: 'One scheduled installment', cadence: 'Synthetic fixture', definition: 'Amount due, amount paid, due date and settlement status for each installment.', calculation: 'Outstanding amount equals amount due minus amount paid.', exclusions: 'Fully settled amounts contribute zero outstanding balance.' }
+    ,construction_progress: { label: 'Construction Progress', owner: 'Project Controls', grain: 'One progress observation per project phase and report date', cadence: 'Synthetic fixture', definition: 'CK1 milestone progress observations for project phases.', calculation: 'Latest progress uses the most recent report date for each phase.', exclusions: 'Older observations are excluded from latest-progress results.' }
+    ,project_phases: { label: 'Project Phases', owner: 'Project Controls', grain: 'One delivery phase per project', cadence: 'Synthetic fixture', definition: 'CK1 project phase identity, status and expected handover date.', calculation: 'Provides the phase grouping for progress reporting.', exclusions: 'No additional fixture exclusions.' }
+    ,lease_contracts: { label: 'Lease Register', owner: 'Property Operations', grain: 'One lease per unit and tenant', cadence: 'Synthetic fixture', definition: 'CK1 active lease dates, rent and currency.', calculation: 'Active leases support verification of occupied units.', exclusions: 'Inactive leases are excluded from current occupancy.' }
+    ,service_contracts: { label: 'Property Service Contracts', owner: 'Property Operations', grain: 'One vendor service agreement per project', cadence: 'Synthetic fixture', definition: 'CK1 recurring property-service agreements, fees and end dates.', calculation: 'Expiry results filter active contracts by contract end date.', exclusions: 'Inactive service contracts are excluded.' }
+    ,vendors: { label: 'Service Vendor Directory', owner: 'Property Operations', grain: 'One service vendor', cadence: 'Synthetic fixture', definition: 'CK1 vendor identity, category, rating and active status.', calculation: 'Provides vendor attributes for service-contract results.', exclusions: 'Inactive vendors are excluded where specified.' }
+    ,audit_logs: { label: 'Data Access and Query Audit Logs', owner: 'Data Governance', grain: 'One access or natural-language query event', cadence: 'Synthetic fixture', definition: 'CK1 audit events and policy decisions for governed data access.', calculation: 'Decision counts group events by ALLOW, MASK or DENY.', exclusions: 'Counts describe only the displayed fixture window.' }
+    ,data_access_policies: { label: 'Data Access Policies', owner: 'Data Governance', grain: 'One policy per role and data scope', cadence: 'Synthetic fixture', definition: 'CK1 allow, mask and deny rules for tables or columns.', calculation: 'Policy metadata explains access decisions; it does not contribute business measures.', exclusions: 'Inactive policies are excluded.' }
   };
 
   function getBusinessSourceDefinition(name) {
-    const physicalName = String(name || '').replace('enterprise_dw.', '');
+    const physicalName = String(name || '').replace('enterprise_dw.', '').split('.').pop();
     const tableDef = (window.AriaMock.SCHEMA_CATALOG || []).find((table) => table.name === physicalName || table.name === name);
     const curated = BUSINESS_SOURCE_DEFINITIONS[physicalName];
     if (curated) return { ...curated, physicalName, domain: tableDef ? tableDef.domain : 'Enterprise data' };
     return {
       physicalName,
-      label: tableDef ? tableDef.description.split(/[,.]/)[0] : 'Prototype business source',
+      label: 'Enterprise Business Records',
       domain: tableDef ? tableDef.domain : 'Enterprise data',
       owner: 'Owner not specified in prototype',
       grain: 'Record grain not yet documented',
       cadence: 'Refresh cadence not yet documented',
       definition: tableDef ? tableDef.description : 'Definition not yet documented for this prototype source.',
+      calculation: 'Calculated according to the metric and applied scope shown with the result.',
       exclusions: 'No additional exclusions documented.'
     };
+  }
+
+  function renderBusinessProvenance(res) {
+    const sources = Array.isArray(res.sources) ? res.sources : [];
+    const sourceLabels = sources.map(source => getBusinessSourceDefinition(source.name).label);
+    return `
+      <section class="result-provenance" aria-label="Data freshness and business sources">
+        <div><span>Data freshness</span><strong>${escapeHtml(res.dataAsOf || 'Not provided')}</strong></div>
+        <div><span>Business sources</span><strong>${escapeHtml(sourceLabels.length ? sourceLabels.join(', ') : 'Enterprise business records')}</strong></div>
+      </section>
+    `;
   }
 
   function renderAgentMessageHtml(msg, msgIdx) {
@@ -892,168 +1147,109 @@
 
     const res = msg.resultsData || {};
     const resultState = getResultState(res);
-    if (resultState === 'no_data' || resultState === 'unsupported') {
+    if (resultState === 'no_data' || resultState === 'unsupported' || resultState === 'partial') {
       return renderResultStateHtml(msg, resultState);
     }
     const pattern = inferResultPattern(res);
     const activeView = getActiveResultView(msg, pattern, res);
     const scope = msg.appliedScope || res.appliedScope;
-    const sourcesHtml = (res.sources || []).map((s) => `
-      <button type="button" class="source-badge-btn" data-table-name="${escapeHtml(s.name)}" title="Open business source definition">
-        <svg width="10" height="10" fill="currentColor" viewBox="0 0 20 20"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2zM3 16a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1v-2z"/></svg>
-        ${escapeHtml(getBusinessSourceDefinition(s.name).label)}
-      </button>
-    `).join('');
-    const sourceDefinitionsHtml = (res.sources || []).map((source) => {
-      const definition = getBusinessSourceDefinition(source.name);
-      return `<article class="business-source-definition">
-        <div><strong>${escapeHtml(definition.label)}</strong><span>${escapeHtml(definition.domain)}</span></div>
-        <p>${escapeHtml(definition.definition)}</p>
-        <dl><div><dt>Grain</dt><dd>${escapeHtml(definition.grain)}</dd></div><div><dt>Refresh</dt><dd>${escapeHtml(definition.cadence)}</dd></div><div><dt>Owner</dt><dd>${escapeHtml(definition.owner)}</dd></div></dl>
-      </article>`;
-    }).join('');
-
-    const answerBody = state.settings.detailLevel === 'concise' && res.answerConcise
-      ? res.answerConcise
-      : res.answer;
-
-    const isPinned = window.AriaMock.getSavedInsights(state.currentUser ? state.currentUser.id : 'default').some(a => a.sourceMessageId === msg.id || a.id === msg.id);
+    
+    // 1. Business area and reporting period
+    const area = scope && scope.domain ? (scope.domain.label || scope.domain.value || scope.domain) : 'Enterprise';
+    const period = scope && scope.time ? scope.time.label : (scope && scope.periodLabel ? scope.periodLabel : 'Current scope');
+    
+    // 2. Direct answer headline
+    const headline = res.answer || 'Business Analysis';
+    
+    // 3. Primary number or conclusion
+    const highlights = getAnswerHighlights(headline, scope);
+    const primaryNumber = highlights.primary || '';
+    
+    // 4. Concise interpretation
+    const interpretationText = `Based on ${escapeHtml(area)} data for ${escapeHtml(period)}, analysis indicates key patterns.`;
+    
+    // 5. Supporting visual or data
+    const evidenceHtml = renderEvidenceHtml(res, msg, pattern, activeView);
+    
+    // 6. Why it matters
+    const whyItMatters = "Understanding these metrics enables proactive operational adjustments and better financial forecasting.";
+    
+    // 7. Recommended next action
+    const nextAction = "Review underlying records in Evidence Desk or drill down by region.";
+    const userId = state.currentUser ? state.currentUser.id : 'default';
+    const savedInsights = window.AriaMock && window.AriaMock.getSavedInsights
+      ? window.AriaMock.getSavedInsights(userId)
+      : [];
+    const isSaved = savedInsights.some((item) => item.sourceMessageId === msg.id);
+    const hasTable = Boolean(res.table);
+    const canDownload = hasTable;
+    const followUps = Array.isArray(res.followUps) ? res.followUps : [];
 
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
-        <div class="agent-response-card result-canvas result-canvas-${pattern}">
-          <!-- Superseded Notice (if this interpretation was later re-run) -->
-          ${msg.isSuperseded ? `
-            <div class="superseded-callout">
-              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-              <span>This answer has been superseded by an updated interpretation below.</span>
-            </div>
-          ` : ''}
-
-          <!-- Re-run notice (if this was created from editing an earlier answer) -->
-          ${msg.sourceMessageId ? `
-            <div class="rerun-callout">
-              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-              <span>Re-run with edited interpretation (Original response preserved above)</span>
-            </div>
-          ` : ''}
-
-          ${resultState === 'partial' ? `
-            <div class="partial-result-banner">
-              <strong>Partial result</strong>
-              <span>${escapeHtml(res.partialReason || 'Some supporting sources were unavailable; available evidence is shown below.')}</span>
-            </div>
-          ` : ''}
-
-          <!-- Answer and key conclusion come first -->
-          ${renderResultHero(pattern, answerBody, scope)}
-
-          <!-- Applied scope stays compact until requested -->
-          ${renderCompactScope(scope, msg)}
-
-          <!-- Pattern-specific evidence -->
-          ${renderEvidenceHtml(res, msg, pattern, activeView)}
-
-          <!-- Freshness and business sources -->
-          <div class="result-provenance-row">
-            <span class="result-freshness">Data as of <strong>${escapeHtml(res.dataAsOf || 'Yesterday 23:59 UTC')}</strong></span>
-            ${sourcesHtml ? `<div class="result-business-sources"><span>Sources</span>${sourcesHtml}</div>` : ''}
+        <div class="agent-response-card" data-msg-id="${msg.id}">
+          <div class="conversation-turn-label answer-turn-label">
+            <span class="answer-turn-mark" aria-hidden="true">A</span>
+            <span>${msg.runAgainOfMessageId ? 'Aria answer · Run again' : (msg.sourceMessageId ? 'Aria answer · Reinterpreted scope' : 'Aria answer')}</span>
           </div>
-
-          <details class="business-definitions" open>
-            <summary>Sources &amp; definitions</summary>
-            ${scope && scope.metric ? `<div class="metric-definition"><strong>${escapeHtml(scope.metric.label || 'Metric')}</strong><span>${escapeHtml(res.confidenceNote || 'Calculated for the applied scope and data date shown above.')}</span></div>` : ''}
-            <div class="business-source-definition-list">${sourceDefinitionsHtml || '<p>No business source metadata was supplied for this result.</p>'}</div>
-          </details>
-
-          <!-- Pattern-aware actions -->
-          <div class="response-actions-row">
-            <div class="action-tools-group">
-              <button type="button" class="action-tool-btn btn-inspect-scope" data-msg-id="${msg.id}" title="Review scope parameters and business sources">
-                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                <span>Review scope &amp; sources</span>
-              </button>
-              <button type="button" class="action-tool-btn btn-copy-answer" data-answer="${escapeHtml(answerBody)}" title="Copy answer text">
-                Copy answer
-              </button>
-              ${res.table ? `<button type="button" class="action-tool-btn btn-copy-table" data-msg-id="${msg.id}" title="Copy supporting data">${pattern === 'entity_detail' ? 'Copy details' : 'Copy records'}</button>` : ''}
-              ${(res.table && (pattern === 'ranking' || pattern === 'record_list' || pattern === 'comparison')) ? `<button type="button" class="action-tool-btn btn-export-csv" data-msg-id="${msg.id}" title="Download supporting records">Download CSV</button>` : ''}
-              ${(resultState === 'partial' && scope) ? `<button type="button" class="action-tool-btn btn-edit-interpretation" data-msg-id="${msg.id}">Edit scope</button>` : ''}
-              <button type="button" class="action-tool-btn btn-pin-answer ${isPinned ? 'pinned' : ''}" data-msg-id="${msg.id}" title="${isPinned ? 'Remove from Saved' : 'Pin to Saved Insights'}">
-                ${isPinned ? 'Saved insight' : 'Save insight'}
-              </button>
-              <button type="button" class="action-tool-btn btn-regenerate" data-msg-id="${msg.id}" title="Regenerate this answer">
-                Run again
-              </button>
-              <details class="result-more-menu">
-                <summary class="action-tool-btn" aria-label="More result actions">
-                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg><span>More</span>
-                </summary>
-                <div class="result-more-popover">
-                  <button type="button" class="btn-inspect-scope" data-msg-id="${msg.id}">Review scope &amp; sources</button>
-                  <button type="button" class="btn-copy-answer" data-answer="${escapeHtml(answerBody)}">Copy answer</button>
-                  ${res.table ? `<button type="button" class="btn-copy-table" data-msg-id="${msg.id}">${pattern === 'entity_detail' ? 'Copy details' : 'Copy records'}</button>` : ''}
-                  ${(resultState === 'partial' && scope) ? `<button type="button" class="btn-edit-interpretation" data-msg-id="${msg.id}">Edit scope</button>` : ''}
-                  <button type="button" class="btn-regenerate" data-msg-id="${msg.id}">Run again</button>
-                  <button type="button" class="btn-feedback-up" data-msg-id="${msg.id}">Mark helpful</button>
-                  <button type="button" class="btn-feedback-down" data-msg-id="${msg.id}">Report an issue</button>
-                </div>
-              </details>
-            </div>
-
-            <div class="feedback-buttons">
-              <button type="button" class="feedback-btn btn-feedback-up" data-msg-id="${msg.id}" title="Helpful answer" aria-label="Thumbs up">👍</button>
-              <button type="button" class="feedback-btn btn-feedback-down" data-msg-id="${msg.id}" title="Report issue with answer" aria-label="Thumbs down">👎</button>
-            </div>
-          </div>
-
-          <!-- Technical evidence stays secondary -->
-          <details class="technical-details-accordion" style="margin-top: 12px; font-size: 11.5px; border-top: 1px solid var(--border-color); padding-top: 8px;">
-            <summary style="cursor: pointer; font-weight: 600; color: var(--text-secondary);">Technical details / Why this answer?</summary>
-
-            <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
-              <div class="answer-meta-bar" style="border: none; padding: 0; background: transparent;">
-                <span class="answer-meta-item">Data as of: ${escapeHtml(res.dataAsOf || 'Yesterday 23:59 UTC')}</span>
-                <span class="answer-meta-item">Simulated access view: ${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Default')}</span>
+          ${renderRunMetadata(msg, scope)}
+          <div class="message-content">
+            <div class="brief-container">
+              <div class="brief-meta">
+                ${escapeHtml(area)} · ${escapeHtml(period)}
               </div>
-
-              ${res.plainEnglishExplanation ? `
-                <div class="explanation-details" style="margin: 0; padding: 8px; background: var(--bg-hover); border-radius: 4px;">
-                  <strong style="display:block; margin-bottom: 4px;">How the result was produced:</strong>
-                  ${escapeHtml(res.plainEnglishExplanation)}
+              <div class="brief-headline">
+                ${formatMarkdownBold(headline)}
+              </div>
+              ${primaryNumber ? `
+                <div class="brief-number">
+                  ${escapeHtml(primaryNumber)}
                 </div>
               ` : ''}
-
-              <details class="sql-accordion" ${state.settings.showSqlDefault ? 'open' : ''} style="margin: 0;">
-                <summary class="sql-summary" style="list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--bg-surface); border: 1.5px solid var(--border-color); border-radius: 6px; font-weight: 600; color: var(--text-primary); transition: all 0.2s ease; margin-bottom: 8px;">
-                  <div class="sql-summary-left" style="display: flex; align-items: center; gap: 8px;">
-                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
-                    <span>View Generated SQL Query</span>
-                  </div>
-                  <div style="display: flex; align-items: center; gap: 12px;">
-                    <button type="button" class="btn-copy-sql action-tool-btn" data-sql="${escapeHtml(res.sql || '')}" onclick="event.preventDefault();" style="padding: 4px 8px; font-size: 11px;">Copy SQL</button>
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" class="sql-chevron"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                  </div>
-                </summary>
-                <pre class="sql-code-block" style="margin-top: 8px;"><code>${escapeHtml(res.sql || '-- No SQL executed')}</code></pre>
-              </details>
-            </div>
-          </details>
-
-          <!-- Suggested next actions -->
-          ${res.followUps && res.followUps.length > 0 ? `
-            <div class="followups-container">
-              <div class="followups-label">Next actions</div>
-              <div class="followups-chips-list">
-                ${res.followUps.map((f) => `
-                  <button type="button" class="followup-chip" data-query="${escapeHtml(f)}">
-                    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                    ${escapeHtml(f)}
-                  </button>
-                `).join('')}
+              <div class="brief-interpretation">
+                ${interpretationText}
+              </div>
+              ${renderCompactScope(scope, msg)}
+              ${renderBusinessProvenance(res)}
+              
+              <div class="brief-evidence">
+                ${evidenceHtml}
+              </div>
+              
+              <div class="brief-why">
+                <strong style="text-transform: uppercase; font-size: 12px; letter-spacing: 1px; margin-bottom: 8px; display: block; color: var(--text-muted);">Why it matters</strong>
+                ${whyItMatters}
+              </div>
+              
+              <div class="brief-action">
+                Action: ${nextAction}
               </div>
             </div>
-          ` : ''}
+          </div>
+          
+          <div class="agent-footer answer-footer">
+            <div class="answer-primary-actions">
+              <button type="button" class="action-tool-btn btn-open-evidence" data-msg-id="${msg.id}">Open Evidence Desk</button>
+            </div>
+            <details class="answer-actions-menu">
+              <summary class="action-tool-btn">More actions</summary>
+              <div class="answer-actions-popover">
+                <button type="button" class="action-tool-btn btn-copy-answer" data-answer="${escapeHtml(headline)}">Copy answer</button>
+                ${hasTable ? `<button type="button" class="action-tool-btn btn-copy-table" data-msg-id="${msg.id}">Copy records</button>` : ''}
+                ${canDownload ? `<button type="button" class="action-tool-btn btn-export-csv" data-msg-id="${msg.id}">Export CSV…</button>` : ''}
+                <button type="button" class="action-tool-btn btn-pin-answer ${isSaved ? 'pinned' : ''}" data-msg-id="${msg.id}">${isSaved ? 'Remove from saved' : 'Save insight'}</button>
+                <button type="button" class="action-tool-btn btn-run-again" data-msg-id="${msg.id}">Run again with this scope</button>
+                <button type="button" class="action-tool-btn btn-feedback-up" data-msg-id="${msg.id}">Helpful</button>
+                <button type="button" class="action-tool-btn btn-feedback-down" data-msg-id="${msg.id}">Report an issue</button>
+                ${followUps.length > 0 ? `
+                  <div class="answer-followups">
+                    <span>Continue exploring</span>
+                    ${followUps.map((query) => `<button type="button" class="followup-chip" data-query="${escapeHtml(query)}">${escapeHtml(query)}</button>`).join('')}
+                  </div>
+                ` : ''}
+              </div>
+            </details>
+          </div>
         </div>
       </div>
     `;
@@ -1062,23 +1258,43 @@
   function renderBlockedSecurityHtml(msg) {
     const combined = `${msg.title || ''} ${msg.message || ''} ${msg.reason || ''}`.toLowerCase();
     const isWriteAction = /delete|update|insert|write|modify|change record/.test(combined);
-    const title = isWriteAction ? 'This workspace is read-only' : 'You do not have access to this data';
+    const isAccessDenied = msg.blockedType === 'ACCESS_DENIED' || /access|payroll|compensation|salary/.test(combined);
+    const roleDef = state.currentUser && window.AriaMock.USER_ROLES
+      ? window.AriaMock.USER_ROLES[state.currentUser.role]
+      : null;
+    const restrictedData = msg.restrictedData || (/payroll|salary/.test(combined) ? 'Payroll data' : 'Requested data');
+    const allowedScope = Array.isArray(msg.allowedScope) && msg.allowedScope.length
+      ? msg.allowedScope
+      : ((roleDef && roleDef.allowedDomains) || []);
+    const title = isWriteAction
+      ? 'This workspace is read-only'
+      : (isAccessDenied ? `You don't have access to ${restrictedData.toLowerCase()}` : 'This request was blocked');
     const explanation = isWriteAction
       ? 'You can review and analyse records here, but this prototype cannot change business data.'
-      : 'The requested data is restricted for the current demo persona. The answer was not generated.';
+      : (isAccessDenied
+          ? `${restrictedData} is outside your current workspace access scope, so no restricted records were retrieved.`
+          : (msg.message || 'This request could not be processed under the current security policy.'));
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
         <div class="agent-response-card result-state-card state-denied">
           <div class="result-state-label">Restricted</div>
           <h3>${escapeHtml(title)}</h3>
           <p>${escapeHtml(explanation)}</p>
-          <div class="result-state-detail"><strong>Available scope:</strong> Ask a read-only question within the business areas shown in Data Guide.</div>
-          ${msg.details ? `<details class="state-details"><summary>More information</summary><p>${escapeHtml(msg.details)}</p></details>` : ''}
+          ${isAccessDenied ? `
+            <div class="access-boundary-summary">
+              <div><span>Unavailable data</span><strong>${escapeHtml(restrictedData)}</strong></div>
+              <div><span>Available scope</span><strong>${escapeHtml(allowedScope.length ? allowedScope.join(', ') : 'Business areas listed in Data Guide')}</strong></div>
+              <div><span>Why</span><strong>${escapeHtml(msg.reason || 'Restricted by data classification and access policy.')}</strong></div>
+              <div><span>Next step</span><strong>Review access guidance, then contact ${escapeHtml(msg.dataOwner || 'the relevant data owner')} through your organisation’s approved process.</strong></div>
+            </div>
+          ` : '<div class="result-state-detail"><strong>Available action:</strong> Ask a read-only business question within the areas shown in Data Guide.</div>'}
+          ${msg.details ? `<details class="state-details"><summary>Policy guidance</summary><p>${escapeHtml(msg.details)}</p></details>` : ''}
           <div class="result-state-actions">
             <button type="button" class="action-tool-btn btn-revise-question" data-msg-id="${msg.id}">Revise question</button>
-            <button type="button" class="action-tool-btn btn-access-guidance">View access guidance</button>
-            ${!isWriteAction ? '<button type="button" class="action-tool-btn" disabled title="Access requests are not connected in this prototype">Request access (not connected)</button>' : ''}
+            ${isAccessDenied ? '<button type="button" class="action-tool-btn btn-access-guidance">Access guidance &amp; data owner</button>' : ''}
+            ${isAccessDenied ? '<button type="button" class="action-tool-btn" disabled aria-describedby="access-request-unavailable" title="No access-request workflow is connected in this prototype">Request access</button>' : ''}
           </div>
+          ${isAccessDenied ? '<p class="access-request-note" id="access-request-unavailable">Request access is unavailable in this prototype; no request has been sent.</p>' : ''}
         </div>
       </div>
     `;
@@ -1095,7 +1311,13 @@
           <h3>${escapeHtml(resolved ? (msg.resolvedChoice || 'Scope confirmed') : 'One choice is needed before I run this question')}</h3>
           <p>${escapeHtml(msg.question || 'Please confirm the intended meaning or scope.')}</p>
           ${resolved
-            ? `<div class="clarification-resolution"><strong>Selected:</strong> ${escapeHtml(msg.resolvedChoice || '')}</div>`
+            ? `<div class="clarification-resolution">
+                <div><strong>Selected:</strong> ${escapeHtml(msg.resolvedChoice || '')}</div>
+                <span class="clarification-locked-note">
+                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+                  Confirmed request locked
+                </span>
+              </div>`
             : `<button type="button" class="action-tool-btn primary btn-open-clarification" data-msg-id="${msg.id}">Answer clarification</button>`}
         </div>
       </div>
@@ -1110,13 +1332,13 @@
                 <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                 <span>Scope Conflict Resolution Required</span>
               </div>
-              <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">Clarification required before query execution</span>
+              <span style="font-size: 12px; color: var(--text-muted); font-weight: 500;">Clarification required before query execution</span>
             </div>
 
             <p class="conflict-explanation" style="font-size: 14px; margin-bottom: 16px; line-height: 1.5; color: var(--text-primary);">${formatMarkdownBold(msg.question || '')}</p>
 
             ${msg.resolvedPayload ? `
-              <div class="conflict-resolved-banner" style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--success-bg); border: 1px solid var(--success-color); border-radius: var(--radius-sm); color: var(--success-color); font-size: 12.5px; font-weight: 600; margin-bottom: 12px;">
+              <div class="conflict-resolved-banner" style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--success-bg); border: 1px solid var(--success-color); border-radius: var(--radius-sm); color: var(--success-color); font-size: 12px; font-weight: 600; margin-bottom: 12px;">
                 <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
                 <span>Scope conflict resolved: Applied <strong>${escapeHtml(msg.resolvedChoice || msg.resolvedPayload)}</strong></span>
               </div>
@@ -1152,16 +1374,16 @@
               <span style="font-weight: 700;">Agent Clarification Required</span>
             </div>
             ${msg.understoodFields ? `
-              <div class="clarification-understood-box" style="margin-bottom: 16px; padding: 12px 14px; background: var(--bg-hover); border-left: 3px solid var(--accent-primary); border-radius: 6px; font-size: 12.5px;">
+              <div class="clarification-understood-box" style="margin-bottom: 16px; padding: 12px 14px; background: var(--bg-hover); border-left: 3px solid var(--accent-primary); border-radius: 6px; font-size: 12px;">
                 <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
                   <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                   <span>What I understood so far:</span>
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px 14px; color: var(--text-secondary);">
-                  ${msg.understoodFields.domain ? `<div><span style="color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 600; display: block;">Business area</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.domain)}</strong></div>` : ''}
-                  ${msg.understoodFields.metric ? `<div><span style="color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 600; display: block;">Metric</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.metric)}</strong></div>` : ''}
-                  ${msg.understoodFields.period ? `<div><span style="color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 600; display: block;">Period</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.period)}</strong></div>` : ''}
-                  ${msg.understoodFields.projectScope ? `<div><span style="color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 600; display: block;">Project scope</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.projectScope)}</strong></div>` : ''}
+                  ${msg.understoodFields.domain ? `<div><span style="color: var(--text-muted); font-size: 12px; text-transform: uppercase; font-weight: 600; display: block;">Business area</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.domain)}</strong></div>` : ''}
+                  ${msg.understoodFields.metric ? `<div><span style="color: var(--text-muted); font-size: 12px; text-transform: uppercase; font-weight: 600; display: block;">Metric</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.metric)}</strong></div>` : ''}
+                  ${msg.understoodFields.period ? `<div><span style="color: var(--text-muted); font-size: 12px; text-transform: uppercase; font-weight: 600; display: block;">Period</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.period)}</strong></div>` : ''}
+                  ${msg.understoodFields.projectScope ? `<div><span style="color: var(--text-muted); font-size: 12px; text-transform: uppercase; font-weight: 600; display: block;">Project scope</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.projectScope)}</strong></div>` : ''}
                 </div>
                 ${msg.understoodFields.fieldToClarify ? `
                   <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border-color); color: var(--warning-color); font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
@@ -1173,7 +1395,7 @@
             ` : ''}
             <p class="clarification-question" style="font-size: 15px; margin-bottom: 20px; line-height: 1.5;">${escapeHtml(msg.question || '')}</p>
             ${msg.resolvedPayload ? `
-              <div class="conflict-resolved-banner" style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--success-bg); border: 1px solid var(--success-color); border-radius: var(--radius-sm); color: var(--success-color); font-size: 12.5px; font-weight: 600; margin-bottom: 12px;">
+              <div class="conflict-resolved-banner" style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--success-bg); border: 1px solid var(--success-color); border-radius: var(--radius-sm); color: var(--success-color); font-size: 12px; font-weight: 600; margin-bottom: 12px;">
                 <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
                 <span>Clarification resolved: Selected <strong>${escapeHtml(msg.resolvedChoice || msg.resolvedPayload)}</strong></span>
               </div>
@@ -1200,6 +1422,16 @@
     activeClarificationTrigger = null;
   }
 
+  function cancelClarificationModal() {
+    const conv = getActiveConversation();
+    const msg = conv && conv.messages.find((item) => item.id === activeClarificationMessageId);
+    if (msg && !msg.resolvedAt && !msg.resolvedPayload) {
+      msg.clarificationDismissedAt = Date.now();
+      saveConversationsToStorage();
+    }
+    closeClarificationModal();
+  }
+
   function openClarificationModal(msgId, trigger) {
     const conv = getActiveConversation();
     const msg = conv && conv.messages.find((item) => item.id === msgId);
@@ -1207,32 +1439,63 @@
 
     activeClarificationMessageId = msgId;
     activeClarificationTrigger = trigger || null;
+    if (msg.clarificationDismissedAt) {
+      delete msg.clarificationDismissedAt;
+      saveConversationsToStorage();
+    }
     clarificationQuestionEl.textContent = msg.question || 'Which interpretation should I use?';
+    clarificationModalTitleEl.textContent = msg.subtype === 'interpretation_confirmation' ? 'Confirm interpretation' : 'Before I continue';
+    const originalQuestion = findUserQueryForAgentMsg(conv, msg) || msg.originalQuery || '';
+    clarificationOriginalQuestionTextEl.textContent = originalQuestion;
+    clarificationOriginalQuestionEl.hidden = !originalQuestion;
+    if (msg.subtype === 'interpretation_confirmation' && msg.originalQuery) {
+      const previewQuestionScope = window.AriaScope.parseQuestionScope(msg.originalQuery);
+      const previewIntent = window.AriaScope.parseQuestionIntent(msg.originalQuery, window.DEMO_CONTEXT);
+      const previewResolved = window.AriaScope.resolveSelectedScope(state.selectedScope, previewQuestionScope, window.DEMO_CONTEXT);
+      msg.understoodFields = {
+        metric: previewIntent.metric && previewIntent.metric.label,
+        grain: previewIntent.breakdown && previewIntent.breakdown.label,
+        period: previewResolved.periodLabel,
+        domain: previewResolved.domain || 'All business areas',
+        projectScope: previewIntent.projects && previewIntent.projects.label,
+        currency: /rate|progress|%/i.test(previewIntent.metric && previewIntent.metric.label) ? 'Not applicable (%)' : (/day|time/i.test(previewIntent.metric && previewIntent.metric.label) ? 'Not applicable (Days)' : (/count/i.test(previewIntent.metric && previewIntent.metric.label) ? 'Not applicable (Count)' : 'USD millions')),
+        assumptions: ['Read-only query', previewResolved.calendarBasis ? `${previewResolved.calendarBasis} calendar basis` : 'Workspace calendar basis']
+      };
+    }
     const understood = msg.understoodFields || {};
     const fieldLabel = (value) => value && typeof value === 'object' ? (value.label || value.value || value.key || '') : value;
     const understoodItems = [
-      fieldLabel(understood.metric) && `Metric: ${fieldLabel(understood.metric)}`,
-      fieldLabel(understood.period) && `Period: ${fieldLabel(understood.period)}`,
-      fieldLabel(understood.domain) && `Business area: ${fieldLabel(understood.domain)}`,
-      fieldLabel(understood.projectScope) && `Project: ${fieldLabel(understood.projectScope)}`
-    ].filter(Boolean);
+      { label: 'Metric', value: fieldLabel(understood.metric) },
+      { label: 'Grain', value: fieldLabel(understood.grain) },
+      { label: 'Period', value: fieldLabel(understood.period) },
+      { label: 'Business area', value: fieldLabel(understood.domain) },
+      { label: 'Project', value: fieldLabel(understood.projectScope) },
+      { label: 'Currency / unit', value: fieldLabel(understood.currency) },
+      { label: 'Assumptions', value: Array.isArray(understood.assumptions) ? understood.assumptions.join('; ') : fieldLabel(understood.assumptions) }
+    ].filter(item => item.value);
+    const clarificationTarget = fieldLabel(understood.fieldToClarify);
+    clarificationReasonEl.textContent = msg.reason || (clarificationTarget
+      ? `I need to confirm ${clarificationTarget.toLowerCase()} before running the query so the answer uses the intended business definition and scope.`
+      : (msg.subtype === 'scope_conflict'
+        ? 'The question and the active workspace scope point to different interpretations. Confirm which one I should use before I run the query.'
+        : 'I found more than one valid interpretation. Confirm the intended meaning before I run the query.'));
     clarificationUnderstoodEl.innerHTML = understoodItems.length
-      ? `<strong>Understood so far</strong><span>${understoodItems.map(escapeHtml).join(' &middot; ')}</span>`
+      ? `<strong class="clarification-understood-title">Understood so far</strong><dl>${understoodItems.map(item => `<div><dt>${escapeHtml(item.label)}</dt><dd>${escapeHtml(item.value)}</dd></div>`).join('')}</dl>`
       : '';
     clarificationUnderstoodEl.hidden = understoodItems.length === 0;
     clarificationOptionsEl.innerHTML = (msg.options || []).map((option, index) => {
       const rawPayload = typeof option.payload === 'object' ? JSON.stringify(option.payload) : String(option.payload || option.label || '');
       return `<label class="clarification-option">
-        <input type="radio" name="clarificationChoice" value="${escapeHtml(rawPayload)}" data-label="${escapeHtml(option.label)}" ${index === 0 ? '' : ''}>
+        <input type="radio" name="clarificationChoice" value="${escapeHtml(rawPayload)}" data-label="${escapeHtml(option.label)}" data-option-number="${index + 1}">
+        <span class="clarification-option-number" aria-hidden="true">${index + 1}</span>
         <span>${escapeHtml(option.label)}</span>
       </label>`;
     }).join('');
-    clarificationOtherInput.value = '';
     confirmClarificationBtn.disabled = true;
     clarificationModalBackdrop.classList.add('open');
     requestAnimationFrame(() => {
       const firstOption = clarificationOptionsEl.querySelector('input');
-      (firstOption || clarificationOtherInput).focus();
+      (firstOption || confirmClarificationBtn).focus();
     });
   }
 
@@ -1241,33 +1504,51 @@
     const msg = conv && conv.messages.find((item) => item.id === activeClarificationMessageId);
     if (!msg || msg.resolvedAt || msg.resolvedPayload || state.isThinking) return;
     const selected = clarificationOptionsEl.querySelector('input:checked');
-    const customText = clarificationOtherInput.value.trim();
-    if (!selected && !customText) return;
+    if (!selected) return;
 
-    const rawPayload = customText || selected.value;
-    const label = customText || selected.getAttribute('data-label');
+    const rawPayload = selected.value;
+    const label = selected.getAttribute('data-label');
     let parsedPayload = null;
     try { parsedPayload = JSON.parse(rawPayload); } catch (e) { parsedPayload = null; }
 
     if (parsedPayload && parsedPayload.resolution === 'edit_scope') {
+      msg.clarificationDismissedAt = Date.now();
+      saveConversationsToStorage();
       closeClarificationModal();
-      if (scopeEditorBarEl) scopeEditorBarEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      if (timeRangeSelectEl) timeRangeSelectEl.focus();
-      showToast('Adjust the scope, then answer the clarification again.');
+      if (msg.subtype === 'interpretation_confirmation') {
+        openEditInterpretationModal(conv, msg.id);
+        showToast('Edit the interpretation, then apply it to run the query.');
+      } else {
+        if (scopeEditorBarEl) scopeEditorBarEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        if (timeRangeSelectEl) timeRangeSelectEl.focus();
+        showToast('Adjust the scope, then answer the clarification again.');
+      }
       return;
     }
 
     msg.resolvedPayload = parsedPayload || rawPayload;
     msg.resolvedChoice = label;
     msg.resolvedAt = Date.now();
+    msg.isLocked = true;
     saveConversationsToStorage();
+    const originalQuestion = findUserQueryForAgentMsg(conv, msg) || msg.originalQuery || label;
     closeClarificationModal();
     renderActiveConversation();
 
+    if (msg.subtype === 'interpretation_confirmation') {
+      processUserPrompt(originalQuestion, {
+        interpretationConfirmed: true,
+        skipUserMessage: true,
+        originalQuestion,
+        displayPromptText: originalQuestion
+      });
+      return;
+    }
+
     if (parsedPayload && parsedPayload.type === 'scope_resolution') {
-      processUserPrompt(label, { scopeConfirmation: parsedPayload });
+      processUserPrompt(label, { scopeConfirmation: parsedPayload, originalQuestion });
     } else {
-      processUserPrompt(label, { clarificationPayload: rawPayload });
+      processUserPrompt(label, { clarificationPayload: rawPayload, originalQuestion });
     }
   }
 
@@ -1276,16 +1557,26 @@
     const titleText = (err.title || '').toLowerCase();
     const kind = err.kind || (msg.type === 'cancelled' ? 'cancelled' : (titleText.includes('not found') || titleText.includes('not available') ? 'unsupported_question' : 'service_error'));
     const config = kind === 'cancelled'
-      ? { label: 'Cancelled', title: err.title || 'Request stopped', tone: 'neutral', reasonLabel: 'Status' }
+      ? { label: 'Cancelled', title: err.title || 'Request stopped', tone: 'neutral', reasonLabel: 'Status', body: err.message || 'The run was stopped before a result was produced. No data or previous answer was changed.' }
       : kind === 'unsupported_question'
-        ? { label: 'Unsupported question', title: err.title || 'Information is outside this demo', tone: 'warning', reasonLabel: 'Available boundary' }
-        : { label: 'Service error', title: err.title || 'The result could not be generated', tone: 'danger', reasonLabel: 'Technical status' };
+        ? { label: 'Unsupported question', title: err.title || 'Information is outside this demo', tone: 'warning', reasonLabel: 'Available boundary', body: err.message || 'The requested information is not represented by the connected business data or verified demo fixtures.' }
+        : { label: 'Service error', title: err.title || 'The result could not be generated', tone: 'danger', reasonLabel: 'Technical status', body: err.message || 'The query could not complete because a required service failed. No result was produced.' };
+    const requestedScope = msg.requestedScope || null;
+    let requestedScopeHtml = '';
+    if (requestedScope && window.AriaScope) {
+      const questionScope = window.AriaScope.parseQuestionScope(msg.originalQuery || '');
+      const resolved = window.AriaScope.resolveSelectedScope(requestedScope, questionScope, window.DEMO_CONTEXT);
+      const limits = requestedScope.domain && Array.isArray(requestedScope.domain.values) ? requestedScope.domain.values : [];
+      const domain = limits.length ? limits.join(' + ') : (resolved.domain || 'Auto — inferred from question');
+      requestedScopeHtml = `<div class="state-applied-scope"><span>Scope used for this run</span><strong>${escapeHtml(`${domain} · ${resolved.periodLabel}`)}</strong></div>`;
+    }
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
         <div class="agent-response-card result-state-card state-${config.tone}">
           <div class="result-state-label">${escapeHtml(config.label)}</div>
           <h3>${escapeHtml(config.title)}</h3>
-          <p>${escapeHtml(err.message || '')}</p>
+          <p>${escapeHtml(config.body)}</p>
+          ${requestedScopeHtml}
           ${err.reason ? `<div class="result-state-detail"><strong>${escapeHtml(config.reasonLabel)}:</strong> ${escapeHtml(err.reason)}</div>` : ''}
           ${err.suggestedActions && err.suggestedActions.length > 0 ? `
             <div class="state-suggestions">
@@ -1294,8 +1585,10 @@
             </div>
           ` : ''}
           <div class="result-state-actions">
-            <button type="button" class="action-tool-btn ${kind === 'unsupported_question' ? 'btn-revise-question' : 'btn-regenerate'}" data-msg-id="${msg.id}">${kind === 'cancelled' ? 'Ask again' : (kind === 'unsupported_question' ? 'Revise question' : 'Try again')}</button>
+            ${kind === 'unsupported_question' ? `<button type="button" class="action-tool-btn btn-edit-failed-scope" data-msg-id="${msg.id}">Edit scope</button>` : ''}
+            ${kind !== 'unsupported_question' ? `<button type="button" class="action-tool-btn btn-retry" data-msg-id="${msg.id}">Retry</button>` : ''}
           </div>
+          ${kind === 'unsupported_question' ? '<p class="state-history-note">This card preserves the scope used by the unsupported run. Your edited scope will be shown on the next result.</p>' : ''}
         </div>
       </div>
     `;
@@ -1309,35 +1602,26 @@
     let examples = window.AriaMock.ROLE_EXAMPLE_QUESTIONS[roleKey] || window.AriaMock.ROLE_EXAMPLE_QUESTIONS.sales_manager;
 
     // Filter by active domain scope
-    if (state.activeDomainScope && state.activeDomainScope !== 'All') {
-      const filtered = examples.filter((ex) => ex.domain === state.activeDomainScope);
+    if (Array.isArray(state.activeDomainScope) && state.activeDomainScope.length > 0) {
+      const filtered = examples.filter((ex) => state.activeDomainScope.includes(ex.domain));
       if (filtered.length > 0) examples = filtered;
     }
 
     chatContainerEl.innerHTML = `
       <section class="welcome-hero" id="welcomeHero">
-        <div class="hero-chip">
-          <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12zm1-9H9v5h2V7zm0 6H9v2h2v-2z"/></svg>
-          Demo workspace &bull; Synthetic data
-        </div>
-        <h1 class="hero-title">Ask about sales, finance, projects, and operations</h1>
-        <p class="hero-subtitle">
-          Explore business questions using synthetic data. Persona access, filtering, and masking shown here are simulated prototype behaviours.
+        <h1 class="hero-title" style="font-size: 56px; font-weight: normal; margin-bottom: 24px;">What does your business need to understand?</h1>
+        <p class="hero-subtitle" style="font-size: 18px; color: var(--text-secondary); max-width: 600px; margin-bottom: 48px;">
+          Aria analyses your enterprise operations, finance, and project intelligence.
         </p>
 
-        <div class="example-section">
-          <div class="example-section-label">
-            <span>Suggested for your role (${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Sales Manager')})</span>
-            <span style="font-weight: normal; font-size: 11px;">Scope: <strong>${escapeHtml(state.activeDomainScope)}</strong></span>
+        <div class="example-section" style="max-width: 600px; border-left: 1px solid var(--border-color); padding-left: 24px;">
+          <div class="example-section-label" style="font-family: var(--font-sans); text-transform: uppercase; font-size: 12px; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 16px;">
+            <span>Starting points for ${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Sales Manager')}</span>
           </div>
-          <div class="example-grid">
-            ${examples.map((ex) => `
-              <button type="button" class="example-card" data-query="${escapeHtml(ex.text)}">
-                <div class="example-card-header">
-                  <span class="example-card-category">${escapeHtml(ex.category)}</span>
-                  <span class="brand-badge capability-badge">Available in demo</span>
-                </div>
-                <div class="example-card-text">${escapeHtml(ex.text)}</div>
+          <div class="example-grid" style="display: flex; flex-direction: column; gap: 12px;">
+            ${examples.slice(0, 3).map((ex) => `
+              <button type="button" class="example-card" data-query="${escapeHtml(ex.text)}" style="text-align: left; background: transparent; border: 1px solid var(--border-color); padding: 16px; font-family: var(--font-serif); font-size: 18px; transition: border-color 0.2s;">
+                <div class="example-card-text" style="color: var(--text-primary);">${escapeHtml(ex.text)}</div>
               </button>
             `).join('')}
           </div>
@@ -1346,12 +1630,12 @@
         <details class="audit-prompt-suite">
           <summary>
             <span>Audit test prompts</span>
-            <small>15 deterministic checks</small>
+            <small>${(window.AriaMock.AUDIT_TEST_PROMPTS || []).length} deterministic checks</small>
           </summary>
           <div class="audit-prompt-help">
-            Click a prompt to place it in the composer, then press Enter. Use a non-admin persona for the access-denied check.
+            Select a prompt to place it in the composer, then press Enter to run it. Use a non-admin persona for the access-denied check.
           </div>
-          ${['Result patterns', 'Decision states', 'Access states'].map((group) => `
+          ${['Visual examples', 'Result patterns', 'Decision states', 'Access states'].map((group) => `
             <section class="audit-prompt-group">
               <h2>${escapeHtml(group)}</h2>
               <div class="audit-prompt-grid">
@@ -1367,8 +1651,8 @@
           <div class="audit-manual-checks">
             <strong>Two interaction checks</strong>
             <ol>
-              <li>Select Q3 in Period, then ask a question containing Q2 to verify the scope-conflict modal.</li>
-              <li>Send any result prompt and press Stop while it is running to verify the Cancelled state.</li>
+              <li>Select Q3 in Period, then ask a question containing Q2 to verify the scope-conflict clarification.</li>
+              <li>Run any result prompt and press Stop while it is processing to verify the Cancelled state.</li>
             </ol>
           </div>
         </details>
@@ -1383,11 +1667,13 @@
         updateSendButtonState();
       });
     });
+
     chatContainerEl.querySelectorAll('.audit-prompt-card').forEach((card) => {
       card.addEventListener('click', () => {
         chatInputEl.value = card.getAttribute('data-query');
         chatInputEl.focus();
         updateSendButtonState();
+        chatInputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
     });
   }
@@ -1422,22 +1708,77 @@
       renderSidebarConversations();
     }
 
-    // 2. Append User Message
-    const userMsgId = 'msg_' + Date.now() + '_u';
-    const userMsg = {
-      id: userMsgId,
-      role: 'user',
-      text: promptText,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      timestamp: Date.now()
-    };
-    conv.messages.push(userMsg);
-    conv.updatedAt = Date.now();
-    saveConversationsToStorage();
-    renderActiveConversation();
+    // 2. Append User Message (unless continuing the same turn after confirmation)
+    if (!options.skipUserMessage) {
+      const userMsgId = 'msg_' + Date.now() + '_u';
+      const userMsg = {
+        id: userMsgId,
+        role: 'user',
+        // Keep the executable query unchanged, but show the scope-adjusted wording
+        // for interpretation re-runs so the new turn never contradicts its answer.
+        text: options.displayPromptText || promptText,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: Date.now(),
+        isScopeRerun: Boolean(options.sourceMessageId),
+        scopeEditSummary: options.scopeEditSummary || null
+      };
+      conv.messages.push(userMsg);
+      conv.updatedAt = Date.now();
+      saveConversationsToStorage();
+      renderActiveConversation();
+    }
+
+    // Clear questions get an interpretation confirmation gate. Questions that are
+    // already ambiguous continue to the Agent's dedicated clarification gate.
+    if (!options.interpretationConfirmed && !options.clarificationPayload && !options.scopeConfirmation && !options.interpretationOverride && !options.retryAttempt) {
+      const directFixture = window.AriaMock.QUERY_RESPONSES[promptText];
+      const questionScope = window.AriaScope.parseQuestionScope(promptText);
+      const scopeConflict = window.AriaScope.detectScopeConflicts(state.selectedScope, questionScope);
+      const securityDecision = window.AriaMock.checkSecurityGateways(promptText, state.currentUser);
+      const requiresClarification = Boolean((directFixture && directFixture.type === 'clarification') || scopeConflict);
+
+      if (!requiresClarification && !securityDecision.blocked) {
+        const intent = window.AriaScope.parseQuestionIntent(promptText, window.DEMO_CONTEXT);
+        const resolved = window.AriaScope.resolveSelectedScope(state.selectedScope, questionScope, window.DEMO_CONTEXT);
+        const previewResult = { domain: resolved.domain || 'All Domains', originalQuery: promptText };
+        const previewAppliedScope = window.AriaScope.buildAppliedInterpretation(previewResult, resolved, intent);
+        const confirmationMsg = {
+          id: 'msg_' + Date.now() + '_confirm',
+          role: 'agent',
+          type: 'clarification',
+          subtype: 'interpretation_confirmation',
+          originalQuery: promptText,
+          resultsData: { ...previewResult, appliedScope: previewAppliedScope },
+          appliedScope: previewAppliedScope,
+          question: 'Is this the interpretation you want me to use?',
+          reason: 'Confirm the intended metric and scope before the query runs.',
+          understoodFields: {
+            metric: intent.metric && intent.metric.label,
+            grain: intent.breakdown && intent.breakdown.label,
+            period: resolved.periodLabel,
+            domain: resolved.domain || 'All business areas',
+            projectScope: intent.projects && intent.projects.label,
+            currency: /rate|progress|%/i.test(intent.metric && intent.metric.label) ? 'Not applicable (%)' : (/day|time/i.test(intent.metric && intent.metric.label) ? 'Not applicable (Days)' : (/count/i.test(intent.metric && intent.metric.label) ? 'Not applicable (Count)' : 'USD millions')),
+            assumptions: ['Read-only query', resolved.calendarBasis ? `${resolved.calendarBasis} calendar basis` : 'Workspace calendar basis']
+          },
+          options: [
+            { id: 'confirm_interpretation', label: 'Use this interpretation', payload: { type: 'interpretation_confirmation', confirmed: true } },
+            { id: 'edit_scope', label: 'Edit scope before running', payload: { resolution: 'edit_scope' }, isEditScope: true }
+          ],
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          timestamp: Date.now()
+        };
+        conv.messages.push(confirmationMsg);
+        conv.updatedAt = Date.now();
+        saveConversationsToStorage();
+        renderActiveConversation();
+        return;
+      }
+    }
 
     // 3. Initiate Thinking State
     state.isThinking = true;
+    chatContainerEl.setAttribute('aria-busy', 'true');
     updateSendButtonState();
     state.activeAbortController = new AbortController();
 
@@ -1449,16 +1790,23 @@
       updateThinkingStage(agentMsgId, stageIdx, stageObj, isRetry);
     }, {
       user: state.currentUser,
-      domainScope: state.activeDomainScope,
-      timeRange: state.activeTimeRange,
-      selectedScope: state.selectedScope,
+      domainScope: options.selectedScope && options.selectedScope.domain ? options.selectedScope.domain.value : state.activeDomainScope,
+      timeRange: options.selectedScope && options.selectedScope.time ? options.selectedScope.time.preset : state.activeTimeRange,
+      selectedScope: options.selectedScope || state.selectedScope,
       clarificationPayload: options.clarificationPayload,
       scopeConfirmation: options.scopeConfirmation,
       interpretationOverride: options.interpretationOverride,
+      auditContext: {
+        originalQuestion: options.originalQuestion || promptText,
+        displayedQuestion: options.displayPromptText || promptText,
+        interactionType: options.retryAttempt ? 'retry' : (options.runAgainOfMessageId ? 'run_again' : (options.clarificationPayload ? 'clarification_selection' : (options.sourceMessageId ? 'scope_rerun' : 'question'))),
+        selectedClarification: options.clarificationPayload ? promptText : null
+      },
       signal: state.activeAbortController.signal
     })
     .then((result) => {
       state.isThinking = false;
+      chatContainerEl.setAttribute('aria-busy', 'false');
       state.activeAbortController = null;
       updateSendButtonState();
 
@@ -1482,21 +1830,29 @@
         role: 'agent',
         type: result.type,
         subtype: result.subtype || null,
+        blockedType: result.blockedType || null,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         timestamp: Date.now(),
         resultsData: result.type === 'results' ? result : null,
         appliedScope: result.appliedScope || null,
         understoodFields: result.understoodFields || null,
         sourceMessageId: options.sourceMessageId || null,
+        runAgainOfMessageId: options.runAgainOfMessageId || null,
+        runRootMessageId: options.runRootMessageId || null,
+        runNumber: options.runNumber || 1,
+        requestedScope: JSON.parse(JSON.stringify(options.selectedScope || state.selectedScope)),
         errorData: result.type === 'error' ? result.friendlyError : null,
         clarificationData: result.type === 'clarification' ? result : null,
         question: result.question || null,
         options: result.options || null,
-        originalQuery: result.originalQuery || (options.sourceMessageId ? promptText : null),
+        originalQuery: result.originalQuery || promptText,
         title: result.title || null,
         message: result.message || null,
         reason: result.reason || null,
         details: result.details || null,
+        restrictedData: result.restrictedData || null,
+        allowedScope: result.allowedScope || null,
+        dataOwner: result.dataOwner || null,
         resultPattern,
         activeView: result.type === 'results' ? getDefaultResultView(resultPattern, result) : null,
         viewUserSelected: false,
@@ -1509,10 +1865,21 @@
       saveConversationsToStorage();
       renderSidebarConversations();
       renderActiveConversation();
+      if (result.type === 'results') {
+        const recordCount = result.table && Array.isArray(result.table.rows) ? result.table.rows.length : 0;
+        announceAppStatus(`Answer ready${recordCount ? `. ${recordCount} records returned` : ''}. Data as of ${result.dataAsOf || 'not recorded'}.`);
+      } else if (result.type === 'clarification') {
+        announceAppStatus('Clarification required. Choose an option before the query can continue.');
+      } else if (result.type === 'error') {
+        announceAppStatus(`Request failed. ${(result.friendlyError && result.friendlyError.message) || 'Review the result for details.'}`, 'assertive');
+      } else {
+        announceAppStatus(`${result.title || 'Request status updated'}. ${result.message || ''}`);
+      }
       scrollToBottom();
     })
     .catch((err) => {
       state.isThinking = false;
+      chatContainerEl.setAttribute('aria-busy', 'false');
       state.activeAbortController = null;
       updateSendButtonState();
 
@@ -1521,6 +1888,8 @@
           id: agentMsgId,
           role: 'agent',
           type: 'cancelled',
+          originalQuery: options.originalQuestion || promptText,
+          requestedScope: JSON.parse(JSON.stringify(options.selectedScope || state.selectedScope)),
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           timestamp: Date.now(),
           errorData: {
@@ -1536,6 +1905,8 @@
           id: agentMsgId,
           role: 'agent',
           type: 'error',
+          originalQuery: options.originalQuestion || promptText,
+          requestedScope: JSON.parse(JSON.stringify(options.selectedScope || state.selectedScope)),
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           timestamp: Date.now(),
           errorData: {
@@ -1549,6 +1920,9 @@
       }
       saveConversationsToStorage();
       renderActiveConversation();
+      announceAppStatus(err.message && err.message.includes('cancelled')
+        ? 'Request cancelled. No result was produced.'
+        : 'Service error. The request could not be completed.', err.message && err.message.includes('cancelled') ? 'polite' : 'assertive');
       scrollToBottom();
     });
   }
@@ -1563,7 +1937,7 @@
 
     const stages = window.AriaMock.PIPELINE_STAGES;
     thinkingRow.innerHTML = `
-      <div class="thinking-container">
+      <div class="thinking-container" role="status" aria-label="Aria is processing your question">
         <div class="thinking-header">
           <div class="thinking-title-area">
             <div class="pulse-spinner" aria-hidden="true"></div>
@@ -1574,10 +1948,10 @@
             Stop generating
           </button>
         </div>
-        <ul class="stage-trail-list" id="trail_${msgId}">
+        <ul class="stage-trail-list" id="trail_${msgId}" aria-label="Query processing stages">
           ${stages.map((st, idx) => `
-            <li class="stage-item ${idx === 0 ? 'active' : 'pending'}" id="st_${msgId}_${idx}">
-              <div class="stage-dot">${idx === 0 ? '●' : '○'}</div>
+            <li class="stage-item ${idx === 0 ? 'active' : 'pending'}" id="st_${msgId}_${idx}" ${idx === 0 ? 'aria-current="step"' : ''} aria-label="${idx === 0 ? 'In progress' : 'Pending'}: ${escapeHtml(st.label)}">
+              <div class="stage-dot" aria-hidden="true">${idx === 0 ? '●' : '○'}</div>
               <span class="stage-label">${escapeHtml(st.label)}</span>
             </li>
           `).join('')}
@@ -1586,6 +1960,7 @@
     `;
 
     chatContainerEl.appendChild(thinkingRow);
+    announceAppStatus(`Aria is processing your question. ${stages[0] ? stages[0].label : 'Starting query processing'}.`);
 
     const stopBtn = thinkingRow.querySelector('#stopGeneratingBtn');
     if (stopBtn) {
@@ -1611,11 +1986,14 @@
         <span class="stage-label">${escapeHtml(stageObj.label)}</span>
       `;
       trailEl.appendChild(retryLi);
+      announceAppStatus(`Retrying: ${stageObj.label}`);
     } else {
       for (let i = 0; i < stageIdx; i++) {
         const item = document.getElementById(`st_${msgId}_${i}`);
         if (item) {
           item.className = 'stage-item completed';
+          item.removeAttribute('aria-current');
+          item.setAttribute('aria-label', `Completed: ${item.querySelector('.stage-label').textContent}`);
           const dot = item.querySelector('.stage-dot');
           if (dot) dot.innerHTML = '✓';
         }
@@ -1623,9 +2001,12 @@
       const curItem = document.getElementById(`st_${msgId}_${stageIdx}`);
       if (curItem) {
         curItem.className = 'stage-item active';
+        curItem.setAttribute('aria-current', 'step');
+        curItem.setAttribute('aria-label', `In progress: ${stageObj.label}`);
         const dot = curItem.querySelector('.stage-dot');
         if (dot) dot.innerHTML = '●';
       }
+      announceAppStatus(`Processing: ${stageObj.label}`);
     }
     scrollToBottom();
   }
@@ -1638,9 +2019,16 @@
     const roleDef = window.AriaMock.USER_ROLES[roleKey];
     if (!roleDef || !roleDef.maskedColumns || roleDef.maskedColumns.length === 0) return;
 
+    tableData.maskedColumnInfo = tableData.maskedColumnInfo || {};
     tableData.columns.forEach((colKey, colIdx) => {
       if (roleDef.maskedColumns.includes(colKey)) {
         tableData.types[colIdx] = 'masked';
+        const lowerKey = String(colKey).toLowerCase();
+        let reason = 'Sensitive business field hidden by the current data classification policy.';
+        if (/phone|tax_id|personal_id/.test(lowerKey)) reason = 'Personal identifying information is restricted in your current access scope.';
+        else if (/payroll|bonus|bank_account|salary/.test(lowerKey)) reason = 'Confidential workforce or payment information is restricted.';
+        else if (/financing_rate|margin|contract_terms|unit_cost/.test(lowerKey)) reason = 'Commercially sensitive pricing or contract terms are restricted.';
+        tableData.maskedColumnInfo[colKey] = { reason };
       }
     });
   }
@@ -1658,13 +2046,21 @@
     const totalPages = Math.ceil(rows.length / pageSize) || 1;
     const curPage = Math.min(Math.max(1, page), totalPages);
     const pagedRows = rows.slice((curPage - 1) * pageSize, curPage * pageSize);
+    const maskedColumns = tableData.columns.filter((column, index) => tableData.types[index] === 'masked');
 
     return `
       <div class="result-table-container" id="table_container_${msgId}">
+        ${maskedColumns.length ? `
+          <div class="masked-data-notice" role="note">
+            <strong>Some fields are restricted</strong>
+            <span>${maskedColumns.length} sensitive ${maskedColumns.length === 1 ? 'field is' : 'fields are'} masked. Available records and permitted fields are shown below.</span>
+            <span>Review access guidance and contact the relevant data owner through your organisation’s approved process if these fields are required.</span>
+          </div>
+        ` : ''}
         <div class="table-toolbar">
           <div class="table-toolbar-left">
-            <span style="font-weight: 600; font-size: 12.5px;">${escapeHtml(tableData.title || 'Query Records')}</span>
-            <span style="font-size: 11px; color: var(--text-muted);">(${rows.length} records)</span>
+            <span style="font-weight: 600; font-size: 12px;">${escapeHtml(tableData.title || 'Query Records')}</span>
+            <span style="font-size: 12px; color: var(--text-muted);">(${rows.length} records)</span>
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
             <input type="text" class="table-search-input in-table-filter" data-msg-id="${msgId}" placeholder="Filter rows..." value="${escapeHtml(searchQuery)}">
@@ -1678,9 +2074,10 @@
                 ${tableData.headers.map((h, i) => `
                   <th data-col-idx="${i}" data-msg-id="${msgId}">
                     ${tableData.types[i] === 'masked' ? `
-                      <div style="display:inline-flex; flex-direction:column; gap:2px;">
-                        <span style="color:var(--danger-color);">🔒 Restricted</span>
-                        <span class="restricted-column-reason">Hidden for this demo persona</span>
+                      <div class="restricted-column-header">
+                        <span class="restricted-column-name">${escapeHtml(h)}</span>
+                        <span class="restricted-column-badge">Restricted</span>
+                        <span class="restricted-column-reason">${escapeHtml((tableData.maskedColumnInfo && tableData.maskedColumnInfo[tableData.columns[i]] && tableData.maskedColumnInfo[tableData.columns[i]].reason) || 'Sensitive field hidden by access policy.')}</span>
                       </div>
                     ` : escapeHtml(h)}
                   </th>
@@ -1716,7 +2113,7 @@
           const type = types[colIdx];
 
           if (type === 'masked') {
-            return `<td><span class="td-masked" title="Restricted for your role (${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Role')})">•••• 🔒</span></td>`;
+            return `<td><span class="td-masked" title="Restricted by data classification and access policy">Restricted</span></td>`;
           } else if (type === 'badge') {
             const badgeClass = 'status-' + String(val).toLowerCase().replace(/[^a-z0-9]/g, '-');
             return `<td><span class="td-badge ${badgeClass}">${escapeHtml(String(val))}</span></td>`;
@@ -1752,12 +2149,7 @@
     return `
       <div class="chart-panel-container">
         <div class="chart-header-row">
-          <div style="font-weight: 600; font-size: 12.5px;">${escapeHtml(chartData.title || 'Data Visualisation')}</div>
-          <div class="chart-type-selector">
-            <button type="button" class="chart-type-btn ${chartType === 'bar' ? 'active' : ''}" data-type="bar" data-msg-id="${msgId}">Bar</button>
-            <button type="button" class="chart-type-btn ${chartType === 'line' ? 'active' : ''}" data-type="line" data-msg-id="${msgId}">Line</button>
-            <button type="button" class="chart-type-btn ${chartType === 'pie' ? 'active' : ''}" data-type="pie" data-msg-id="${msgId}">Pie</button>
-          </div>
+          <div><strong>${escapeHtml(chartData.title || 'Data visualisation')}</strong><span class="chart-axis-summary">${chartType === 'line' ? 'X-axis: Period' : chartType === 'pie' ? 'Legend: Business category' : 'Y-axis: Business entity'} · ${chartType === 'pie' ? 'Share of total' : `Value axis: ${escapeHtml(chartData.unit || 'Value')}`}</span></div>
         </div>
         <div class="chart-svg-wrapper">
           ${svgChartHtml}
@@ -1778,7 +2170,8 @@
       <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="max-width: 100%; height: auto;">
         ${items.map((item, idx) => {
           const y = idx * (barHeight + gap) + 10;
-          const barWidth = Math.max(10, Math.round(((item.value || 0) / maxVal) * 360));
+          const numericValue = Number(item.value) || 0;
+          const barWidth = numericValue === 0 ? 0 : Math.max(2, Math.round((numericValue / maxVal) * 360));
           const color = item.color || '#2563eb';
           return `
             <g>
@@ -1789,7 +2182,7 @@
               <rect x="120" y="${y}" width="${barWidth}" height="${barHeight}" rx="4" fill="${color}">
                 <title>${escapeHtml(item.label)}: ${item.value}${chartData.unit || ''}</title>
               </rect>
-              <text x="${130 + barWidth}" y="${y + 16}" font-size="11" font-weight="600" fill="var(--text-primary)" font-family="var(--font-mono)">
+              <text x="${barWidth === 0 ? 124 : Math.min(540, 130 + barWidth)}" y="${y + 16}" font-size="11" font-weight="600" fill="var(--text-primary)" font-family="var(--font-mono)">
                 ${item.value}${chartData.unit || ''}
               </text>
             </g>
@@ -2112,6 +2505,37 @@
     }
   }
 
+  function buildScopeAdjustedQuestion(originalQuestion, scope) {
+    let question = String(originalQuestion || '').trim();
+    if (!question) return question;
+
+    const periodLabel = scope.periodKey === 'custom' && scope.startDate && scope.endDate
+      ? `${scope.startDate} to ${scope.endDate}`
+      : (scope.periodKey === 'auto' ? 'No time restriction' : scope.period);
+    const explicitPeriodPattern = /\b(?:all[- ]time|no time restriction|this calendar quarter|current calendar quarter|current quarter|previous calendar quarter|previous quarter|calendar year(?:\s+\d{4})?|FY\s*\d{4}|Q[1-4]\s+\d{4})\b/i;
+    const hadExplicitPeriod = explicitPeriodPattern.test(question);
+
+    if (hadExplicitPeriod && periodLabel) {
+      question = question.replace(explicitPeriodPattern, periodLabel);
+    }
+
+    const appliedClauses = [];
+    if (!hadExplicitPeriod && periodLabel) appliedClauses.push(`period: ${periodLabel}`);
+    if (scope.project && scope.project !== 'All active projects' && scope.project !== 'All enterprise projects') {
+      appliedClauses.push(`project: ${scope.project}`);
+    }
+    if (scope.domain && scope.domain !== 'Auto' && scope.domain !== 'All Domains') {
+      appliedClauses.push(`domain: ${scope.domain}`);
+    }
+    if (scope.metric) appliedClauses.push(`metric: ${scope.metric}`);
+    if (scope.grain) appliedClauses.push(`grain: ${scope.grain}`);
+
+    if (appliedClauses.length > 0) {
+      question = `${question.replace(/[?.!]+$/, '')} (Applied scope: ${appliedClauses.join('; ')})?`;
+    }
+    return question;
+  }
+
   function handleApplyEditInterpretation() {
     const msgId = editInterpSourceMsgId ? editInterpSourceMsgId.value : null;
     const conv = getActiveConversation();
@@ -2162,8 +2586,46 @@
       assumptions: checkedAssumptions
     };
 
-    // Immutably flag source message as superseded
-    srcMsg.isSuperseded = true;
+    const selectedMetricLabel = editInterpMetric && editInterpMetric.selectedOptions[0]
+      ? editInterpMetric.selectedOptions[0].textContent.trim() : selectedMetric;
+    const selectedGrainLabel = editInterpBreakdown && editInterpBreakdown.selectedOptions[0]
+      ? editInterpBreakdown.selectedOptions[0].textContent.trim() : selectedBreakdown;
+    const selectedProjectLabel = editInterpProjects && editInterpProjects.selectedOptions[0]
+      ? editInterpProjects.selectedOptions[0].textContent.trim() : selectedProject;
+    const selectedPeriodLabel = editInterpPeriod && editInterpPeriod.selectedOptions[0]
+      ? editInterpPeriod.selectedOptions[0].textContent.trim() : selectedPeriod;
+    const selectedCurrencyLabel = editInterpCurrency ? editInterpCurrency.value : 'Not specified';
+    const scopeEditSummary = [
+      `Metric: ${selectedMetricLabel}`,
+      `Grain: ${selectedGrainLabel}`,
+      `Period: ${selectedPeriodLabel}`,
+      `Project / domain: ${selectedProjectLabel} / ${selectedDomain}`,
+      `Currency / unit: ${selectedCurrencyLabel}`,
+      `Assumptions: ${checkedAssumptions.length ? checkedAssumptions.join('; ') : 'None'}`
+    ].join(' · ');
+    const displayPromptText = buildScopeAdjustedQuestion(userQuery, {
+      metric: selectedMetricLabel,
+      grain: selectedGrainLabel,
+      periodKey: selectedPeriod,
+      period: selectedPeriodLabel,
+      startDate,
+      endDate,
+      project: selectedProjectLabel,
+      domain: selectedDomain
+    });
+
+    const isPreRunConfirmation = srcMsg.subtype === 'interpretation_confirmation';
+    // Completed results become superseded; a pre-run confirmation is instead
+    // locked with the edited interpretation that will be executed.
+    if (isPreRunConfirmation) {
+      srcMsg.resolvedPayload = { type: 'interpretation_confirmation', edited: true };
+      srcMsg.resolvedChoice = 'Edited interpretation';
+      srcMsg.resolvedAt = Date.now();
+      srcMsg.isLocked = true;
+      delete srcMsg.clarificationDismissedAt;
+    } else {
+      srcMsg.isSuperseded = true;
+    }
     saveConversationsToStorage();
 
     // Close modal
@@ -2174,10 +2636,108 @@
     // Re-run original query with overrides
     processUserPrompt(userQuery, {
       interpretationOverride: overrides,
-      sourceMessageId: msgId
+      sourceMessageId: isPreRunConfirmation ? null : msgId,
+      interpretationConfirmed: true,
+      skipUserMessage: isPreRunConfirmation,
+      scopeEditSummary,
+      displayPromptText
     });
 
     showToast('Applying updated interpretation and re-running...');
+  }
+
+  function getExportContext(msg, conv) {
+    const res = (msg && msg.resultsData) || {};
+    const scope = (msg && msg.appliedScope) || res.appliedScope || {};
+    const grain = scope.grain || scope.breakdown;
+    const period = scope.time
+      ? `${scope.time.label || scope.periodLabel || 'Not specified'}${scope.time.dateRange ? ` (${scope.time.dateRange})` : ''}`
+      : (scope.periodLabel || 'Not specified');
+    const currency = scope.currencyObj ? scope.currencyObj.label : (scope.currency || 'Not specified');
+    const domain = scope.domain ? (scope.domain.label || scope.domain.value || scope.domain) : 'All available domains';
+    const project = scope.projectScope ? (scope.projectScope.label || scope.projectScope.value || scope.projectScope) : 'All applicable projects';
+    return [
+      ['Export label', 'Demo — Synthetic data'],
+      ['Question', findUserQueryForAgentMsg(conv, msg) || msg.originalQuery || 'Not recorded'],
+      ['Metric', scope.metric ? (scope.metric.label || scope.metric.value || scope.metric) : 'Not specified'],
+      ['Grain', grain ? (grain.label || grain.value || grain) : 'Not specified'],
+      ['Period', period],
+      ['Domain', domain],
+      ['Project scope', project],
+      ['Currency / unit', currency],
+      ['Assumptions', Array.isArray(scope.assumptions) && scope.assumptions.length ? scope.assumptions.join('; ') : 'None recorded'],
+      ['Data as of', res.dataAsOf || 'Not recorded'],
+      ['Exported at', new Date().toISOString()]
+    ];
+  }
+
+  function filterExportRows(table, searchQuery) {
+    if (!table || !Array.isArray(table.rows)) return [];
+    const q = String(searchQuery || '').trim().toLowerCase();
+    if (!q) return [...table.rows];
+    return table.rows.filter(row => Object.values(row).some(value => String(value ?? '').toLowerCase().includes(q)));
+  }
+
+  function encodeCsvCell(value) {
+    return `"${String(value === undefined || value === null ? '' : value).replace(/"/g, '""')}"`;
+  }
+
+  function buildContextualCsv(msg, conv, rowMode) {
+    const table = msg.resultsData.table;
+    const filteredRows = filterExportRows(table, msg.tableSearch);
+    const rows = rowMode === 'filtered' ? filteredRows : table.rows;
+    const context = getExportContext(msg, conv);
+    const columnCount = Math.max(2, table.headers.length);
+    const csvRow = (cells) => [...cells, ...Array(Math.max(0, columnCount - cells.length)).fill('')].map(encodeCsvCell).join(',');
+    const lines = [
+      csvRow(['Metadata', 'Value']),
+      ...context.map(([label, value]) => csvRow([label, value])),
+      csvRow(['Row scope', rowMode === 'filtered' ? `Filtered rows (${rows.length} of ${table.rows.length}); filter: ${msg.tableSearch || 'none'}` : `All rows (${table.rows.length})`]),
+      csvRow([]),
+      csvRow(table.headers),
+      ...rows.map(row => csvRow(table.columns.map((column, index) => table.types[index] === 'masked' ? '[RESTRICTED]' : row[column])))
+    ];
+    return `\uFEFF${lines.join('\r\n')}`;
+  }
+
+  function contextualClipboardText(msg, conv, includeTable) {
+    const context = getExportContext(msg, conv);
+    const res = msg.resultsData || {};
+    let text = context.map(([label, value]) => `${label}: ${value}`).join('\n');
+    text += `\n\nAnswer:\n${res.answer || res.answerConcise || msg.message || ''}`;
+    if (includeTable && res.table) {
+      const rows = filterExportRows(res.table, msg.tableSearch);
+      text += `\n\nRows: ${msg.tableSearch ? `Filtered (${rows.length} of ${res.table.rows.length}) using “${msg.tableSearch}”` : `All rows (${rows.length})`}\n`;
+      text += [
+        res.table.headers.join('\t'),
+        ...rows.map(row => res.table.columns.map((column, index) => res.table.types[index] === 'masked' ? '[RESTRICTED]' : String(row[column] ?? '')).join('\t'))
+      ].join('\n');
+    }
+    return text;
+  }
+
+  function openCsvExportOptions(msg, conv, trigger) {
+    const table = msg && msg.resultsData && msg.resultsData.table;
+    if (!table) return;
+    const filteredRows = filterExportRows(table, msg.tableSearch);
+    const hasFilter = Boolean(String(msg.tableSearch || '').trim());
+    pendingCsvExport = { msg, conv, trigger };
+    csvExportAllLabel.textContent = `All rows (${table.rows.length})`;
+    csvExportFilteredLabel.textContent = `Filtered rows (${filteredRows.length} of ${table.rows.length})`;
+    csvExportFilterDescription.textContent = hasFilter ? `Current filter: “${msg.tableSearch}”` : 'Apply a table filter first to export a subset.';
+    const filteredRadio = csvExportFilteredOption.querySelector('input');
+    filteredRadio.disabled = !hasFilter;
+    csvExportFilteredOption.classList.toggle('is-disabled', !hasFilter);
+    csvExportModalBackdrop.querySelector('input[value="all"]').checked = true;
+    csvExportContextPreview.innerHTML = getExportContext(msg, conv).slice(2, 10).map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
+    csvExportModalBackdrop.classList.add('open');
+    requestAnimationFrame(() => csvExportModalBackdrop.querySelector('input[value="all"]').focus());
+  }
+
+  function closeCsvExportOptions() {
+    csvExportModalBackdrop.classList.remove('open');
+    if (pendingCsvExport && pendingCsvExport.trigger && document.contains(pendingCsvExport.trigger)) pendingCsvExport.trigger.focus();
+    pendingCsvExport = null;
   }
 
   // =========================================================================
@@ -2197,16 +2757,23 @@
             if (scope) {
               md += `#### How I interpreted your question\n`;
               if (scope.metric) md += `- **Metric:** ${scope.metric.label || scope.metric} (${scope.metric.source || 'Standard'})\n`;
-              if (scope.breakdown) md += `- **Breakdown:** ${scope.breakdown.label || scope.breakdown} (${scope.breakdown.source || 'Standard'})\n`;
+              const grain = scope.grain || scope.breakdown;
+              if (grain) md += `- **Grain:** ${grain.label || grain} (${grain.source || 'Standard'})\n`;
               if (scope.domain) md += `- **Business area:** ${scope.domain.label || scope.domain.value || scope.domain}\n`;
               if (scope.projectScope) md += `- **Project scope:** ${scope.projectScope.label || scope.projectScope}\n`;
               if (scope.time) md += `- **Period & dates:** ${scope.time.label || scope.periodLabel}${scope.time.dateRange ? ` (${scope.time.dateRange})` : ''}\n`;
-              if (scope.currency) md += `- **Currency / Unit:** ${scope.currency}\n`;
+              else if (scope.periodLabel) md += `- **Period & dates:** ${scope.periodLabel}\n`;
+              const exportCurrency = scope.currencyObj ? scope.currencyObj.label : scope.currency;
+              if (exportCurrency) md += `- **Currency / Unit:** ${exportCurrency}\n`;
               if (scope.assumptions && scope.assumptions.length > 0) {
                 md += `- **Assumptions:**\n`;
                 scope.assumptions.forEach(a => { md += `  - ${a}\n`; });
               }
               md += `\n`;
+            }
+            if (m.resultsData) {
+              md += `- **Data as of:** ${m.resultsData.dataAsOf || 'Not recorded'}\n`;
+              md += `- **Result label:** Demo — Synthetic data\n\n`;
             }
             md += `### Aria Answer (${m.time})\n${m.resultsData ? m.resultsData.answer : (m.message || '')}\n\n`;
             if (m.resultsData && m.resultsData.sql) {
@@ -2248,6 +2815,28 @@
           updateSendButtonState();
           showToast('Question ready to revise.');
         }
+      });
+    });
+
+    chatContainerEl.querySelectorAll('.btn-edit-failed-scope').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const msg = conv.messages.find(m => m.id === btn.getAttribute('data-msg-id'));
+        const text = msg ? (msg.originalQuery || findUserQueryForAgentMsg(conv, msg)) : '';
+        if (text) {
+          chatInputEl.value = text;
+          updateSendButtonState();
+        }
+        if (scopeEditorBarEl) {
+          scopeEditorBarEl.classList.remove('scope-editor-pulse');
+          void scopeEditorBarEl.offsetWidth;
+          scopeEditorBarEl.classList.add('scope-editor-pulse');
+          scopeEditorBarEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        requestAnimationFrame(() => {
+          if (domainScopeSelectEl) domainScopeSelectEl.focus();
+          else if (timeRangeSelectEl) timeRangeSelectEl.focus();
+        });
+        showToast('Adjust domain or period, then send the prepared question. The previous result will remain unchanged.');
       });
     });
 
@@ -2305,11 +2894,15 @@
         }
 
         if (parsedPayload && parsedPayload.type === 'scope_resolution') {
-          processUserPrompt(label, { scopeConfirmation: parsedPayload });
+          const clarificationMsg = msgId ? conv.messages.find((m) => m.id === msgId) : null;
+          const originalQuestion = clarificationMsg ? findUserQueryForAgentMsg(conv, clarificationMsg) : label;
+          processUserPrompt(label, { scopeConfirmation: parsedPayload, originalQuestion });
           return;
         }
 
-        processUserPrompt(label, { clarificationPayload: rawPayload });
+        const clarificationMsg = msgId ? conv.messages.find((m) => m.id === msgId) : null;
+        const originalQuestion = clarificationMsg ? findUserQueryForAgentMsg(conv, clarificationMsg) : label;
+        processUserPrompt(label, { clarificationPayload: rawPayload, originalQuestion });
       });
     });
 
@@ -2344,20 +2937,7 @@
       });
     });
 
-    // 7. Chart Type Switch (Bar / Line / Pie)
-    chatContainerEl.querySelectorAll('.chart-type-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const msgId = btn.getAttribute('data-msg-id');
-        const type = btn.getAttribute('data-type');
-        const msg = conv.messages.find((m) => m.id === msgId);
-        if (msg) {
-          msg.chartType = type;
-          renderActiveConversation();
-        }
-      });
-    });
-
-    // 8. In-Table Filter Search
+    // 7. In-Table Filter Search
     chatContainerEl.querySelectorAll('.in-table-filter').forEach((input) => {
       input.addEventListener('input', () => {
         const msgId = input.getAttribute('data-msg-id');
@@ -2416,9 +2996,11 @@
     // 11. Copy Answer Text
     chatContainerEl.querySelectorAll('.btn-copy-answer').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const text = btn.getAttribute('data-answer');
+        const card = btn.closest('.agent-response-card');
+        const msg = card ? conv.messages.find(item => item.id === card.getAttribute('data-msg-id')) : null;
+        const text = msg && msg.resultsData ? contextualClipboardText(msg, conv, false) : btn.getAttribute('data-answer');
         navigator.clipboard.writeText(text);
-        showToast('Answer text copied to clipboard');
+        showToast('Answer copied with scope and freshness context');
       });
     });
 
@@ -2428,10 +3010,9 @@
         const msgId = btn.getAttribute('data-msg-id');
         const msg = conv.messages.find((m) => m.id === msgId);
         if (msg && msg.resultsData && msg.resultsData.table) {
-          const t = msg.resultsData.table;
-          const tsv = [t.headers.join('\t'), ...t.rows.map((r) => t.columns.map((c) => r[c]).join('\t'))].join('\n');
-          navigator.clipboard.writeText(tsv);
-          showToast('Table copied as TSV to clipboard');
+          navigator.clipboard.writeText(contextualClipboardText(msg, conv, true));
+          const filtered = Boolean(String(msg.tableSearch || '').trim());
+          showToast(`${filtered ? 'Filtered records' : 'All records'} copied with scope and freshness context`);
         }
       });
     });
@@ -2442,16 +3023,7 @@
         const msgId = btn.getAttribute('data-msg-id');
         const msg = conv.messages.find((m) => m.id === msgId);
         if (msg && msg.resultsData && msg.resultsData.table) {
-          const t = msg.resultsData.table;
-          const csv = [
-            '"Demo • Synthetic data"',
-            '"Prototype export — persona access and masking are simulated"',
-            '',
-            t.headers.join(','),
-            ...t.rows.map((r) => t.columns.map((c) => `"${r[c]}"`).join(','))
-          ].join('\n');
-          downloadFile('query_results.csv', csv, 'text/csv');
-          showToast('Table downloaded as CSV');
+          openCsvExportOptions(msg, conv, btn);
         }
       });
     });
@@ -2517,17 +3089,62 @@
       });
     });
 
-    // 15. Regenerate
-    chatContainerEl.querySelectorAll('.btn-regenerate').forEach((btn) => {
+    // 15. Run successful answers again with their stored scope. The prior
+    // answer remains visible until the new version finishes.
+    chatContainerEl.querySelectorAll('.btn-run-again').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const msgId = btn.getAttribute('data-msg-id');
-        const msgIdx = conv.messages.findIndex((m) => m.id === msgId);
-        if (msgIdx >= 1) {
-          const userPrompt = conv.messages[msgIdx - 1].text;
-          conv.messages.splice(msgIdx, 1);
-          saveConversationsToStorage();
-          processUserPrompt(userPrompt);
+        if (state.isThinking) {
+          showToast('Wait for the current run to finish before starting another.');
+          return;
         }
+        const msgId = btn.getAttribute('data-msg-id');
+        const msg = conv.messages.find((item) => item.id === msgId);
+        if (!msg || !msg.resultsData) return;
+        const originalQuestion = msg.originalQuery || findUserQueryForAgentMsg(conv, msg);
+        const storedScope = msg.appliedScope || msg.resultsData.appliedScope;
+        if (!originalQuestion || !storedScope) {
+          showToast('Run again is unavailable because the original question or scope is missing.');
+          return;
+        }
+        const execution = buildSavedExecutionOptions(storedScope);
+        const runRootMessageId = msg.runRootMessageId || msg.id;
+        const priorRuns = conv.messages
+          .filter(item => item.id === runRootMessageId || item.runRootMessageId === runRootMessageId)
+          .map(item => Number(item.runNumber) || 1);
+        const nextRunNumber = Math.max(...priorRuns, 1) + 1;
+        processUserPrompt(originalQuestion, {
+          skipUserMessage: true,
+          originalQuestion,
+          displayPromptText: originalQuestion,
+          interpretationOverride: execution.interpretationOverride,
+          selectedScope: execution.selectedScope,
+          runAgainOfMessageId: msg.id,
+          runRootMessageId,
+          runNumber: nextRunNumber
+        });
+        showToast('Running again with the scope saved on this answer.');
+      });
+    });
+
+    // Retry is reserved for failed or cancelled executions and keeps the
+    // failed event in the conversation as evidence.
+    chatContainerEl.querySelectorAll('.btn-retry').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (state.isThinking) return;
+        const msg = conv.messages.find(item => item.id === btn.getAttribute('data-msg-id'));
+        if (!msg || (msg.type !== 'error' && msg.type !== 'cancelled')) return;
+        const originalQuestion = msg.originalQuery || findUserQueryForAgentMsg(conv, msg);
+        if (!originalQuestion) {
+          showToast('Retry is unavailable because the original question is missing.');
+          return;
+        }
+        processUserPrompt(originalQuestion, {
+          skipUserMessage: true,
+          retryAttempt: true,
+          originalQuestion,
+          selectedScope: msg.requestedScope || state.selectedScope
+        });
+        showToast('Retrying the failed run with its original scope.');
       });
     });
 
@@ -2575,7 +3192,8 @@
     chatContainerEl.querySelectorAll('.btn-inspect-scope').forEach((btn) => {
       btn.addEventListener('click', () => {
         const msgId = btn.getAttribute('data-msg-id');
-        openScopeInspector(msgId, btn);
+        const msg = conv.messages.find(item => item.id === msgId);
+        if (msg) openEvidenceDesk(msg);
       });
     });
   }
@@ -2583,6 +3201,27 @@
   // =========================================================================
   // 11. SOURCE TABLE INSPECTION MODAL (Group B)
   // =========================================================================
+  function getVerifiedQuestionForSource(tableName) {
+    const source = String(tableName || '').split('.').pop();
+    const mappings = {
+      projects: 'Show total active contract value by project in calendar year 2026',
+      units: 'What is the current occupied-unit rate by project?',
+      sales_contracts: 'Show total active contract value by project in calendar year 2026',
+      customers: 'Break down Skyline Residences overdue installments by buyer contract',
+      payment_schedules: 'Which projects have the highest outstanding buyer installments in 2026?',
+      payment_installments: 'Which projects have the highest outstanding buyer installments in 2026?',
+      construction_progress: 'Compare latest construction progress across active project phases',
+      project_phases: 'Compare latest construction progress across active project phases',
+      lease_contracts: 'What is the current occupied-unit rate by project?',
+      tenants: 'What is the current occupied-unit rate by project?',
+      service_contracts: 'Which active service contracts expire in the next 60 days?',
+      vendors: 'List active property service vendors with their category and rating',
+      audit_logs: 'Summarise allow, mask, and deny decisions in recent query audit logs',
+      data_access_policies: 'Show masked fields configured for the Sales Manager role'
+    };
+    return mappings[source] || '';
+  }
+
   function openSourceTableModal(tableName) {
     const tableDef = window.AriaMock.SCHEMA_CATALOG.find((t) => t.name === tableName) || {
       name: tableName,
@@ -2593,6 +3232,7 @@
     };
 
     const businessSource = getBusinessSourceDefinition(tableName);
+    const verifiedQuestion = getVerifiedQuestionForSource(tableName);
     sourceTableModalTitle.textContent = businessSource.label;
     sourceTableModalBody.innerHTML = `
       <div class="schema-table-card business-source-overview">
@@ -2605,6 +3245,7 @@
           <div><dt>Business owner</dt><dd>${escapeHtml(businessSource.owner)}</dd></div>
           <div><dt>Record grain</dt><dd>${escapeHtml(businessSource.grain)}</dd></div>
           <div><dt>Refresh cadence</dt><dd>${escapeHtml(businessSource.cadence)}</dd></div>
+          <div><dt>Metric calculation</dt><dd>${escapeHtml(businessSource.calculation)}</dd></div>
           <div><dt>Exclusions</dt><dd>${escapeHtml(businessSource.exclusions)}</dd></div>
         </dl>
       </div>
@@ -2613,14 +3254,14 @@
         <summary>Technical schema</summary>
         <p class="technical-source-name">Physical table: <code>${escapeHtml(tableDef.name)}</code> &middot; ${escapeHtml(String(tableDef.records))} demo rows &middot; Primary key: <code>${escapeHtml(tableDef.pk || 'id')}</code></p>
         <div style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
-          <table class="result-data-table" style="font-size: 11.5px;">
+          <table class="result-data-table" style="font-size: 12px;">
             <thead><tr><th>Column</th><th>Data Type</th><th>Attributes</th></tr></thead>
             <tbody>
               ${(tableDef.columns || []).map((col) => `
                 <tr>
                   <td><code>${escapeHtml(col.name)}</code></td>
                   <td>${escapeHtml(col.type)}</td>
-                  <td>${col.isPk ? '<span class="brand-badge" style="font-size: 9px;">PK</span>' : (col.isFk ? '<span class="brand-badge" style="font-size: 9px;">FK</span>' : (col.isSensitive ? '🔒 Sensitive' : ''))}</td>
+                  <td>${col.isPk ? '<span class="brand-badge" style="font-size: 12px;">PK</span>' : (col.isFk ? '<span class="brand-badge" style="font-size: 12px;">FK</span>' : (col.isSensitive ? '🔒 Sensitive' : ''))}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -2628,21 +3269,21 @@
         </div>
       </details>
 
-      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
-        <button type="button" class="btn-new-chat ask-about-table-btn" data-query="${escapeHtml(tableDef.sampleQuery || `Describe records in ${tableDef.name}`)}" style="width: auto; padding: 6px 14px;">
-          Ask about this source
-        </button>
-      </div>
+      ${verifiedQuestion ? `<div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
+        <button type="button" class="btn-new-chat ask-about-table-btn" data-query="${escapeHtml(verifiedQuestion)}" style="width: auto; padding: 6px 14px;">Use verified question</button>
+      </div>` : '<div class="definition-coverage-note">Technical source available · No verified business question is attached to this source.</div>'}
     `;
 
-    sourceTableModalBody.querySelector('.ask-about-table-btn').addEventListener('click', () => {
-      sourceTableModalBackdrop.classList.remove('open');
-      const q = tableDef.sampleQuery || `Describe records in ${tableDef.name}`;
-      chatInputEl.value = q;
-      chatInputEl.focus();
-      updateSendButtonState();
-      if (typeof updateRailActiveState === 'function') showBusinessWorkspaceView('ask');
-    });
+    const askSourceButton = sourceTableModalBody.querySelector('.ask-about-table-btn');
+    if (askSourceButton) {
+      askSourceButton.addEventListener('click', () => {
+        sourceTableModalBackdrop.classList.remove('open');
+        chatInputEl.value = verifiedQuestion;
+        chatInputEl.focus();
+        updateSendButtonState();
+        if (typeof updateRailActiveState === 'function') showBusinessWorkspaceView('ask');
+      });
+    }
 
     sourceTableModalBackdrop.classList.add('open');
   }
@@ -2772,17 +3413,19 @@
         </div>
       ` : ''}
 
+      
       <div class="inspector-section">
         <div class="inspector-section-label">Data Freshness &amp; Basis</div>
         <div class="inspector-freshness-box">
           <div>Data freshness: <strong>${escapeHtml(dataFreshness)}</strong></div>
           <div>Calendar basis: <strong>${escapeHtml(calendarBasis)}</strong></div>
+          <div>Access view: <strong>${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Default')}</strong></div>
         </div>
       </div>
 
       <div class="inspector-section">
-        <div class="inspector-section-label">Business Sources (${sources.length})</div>
-        <p class="inspector-section-help">Click any verified source below to review its business definition and schema details:</p>
+        <div class="inspector-section-label">Business Sources &amp; Definitions</div>
+        ${(scope && scope.metric) ? `<div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${escapeHtml(scope.metric.label || 'Metric')}</div><div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">${escapeHtml(res.confidenceNote || 'Calculated for the applied scope and data date shown above.')}</div>` : ''}
         <div class="inspector-sources-list">
           ${sources.length > 0 ? sources.map(s => `
             <button type="button" class="inspector-source-pill source-badge-btn" data-table-name="${escapeHtml(s.name)}" title="Review technical source definition">
@@ -2793,7 +3436,27 @@
         </div>
       </div>
 
-      <div class="inspector-actions">
+      ${res.plainEnglishExplanation ? `
+        <div class="inspector-section">
+          <div class="inspector-section-label">How this was calculated</div>
+          <div style="font-size: 13px; color: var(--text-secondary); background: var(--bg-hover); padding: 8px; border-radius: 4px;">
+            ${escapeHtml(res.plainEnglishExplanation)}
+          </div>
+        </div>
+      ` : ''}
+
+      <div class="inspector-section">
+        <details class="sql-accordion" style="margin: 0;">
+          <summary class="sql-summary" style="list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--bg-surface); border: 1.5px solid var(--border-color); border-radius: 6px; font-weight: 600; color: var(--text-primary); transition: all 0.2s ease;">
+            <div class="sql-summary-left" style="display: flex; align-items: center; gap: 8px;">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+              <span>Review Data Logic (SQL)</span>
+            </div>
+          </summary>
+          <pre class="sql-code-block" style="margin-top: 8px;"><code>${escapeHtml(res.sql || '-- No SQL executed')}</code></pre>
+        </details>
+      </div>
+<div class="inspector-actions">
         <button type="button" class="action-tool-btn btn-edit-interpretation" data-msg-id="${msg.id}" style="width: 100%; justify-content: center; padding: 8px 12px;">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
           <span>Edit scope parameters</span>
@@ -2855,42 +3518,211 @@
   // =========================================================================
   // 12. DATA EXPLORER & BUSINESS GLOSSARY (Group D)
   // =========================================================================
-  let explorerActiveTab = 'tables';
+  const CK1_CAPABILITY_MAP = [
+    { domain: 'Finance', capability: 'Receivables and aging', metrics: ['Outstanding receivables', 'Overdue receivables >60 days'], demo: 'available', ck1: 'partial', tables: ['invoices', 'payment_installments', 'payment_transactions', 'sales_contracts', 'customers', 'projects'], note: 'CK1 supports invoice and payment events; a receivables snapshot and aging view must be derived.' },
+    { domain: 'Property Operations', capability: 'Service contract fees', metrics: ['Monthly service contract fee'], demo: 'available', ck1: 'covered', tables: ['service_contracts', 'vendors', 'projects'], note: 'Calculated from active property service agreements and their monthly fees.' },
+    { domain: 'Sales & Contracts', capability: 'Sales contract portfolio', metrics: ['Active contract value', 'Contract count'], demo: 'available', ck1: 'covered', tables: ['sales_contracts', 'contract_parties', 'contract_amendments', 'customers', 'projects'], note: 'Direct CK1 coverage for signed sales contracts and amendments.' },
+    { domain: 'Sales & Contracts', capability: 'Buyer receivables', metrics: ['Outstanding buyer receivables', 'Buyer installment receivables'], demo: 'available', ck1: 'covered', tables: ['sales_contracts', 'payment_schedules', 'payment_installments', 'payment_transactions', 'customers'], note: 'Outstanding balance is derived from scheduled installments minus settled transactions.' },
+    { domain: 'Property Operations', capability: 'Active service vendors', metrics: ['Vendor rating', 'Active vendor count'], demo: 'available', ck1: 'covered', tables: ['vendors', 'service_contracts'], note: 'Uses active service vendors and the ratings included in the curated CK1 fixture.' },
+    { domain: 'Procurement', capability: 'Pending purchase-order approvals', metrics: ['Pending PO value'], demo: 'limited', ck1: 'gap', tables: [], note: 'No purchase-order entity exists in CK1 v2.1, so this question is not offered as a runnable demo.' },
+    { domain: 'Property Operations', capability: 'Supplier contract expiry', metrics: ['Active contracts expiring within 60 days'], demo: 'available', ck1: 'covered', tables: ['service_contracts', 'vendors', 'projects'], note: 'Uses active property service contracts and their contractual end dates.' },
+    { domain: 'Projects & Property', capability: 'Construction progress and delay', metrics: ['Construction progress', 'Schedule variance'], demo: 'available', ck1: 'covered', tables: ['construction_progress', 'projects', 'project_phases', 'buildings'], note: 'Direct CK1 coverage at project and phase reporting grain.' },
+    { domain: 'Projects & Property', capability: 'Contractual delay damages', metrics: ['Liquidated damages exposure'], demo: 'limited', ck1: 'partial', tables: ['sales_contracts', 'contract_amendments', 'construction_progress'], note: 'A governed damages-rate field or metric view is required before this question can run.' },
+    { domain: 'Property Operations', capability: 'Occupancy and lease renewal', metrics: ['Occupancy rate', 'Lease renewal forecast'], demo: 'available', ck1: 'covered', tables: ['lease_contracts', 'units', 'buildings', 'projects', 'tenants'], note: 'Occupancy derives from active leases and rentable units; renewal forecasting needs agreed rules.' },
+    { domain: 'Marketing & Workforce', capability: 'Marketing headcount budget variance', metrics: ['Headcount budget variance'], demo: 'limited', ck1: 'partial', tables: ['employees', 'budgets', 'cost_centers', 'marketing_campaigns'], note: 'Entities exist, but workforce-to-marketing cost-centre mapping needs governance.' },
+    { domain: 'Security & Governance', capability: 'Role access, masking and audit', metrics: ['Policy decision', 'Query audit events'], demo: 'simulated', ck1: 'covered', tables: ['platform.data_access_policies', 'platform.roles', 'platform.system_users', 'platform.user_role_assignments', 'platform.audit_logs'], note: 'CK1 provides RBAC/ABAC and audit structures; demo enforcement remains simulated.' }
+  ];
+
+  const BUSINESS_GUIDE_DETAILS = {
+    'Receivables and aging': { entity: 'Buyer receivables', definition: 'Amounts still owed by property buyers for due contractual installments, including overdue aging where settlement has not been confirmed.', question: 'Which projects have the highest outstanding buyer installments in 2026?', searchTerms: 'công nợ khoản phải thu debt balance unpaid aging' },
+    'Service contract fees': { entity: 'Property service agreements', definition: 'Recurring monthly fees for active vendor service agreements, linked to the relevant project and service provider.', question: 'Compare monthly service contract fees by project and vendor' },
+    'Sales contract portfolio': { entity: 'Property sales contracts', definition: 'Signed property sale agreements and their current contractual value, status, project, buyer, and approved amendments.', question: 'Show total active contract value by project in calendar year 2026' },
+    'Buyer receivables': { entity: 'Buyer payment schedules', definition: 'Scheduled buyer installments less confirmed settled payments, traceable to the buyer contract and project.', question: 'Break down Skyline Residences overdue installments by buyer contract', searchTerms: 'công nợ khoản phải thu buyer debt unpaid' },
+    'Active service vendors': { entity: 'Property service vendors', definition: 'Active vendors providing property services, including their service category and synthetic fixture rating.', question: 'List active property service vendors with their category and rating' },
+    'Pending purchase-order approvals': { entity: 'Purchase-order approvals', definition: 'Purchase orders awaiting the required business approval, including their outstanding value and approval stage.', question: 'Show outstanding purchase orders pending executive sign-off' },
+    'Supplier contract expiry': { entity: 'Service contracts', definition: 'Active supplier service agreements approaching their contractual end date within the requested date range.', question: 'Which active service contracts expire in the next 60 days?' },
+    'Construction progress and delay': { entity: 'Project phases', definition: 'Latest reported completion and schedule variance for active construction phases within each project.', question: 'Compare latest construction progress across active project phases' },
+    'Contractual delay damages': { entity: 'Contract delay obligations', definition: 'Pre-agreed contractual exposure associated with unexcused delivery delay beyond an applicable grace period.', question: 'What is the contractual delay liquidated damages clause for Parkview Heights?' },
+    'Occupancy and lease renewal': { entity: 'Units and leases', definition: 'Occupancy derived from active leases and rentable units, with lease dates supporting renewal analysis.', question: 'What is the current occupied-unit rate by project?' },
+    'Marketing headcount budget variance': { entity: 'Marketing workforce budgets', definition: 'Difference between planned and actual marketing headcount or workforce cost for an agreed reporting period.', question: 'Show total internal marketing headcount budget variance for FY2021' },
+    'Role access, masking and audit': { entity: 'Data-access decisions', definition: 'Recorded allow, mask, and deny decisions used to review governed access and recent query activity.', question: 'Summarise allow, mask, and deny decisions in recent query audit logs' }
+  };
+
+  const GLOSSARY_EXAMPLE_QUESTIONS = {
+    'Outstanding Receivables': 'Which projects have the highest outstanding buyer installments in 2026?',
+    'Critical Path Delay': 'Compare latest construction progress across active project phases',
+    'Ready-Mix Concrete': '',
+    'Net Lettable Area (NLA)': 'What is the current occupied-unit rate by project?',
+    'Liquidated Damages (LD)': '',
+    'WALE (Weighted Avg Lease Expiry)': '',
+    'Purchase Order Lead Time': '',
+    'Collection Rate': ''
+  };
+
+  const CK1_ENGLISH_OVERRIDES = {
+    'platform.audit_logs': { label: 'Data Access and Query Audit Logs', description: 'Audit events for data access and natural-language queries sent to the Agent.', grain: 'One data-access or Agent-query event.' },
+    'platform.data_access_policies': { label: 'Data Access Policies', description: 'Governed allow, mask, and deny rules for protected data.', grain: 'One access policy for one role and table or column scope.' },
+    'platform.departments': { label: 'Departments', description: 'Organisational departments used for workforce and access governance.', grain: 'One organisational department.' },
+    'platform.roles': { label: 'Access Roles', description: 'Role-based access-control definitions used by the platform.', grain: 'One RBAC role.' },
+    'platform.system_users': { label: 'System Users', description: 'Human and service accounts that can authenticate to the platform.', grain: 'One human or service account.' },
+    'platform.user_role_assignments': { label: 'User Role Assignments', description: 'Role assignments granted to system users, optionally limited by project.', grain: 'One role assignment for one user.' }
+  };
+
+  function titleCaseSchemaName(name) {
+    const acronyms = { id: 'ID', kyc: 'KYC', rbac: 'RBAC', crm: 'CRM', api: 'API', po: 'PO', url: 'URL' };
+    return String(name || '').split('_').filter(Boolean)
+      .map(word => acronyms[word.toLowerCase()] || word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
+
+  function getEnglishSchemaCopy(table) {
+    const override = CK1_ENGLISH_OVERRIDES[table.qualifiedName];
+    if (override) return override;
+    const label = titleCaseSchemaName(table.name);
+    const singular = label.endsWith('ies') ? `${label.slice(0, -3)}y` : (label.endsWith('s') ? label.slice(0, -1) : label);
+    return {
+      label,
+      description: `${label} records in the ${table.domain} domain.`,
+      grain: `One ${singular.toLowerCase()} record.`
+    };
+  }
+
+  let explorerActiveTab = 'capabilities';
+
+  function useBusinessGuideQuestion(question) {
+    if (!question) return;
+    dataExplorerDrawer.classList.remove('open');
+    chatInputEl.value = question;
+    chatInputEl.focus();
+    updateSendButtonState();
+    showBusinessWorkspaceView('ask');
+    showToast('Question added from Business Data Guide');
+  }
+
+  function bindBusinessGuideQuestionButtons() {
+    explorerTabContent.querySelectorAll('.use-guide-question').forEach((btn) => {
+      btn.addEventListener('click', () => useBusinessGuideQuestion(btn.getAttribute('data-query')));
+    });
+  }
+
   function renderDataExplorer() {
     const q = (explorerSearchInput.value || '').toLowerCase().trim();
 
-    if (explorerActiveTab === 'tables') {
-      let tables = window.AriaMock.SCHEMA_CATALOG;
+    if (explorerActiveTab === 'capabilities') {
+      const capabilities = CK1_CAPABILITY_MAP.filter((item) => {
+        const detail = BUSINESS_GUIDE_DETAILS[item.capability] || {};
+        return !q || [item.domain, item.capability, detail.entity, item.metrics.join(' '), detail.definition, detail.question, detail.searchTerms].join(' ').toLowerCase().includes(q);
+      });
+      const domains = [...new Set(CK1_CAPABILITY_MAP.map(item => item.domain))];
+      const groupedDomains = [...new Set(capabilities.map(item => item.domain))];
+      explorerTabContent.innerHTML = `
+        <div class="business-guide-summary">
+          <strong>What you can ask in this demo</strong>
+          <p>Browse business concepts without needing table or column knowledge. Availability describes demo coverage only; it does not grant data access.</p>
+          <div class="demo-domain-list" aria-label="Domains available in the demo">${domains.map(domain => `<span>${escapeHtml(domain)}</span>`).join('')}</div>
+        </div>
+        ${groupedDomains.map(domain => `
+          <section class="business-guide-domain">
+            <h3>${escapeHtml(domain)}</h3>
+            ${capabilities.filter(item => item.domain === domain).map((item) => {
+              const detail = BUSINESS_GUIDE_DETAILS[item.capability] || {};
+              const statusLabel = item.demo === 'available' ? 'Available in demo' : item.demo === 'simulated' ? 'Simulated demo' : 'Limited demo';
+              return `<article class="business-entity-card">
+                <div class="business-entity-heading"><strong>${escapeHtml(detail.entity || item.capability)}</strong><span class="guide-availability ${escapeHtml(item.demo)}">${statusLabel}</span></div>
+                <p class="business-definition">${escapeHtml(detail.definition || item.note)}</p>
+                <div class="business-metrics"><span>Metrics</span>${item.metrics.map(metric => `<em>${escapeHtml(metric)}</em>`).join('')}</div>
+                <div class="example-question"><span>Example question</span><p>${escapeHtml(detail.question || '')}</p></div>
+                <button type="button" class="action-tool-btn use-guide-question" data-query="${escapeHtml(detail.question || '')}" ${item.demo === 'limited' ? 'disabled title="No verified demo answer is available for this capability yet."' : ''}>Use this question</button>
+              </article>`;
+            }).join('')}
+          </section>
+        `).join('') || '<div class="empty-state"><strong>No business concepts match this search.</strong><span>Try a domain, entity, metric, or definition such as “receivables” or “công nợ”.</span></div>'}
+      `;
+      bindBusinessGuideQuestionButtons();
+      return;
+    }
+
+    if (explorerActiveTab === 'glossary') {
+      let glossary = window.AriaMock.BUSINESS_GLOSSARY;
       if (q) {
-        tables = tables.filter((t) => t.name.toLowerCase().includes(q) || t.domain.toLowerCase().includes(q) || t.description.toLowerCase().includes(q));
+        glossary = glossary.filter((g) => [g.term, g.definition, g.domain, g.synonyms.join(' '), g.term === 'Outstanding Receivables' ? 'công nợ khoản phải thu' : ''].join(' ').toLowerCase().includes(q));
+      }
+      explorerTabContent.innerHTML = glossary.map((g) => `
+        <article class="schema-table-card business-definition-card">
+          <div class="business-entity-heading"><strong>${escapeHtml(g.term)}</strong><span class="brand-badge">${escapeHtml(g.domain)}</span></div>
+          <p class="business-definition">${escapeHtml(g.definition)}</p>
+          <div class="definition-synonyms"><strong>Also known as:</strong> ${escapeHtml(g.synonyms.join(', '))}</div>
+          ${GLOSSARY_EXAMPLE_QUESTIONS[g.term] ? `
+            <div class="example-question"><span>Verified example question</span><p>${escapeHtml(GLOSSARY_EXAMPLE_QUESTIONS[g.term])}</p></div>
+            <button type="button" class="action-tool-btn use-guide-question" data-query="${escapeHtml(GLOSSARY_EXAMPLE_QUESTIONS[g.term])}">Use this question</button>
+          ` : '<div class="definition-coverage-note">Definition available · No verified CK1 demo question yet</div>'}
+        </article>
+      `).join('') || '<div class="empty-state">No business definitions match this search.</div>';
+      bindBusinessGuideQuestionButtons();
+      return;
+    }
+
+    if (explorerActiveTab === 'capabilities') {
+      const capabilities = CK1_CAPABILITY_MAP.filter(item => !q || [item.domain, item.capability, item.metrics.join(' '), item.tables.join(' '), item.note].join(' ').toLowerCase().includes(q));
+      const ck1 = window.CK1_SCHEMA || { tableCount: 0, version: 'CK1', schemaDate: 'Unknown' };
+      explorerTabContent.innerHTML = `
+        <div class="capability-map-summary">
+          <strong>Demo UI ↔ CK1 capability map</strong>
+          <span>${escapeHtml(ck1.version)} · ${escapeHtml(String(ck1.tableCount))} tables · schema date ${escapeHtml(ck1.schemaDate)}</span>
+          <p>Coverage shows whether each UI metric can be grounded in the supplied CK1 schema. It does not imply production data is connected.</p>
+        </div>
+        ${capabilities.map(item => `
+          <article class="capability-map-card">
+            <div class="capability-map-heading">
+              <div><span>${escapeHtml(item.domain)}</span><strong>${escapeHtml(item.capability)}</strong></div>
+              <div class="capability-badges"><span class="capability-status ${escapeHtml(item.demo)}">Demo: ${escapeHtml(item.demo)}</span><span class="capability-status ${escapeHtml(item.ck1)}">CK1: ${escapeHtml(item.ck1)}</span></div>
+            </div>
+            <dl>
+              <div><dt>Business metrics</dt><dd>${escapeHtml(item.metrics.join(', '))}</dd></div>
+              <div><dt>CK1 source entities</dt><dd>${item.tables.length ? item.tables.map(table => `<code>${escapeHtml(table)}</code>`).join(' ') : '<span class="capability-gap-text">No CK1 entity mapped</span>'}</dd></div>
+              <div><dt>Coverage note</dt><dd>${escapeHtml(item.note)}</dd></div>
+            </dl>
+          </article>
+        `).join('') || '<div class="empty-state">No capabilities match this search.</div>'}
+      `;
+    } else if (explorerActiveTab === 'tables') {
+      let tables = (window.CK1_SCHEMA && window.CK1_SCHEMA.tables) || [];
+      if (q) {
+        tables = tables.filter((t) => {
+          const english = getEnglishSchemaCopy(t);
+          return [t.qualifiedName, english.label, t.domain, english.description, english.grain, t.columns.map(column => column.name).join(' ')].join(' ').toLowerCase().includes(q);
+        });
       }
 
-      explorerTabContent.innerHTML = tables.map((t) => `
+      explorerTabContent.innerHTML = tables.map((t) => {
+        const english = getEnglishSchemaCopy(t);
+        const mockRows = window.CK1_MOCK_DATA ? window.CK1_MOCK_DATA.getRows(t.qualifiedName) : [];
+        const fixtureKind = window.CK1_MOCK_DATA && window.CK1_MOCK_DATA.getFixtureKind ? window.CK1_MOCK_DATA.getFixtureKind(t.qualifiedName) : 'none';
+        const previewColumns = mockRows.length ? t.columns.map(column => column.name) : [];
+        return `
         <div class="schema-table-card">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span class="schema-table-name">${escapeHtml(getBusinessSourceDefinition(t.name).label)}</span>
-            <span class="brand-badge">${escapeHtml(t.domain)}</span>
+            <span class="schema-table-name">${escapeHtml(english.label)}</span>
+            <div class="schema-card-badges"><span class="brand-badge">${escapeHtml(t.domain)}</span>${mockRows.length ? `<span class="ck1-fixture-badge">${fixtureKind === 'curated' ? 'Curated' : 'Generated'} synthetic fixture · ${mockRows.length} rows</span>` : '<span class="ck1-no-fixture-badge">Schema only</span>'}</div>
           </div>
-          <p>${escapeHtml(getBusinessSourceDefinition(t.name).definition)}</p>
+          <p>${escapeHtml(english.description)}</p>
+          <div class="ck1-grain"><strong>Grain:</strong> ${escapeHtml(english.grain)}</div>
+          <details class="technical-source-details">
+            <summary>Technical schema · <code>${escapeHtml(t.qualifiedName)}</code> · ${t.columns.length} columns</summary>
+            <div class="technical-column-list">${t.columns.map(column => `<code title="${escapeHtml(column.type)}">${escapeHtml(column.name)} <small>${escapeHtml(column.type)}</small></code>`).join('')}</div>
+          </details>
+          ${mockRows.length ? `<details class="ck1-mock-preview">
+            <summary>Preview synthetic CK1 rows</summary>
+            <div class="table-scroll-wrap"><table class="data-table ck1-preview-table">
+              <thead><tr>${previewColumns.map(column => `<th>${escapeHtml(column)}</th>`).join('')}</tr></thead>
+              <tbody>${mockRows.slice(0, 3).map(row => `<tr>${previewColumns.map(column => `<td>${escapeHtml(typeof row[column] === 'object' && row[column] !== null ? JSON.stringify(row[column]) : String(row[column] ?? '—'))}</td>`).join('')}</tr>`).join('')}</tbody>
+            </table></div>
+          </details>` : ''}
           <div class="technical-source-name" hidden>
             PK: <code>${t.pk}</code> • ${t.columns.length} columns • ${t.records} records
           </div>
-          <button type="button" class="action-tool-btn ask-table-btn" data-query="${escapeHtml(t.sampleQuery)}" style="align-self: flex-start; margin-top: 4px;">
-            💬 Ask about this table
-          </button>
         </div>
-      `).join('');
-
-      explorerTabContent.querySelectorAll('.ask-table-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          dataExplorerDrawer.classList.remove('open');
-          const query = btn.getAttribute('data-query');
-          chatInputEl.value = query;
-          chatInputEl.focus();
-          updateSendButtonState();
-          showBusinessWorkspaceView('ask');
-        });
-      });
+      `; }).join('') || '<div class="empty-state">No CK1 schema entities match this search.</div>';
     } else {
       let glossary = window.AriaMock.BUSINESS_GLOSSARY;
       if (q) {
@@ -2901,13 +3733,13 @@
         <div class="schema-table-card">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">${escapeHtml(g.term)}</span>
-            <span class="brand-badge" style="font-size: 9.5px;">${escapeHtml(g.domain)}</span>
+            <span class="brand-badge" style="font-size: 12px;">${escapeHtml(g.domain)}</span>
           </div>
           <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">${escapeHtml(g.definition)}</p>
-          <div style="font-size: 11px; color: var(--text-muted);">
+          <div style="font-size: 12px; color: var(--text-muted);">
             <strong>Synonyms:</strong> ${escapeHtml(g.synonyms.join(', '))}
           </div>
-          <div style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px;">
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
             Technical mappings: ${g.tables.map((tbl) => `<code>${tbl}</code>`).join(' ')}
           </div>
         </div>
@@ -2918,6 +3750,29 @@
   // =========================================================================
   // 13. SAVED INSIGHTS VIEW
   // =========================================================================
+  function savedResultFingerprint(result) {
+    if (!result) return '';
+    const serialized = JSON.stringify(result);
+    let hash = 5381;
+    for (let i = 0; i < serialized.length; i++) hash = ((hash << 5) + hash) ^ serialized.charCodeAt(i);
+    return (hash >>> 0).toString(16).padStart(8, '0');
+  }
+
+  function createRefreshedFixtureResult(rawResult, item) {
+    const refreshedAt = Date.now();
+    const previousRevision = Number(item && item.latestResult && item.latestResult.refreshMetadata && item.latestResult.refreshMetadata.fixtureRevision) || 0;
+    const result = JSON.parse(JSON.stringify(rawResult));
+    result.refreshMetadata = {
+      runId: `refresh_${refreshedAt}_${previousRevision + 1}`,
+      refreshedAt,
+      fixtureRevision: previousRevision + 1,
+      source: 'Simulated fixture rerun',
+      changedFields: ['dataAsOf', 'fixtureRevision']
+    };
+    result.dataAsOf = new Date(refreshedAt).toISOString();
+    return result;
+  }
+
   function renderSavedInsights() {
     const listContainer = document.getElementById('savedInsightsListContainer');
     if (!listContainer) return;
@@ -2930,7 +3785,7 @@
           <div style="margin-bottom: 16px;">
             <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="opacity: 0.5;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
           </div>
-          <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">No saved insights yet</div>
+          <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">No saved queries or snapshots yet</div>
           <p style="max-width: 320px; margin: 0 auto; line-height: 1.5;">
             <strong>Save a query</strong> to re-run it with the same scope later.<br>
             <strong>Save a snapshot</strong> to keep an immutable result at a point in time.
@@ -2943,7 +3798,16 @@
       return;
     }
 
-    listContainer.innerHTML = list.map((item) => {
+    const queryCount = list.filter(item => item.type !== 'snapshot').length;
+    const snapshotCount = list.filter(item => item.type === 'snapshot').length;
+    const librarySummary = `
+      <div class="saved-library-summary" aria-label="Saved insights summary">
+        <div><span>Saved queries</span><strong>${queryCount}</strong><small>Reusable question + scope</small></div>
+        <div><span>Snapshots</span><strong>${snapshotCount}</strong><small>Immutable captured results</small></div>
+      </div>
+    `;
+
+    listContainer.innerHTML = librarySummary + list.map((item) => {
       const isSnapshot = item.type === 'snapshot';
       const badgeColor = isSnapshot ? 'var(--info-color, #0ea5e9)' : 'var(--accent-primary)';
 
@@ -2980,11 +3844,11 @@
       }
 
       return `
-      <div class="schema-table-card saved-insight-card" data-insight-id="${escapedItemId}" style="margin-bottom: 16px;">
+      <article class="schema-table-card saved-insight-card ${isSnapshot ? 'is-snapshot' : 'is-query'}" data-insight-id="${escapedItemId}" style="margin-bottom: 16px;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
           <div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 280px;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="background: ${badgeColor}; color: white; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">
+              <span style="background: ${badgeColor}; color: white; font-size: 12px; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">
                 ${isSnapshot ? 'Snapshot' : 'Query'}
               </span>
               <div style="font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 6px;" class="insight-title-container">
@@ -2999,26 +3863,36 @@
                 <button type="button" class="action-tool-btn btn-rename-cancel" data-id="${escapedItemId}">Cancel</button>
               </div>
             </div>
-            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
-              <strong>Q:</strong> ${escapeHtml(item.question)}
+            <div class="saved-question-text">
+              <span>Question</span>
+              <strong>${escapeHtml(item.question)}</strong>
             </div>
-            <div style="font-size: 11px; color: var(--text-muted); display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px;">
-              <span><strong>Scope:</strong> ${escapeHtml(scopeText)}</span>
-              <span><strong>Saved at:</strong> ${new Date(item.savedAt).toLocaleString()}</span>
+            <div class="saved-scope-block">
+              <span>Saved scope</span>
+              <strong>${escapeHtml(scopeText)}</strong>
+              <small>Scope controls query reuse; data access is evaluated separately.</small>
+            </div>
+            <div class="saved-item-metadata">
+              <span><strong>${isSnapshot ? 'Captured at' : 'Saved at'}:</strong> ${new Date(isSnapshot ? (item.capturedAt || item.savedAt) : item.savedAt).toLocaleString()}</span>
               ${!isSnapshot ? `<span><strong>Last refreshed:</strong> ${item.refreshCount > 0 && item.lastRefreshedAt ? new Date(item.lastRefreshedAt).toLocaleString() : 'Never'}</span>` : ''}
+              ${!isSnapshot && resultData && resultData.refreshMetadata ? `<span><strong>Refresh status:</strong> Updated · fixture revision ${escapeHtml(String(resultData.refreshMetadata.fixtureRevision))}</span>` : ''}
+              ${isSnapshot ? '<span><strong>State:</strong> Immutable result</span>' : ''}
               <span><strong>Data as of:</strong> ${typeof item.dataAsOf === 'number' ? new Date(item.dataAsOf).toLocaleString() : escapeHtml(String(item.dataAsOf))}</span>
             </div>
           </div>
 
           <div style="display: flex; gap: 8px; flex-shrink: 0; align-items: center; flex-wrap: wrap;">
             <button type="button" class="action-tool-btn btn-open-insight" data-id="${escapedItemId}">Open</button>
-            ${!isSnapshot ? (item.canRefresh === false ? `<button type="button" class="action-tool-btn btn-refresh-query" data-id="${escapedItemId}" disabled title="${escapeHtml(item.refreshDisabledReason || 'Refresh not available')}">Refresh</button>` : `<button type="button" class="action-tool-btn btn-refresh-query" data-id="${escapedItemId}">Refresh</button>`) : ''}
-            ${!isSnapshot && item.latestResult ? `<button type="button" class="action-tool-btn btn-save-snapshot" data-id="${escapedItemId}">Save Snapshot</button>` : ''}
+            ${!isSnapshot ? (item.canRefresh === false ? `<button type="button" class="action-tool-btn btn-refresh-query" data-id="${escapedItemId}" disabled title="${escapeHtml(item.refreshDisabledReason || 'Refresh not available')}">Refresh</button>` : `<button type="button" class="action-tool-btn btn-refresh-query" data-id="${escapedItemId}">Refresh</button>`) : '<button type="button" class="action-tool-btn" disabled title="Snapshots are immutable; refresh the source saved query instead">Refresh</button>'}
+            ${!isSnapshot && item.latestResult ? `<button type="button" class="action-tool-btn btn-save-snapshot" data-id="${escapedItemId}">Save Snapshot</button>` : (!isSnapshot ? '<button type="button" class="action-tool-btn" disabled title="Run or refresh this saved query before creating a snapshot">Save Snapshot</button>' : '')}
             <button type="button" class="conv-action-btn btn-remove-insight" data-id="${escapedItemId}" style="color: var(--danger-color); font-size: 12px; padding: 4px 8px; border: 1px solid transparent; background: transparent; cursor: pointer; border-radius: 4px;">Remove</button>
           </div>
         </div>
+        ${!isSnapshot && item.canRefresh === false
+          ? `<div class="saved-action-note">Refresh unavailable: ${escapeHtml(item.refreshDisabledReason || 'The saved query cannot be reconstructed safely.')}</div>`
+          : (isSnapshot ? '<div class="saved-action-note">Snapshots are immutable. Refresh the source saved query to obtain newer data.</div>' : '')}
         ${previewHtml}
-      </div>
+      </article>
       `;
     }).join('');
 
@@ -3026,10 +3900,11 @@
     listContainer.querySelectorAll('.btn-remove-insight').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-id');
+        const currentItem = window.AriaMock.getSavedInsights(userId).find(item => item.id === id);
         const removed = window.AriaMock.removeSavedInsight(userId, id);
         if (removed) {
           renderSavedInsights();
-          showToast('Insight removed');
+          showToast(currentItem && currentItem.type === 'snapshot' ? 'Snapshot removed' : 'Saved query removed');
           renderActiveConversation();
         } else {
           showToast('Failed to remove insight');
@@ -3120,6 +3995,7 @@
           renderSidebarConversations();
           showBusinessWorkspaceView('ask');
           renderActiveConversation();
+          showToast(item.type === 'snapshot' ? 'Opened immutable snapshot' : 'Opened saved query result');
         }
       });
     });
@@ -3168,16 +4044,27 @@
               if (result.table && state.currentUser) {
                 if (typeof applyRoleColumnMasking === 'function') applyRoleColumnMasking(result.table, state.currentUser.role);
               }
-              item.latestResult = JSON.parse(JSON.stringify(result));
-              item.lastRefreshedAt = Date.now();
-              item.dataAsOf = result.dataAsOf || Date.now();
+              const refreshedResult = createRefreshedFixtureResult(result, item);
+              refreshedResult.resultState = resultState;
+              const previousFingerprint = savedResultFingerprint(item.latestResult);
+              const refreshedFingerprint = savedResultFingerprint(refreshedResult);
+              if (previousFingerprint === refreshedFingerprint) {
+                showToast('No changes detected; saved query was not updated');
+                return;
+              }
+
+              item.latestResult = refreshedResult;
+              item.lastRefreshedAt = refreshedResult.refreshMetadata.refreshedAt;
+              item.dataAsOf = refreshedResult.dataAsOf;
               item.refreshCount = (item.refreshCount || 0) + 1;
-              // preserve partial state warning if any
-              item.latestResult.resultState = resultState;
+              item.lastRefreshStatus = resultState === 'partial' ? 'partial' : 'updated';
+              item.latestResultFingerprint = refreshedFingerprint;
 
               const saved = window.AriaMock.updateSavedQuery(userId, item);
               if (saved) {
-                showToast(resultState === 'partial' ? 'Query refreshed (partial data)' : 'Query refreshed successfully');
+                showToast(resultState === 'partial'
+                  ? `Query refreshed with partial data · fixture revision ${refreshedResult.refreshMetadata.fixtureRevision}`
+                  : `Query refreshed · fixture revision ${refreshedResult.refreshMetadata.fixtureRevision}`);
                 renderSavedInsights();
               } else {
                 showToast('Failed to save refreshed query');
@@ -3207,7 +4094,10 @@
           snapshot.type = 'snapshot';
           snapshot.sourceQueryId = id;
           snapshot.savedAt = Date.now();
+          snapshot.capturedAt = snapshot.savedAt;
           snapshot.result = JSON.parse(JSON.stringify(snapshot.latestResult));
+          snapshot.capturedResultFingerprint = savedResultFingerprint(snapshot.result);
+          snapshot.title = `Snapshot · ${item.title}`;
           delete snapshot.latestResult;
           delete snapshot.lastRefreshedAt;
           delete snapshot.refreshCount;
@@ -3270,12 +4160,12 @@
     const currentVal = timeRangeSelectEl.value;
 
     timeRangeSelectEl.innerHTML = `
-      <option value="auto" ${currentVal === 'auto' ? 'selected' : ''}>Auto &mdash; No time restriction</option>
-      <option value="current_quarter" ${currentVal === 'current_quarter' ? 'selected' : ''}>This calendar quarter (${curQ.displayRange})</option>
-      <option value="previous_quarter" ${currentVal === 'previous_quarter' ? 'selected' : ''}>Previous calendar quarter (${prevQ.displayRange})</option>
-      <option value="calendar_year" ${currentVal === 'calendar_year' ? 'selected' : ''}>Calendar year ${yr.year} (${yr.displayRange})</option>
-      <option value="all_time" ${currentVal === 'all_time' ? 'selected' : ''}>All time</option>
-      <option value="custom" ${currentVal === 'custom' ? 'selected' : ''}>Custom date range...</option>
+      <option value="auto" ${currentVal === 'auto' ? 'selected' : ''}>Auto &mdash; infer from question (no added filter)</option>
+      <option value="current_quarter" ${currentVal === 'current_quarter' ? 'selected' : ''}>This calendar quarter &mdash; ${curQ.displayRange}</option>
+      <option value="previous_quarter" ${currentVal === 'previous_quarter' ? 'selected' : ''}>Previous calendar quarter &mdash; ${prevQ.displayRange}</option>
+      <option value="calendar_year" ${currentVal === 'calendar_year' ? 'selected' : ''}>Calendar year ${yr.year} &mdash; ${yr.displayRange}</option>
+      <option value="all_time" ${currentVal === 'all_time' ? 'selected' : ''}>All time &mdash; no date boundary</option>
+      <option value="custom" ${currentVal === 'custom' ? 'selected' : ''}>Custom date range &mdash; choose start and end dates</option>
     `;
 
     if (state.selectedScope && state.selectedScope.time) {
@@ -3327,7 +4217,7 @@
       if (suggestions.length > 0) {
         typeaheadPopupEl.innerHTML = suggestions.slice(0, 4).map((s) => `
           <div class="typeahead-item" data-text="${escapeHtml(s.text)}">
-            <span class="brand-badge" style="font-size: 9px; margin-right: 6px;">${escapeHtml(s.type)}</span>
+            <span class="brand-badge" style="font-size: 12px; margin-right: 6px;">${escapeHtml(s.type)}</span>
             ${escapeHtml(s.text)}
           </div>
         `).join('');
@@ -3346,24 +4236,61 @@
       }
     });
 
-    // 2. Domain Scope Chips
-    if (domainScopeChipsEl) {
-      domainScopeChipsEl.querySelectorAll('.scope-chip').forEach((chip) => {
-        chip.addEventListener('click', () => {
-          domainScopeChipsEl.querySelectorAll('.scope-chip').forEach((c) => c.classList.remove('active'));
-          chip.classList.add('active');
-          const scopeVal = chip.getAttribute('data-scope');
-          state.activeDomainScope = scopeVal;
-          state.selectedScope.domain = {
-            mode: scopeVal === 'Auto' ? 'auto' : 'explicit',
-            value: scopeVal
-          };
-          showToast(`Query scope limited to: ${state.activeDomainScope}`);
-          if (!getActiveConversation() || (getActiveConversation().messages || []).length === 0) {
-            renderIdleState();
-          }
-        });
+    // 2. Optional multi-domain search boundary. This is discovery scope, not access.
+    if (domainScopeSelectEl && domainScopeMenuEl) {
+      const domainCheckboxes = Array.from(domainScopeMenuEl.querySelectorAll('input[type="checkbox"]'));
+      const closeDomainMenu = () => {
+        domainScopeMenuEl.hidden = true;
+        domainScopeSelectEl.setAttribute('aria-expanded', 'false');
+      };
+      const syncDomainScope = (announce = true) => {
+        const selectedDomains = domainCheckboxes.filter(input => input.checked).map(input => input.value);
+        const isAuto = selectedDomains.length === 0;
+        state.activeDomainScope = isAuto ? 'Auto' : selectedDomains;
+        state.selectedScope.domain = {
+          mode: isAuto ? 'auto' : 'multi',
+          value: isAuto ? 'Auto' : selectedDomains.join(' + '),
+          values: selectedDomains
+        };
+        domainScopeSelectLabelEl.textContent = isAuto
+          ? 'Auto — infer from question'
+          : selectedDomains.join(' + ');
+        domainScopeImpactEl.textContent = isAuto
+          ? 'Auto searches domains inferred from the question.'
+          : `Search is limited to ${selectedDomains.join(' and ')}. Access policies still apply separately.`;
+        if (announce) {
+          showToast(isAuto
+            ? 'Domain search reset to Auto: inferred from the question'
+            : `Search limited to: ${selectedDomains.join(' + ')} (access unchanged)`);
+        }
+        if (!getActiveConversation() || (getActiveConversation().messages || []).length === 0) {
+          renderIdleState();
+        }
+      };
+
+      domainScopeSelectEl.addEventListener('click', () => {
+        const willOpen = domainScopeMenuEl.hidden;
+        domainScopeMenuEl.hidden = !willOpen;
+        domainScopeSelectEl.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        if (willOpen) (domainCheckboxes.find(input => input.checked) || domainCheckboxes[0]).focus();
       });
+      domainCheckboxes.forEach(input => input.addEventListener('change', () => syncDomainScope(true)));
+      resetDomainScopeBtnEl.addEventListener('click', () => {
+        domainCheckboxes.forEach(input => { input.checked = false; });
+        syncDomainScope(true);
+        domainScopeSelectEl.focus();
+      });
+      document.addEventListener('click', (event) => {
+        if (!domainScopeMenuEl.hidden && !event.target.closest('.scope-domain-control')) closeDomainMenu();
+      });
+      domainScopeMenuEl.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeDomainMenu();
+          domainScopeSelectEl.focus();
+        }
+      });
+      syncDomainScope(false);
     }
 
     // 3. Time Range / Scope Editor Select
@@ -3389,7 +4316,7 @@
           if (val === 'auto' || val === 'Auto') {
             state.selectedScope.time = { mode: 'auto', preset: 'auto', start: null, end: null };
             state.activeTimeRange = 'Auto';
-            showToast('Time window set to: Auto (No time restriction)');
+            showToast('Period set to Auto: inferred from the question; no extra time filter added');
           } else {
             const p = window.AriaScope.resolvePresetDateRange(val, window.AriaMock.DEMO_CONTEXT);
             state.selectedScope.time = {
@@ -3504,11 +4431,16 @@
     const domainValue = appliedScope.domain && typeof appliedScope.domain === 'object'
       ? (appliedScope.domain.value || appliedScope.domain.label || 'Auto')
       : (appliedScope.domain || 'Auto');
+    const domainValues = appliedScope.domain && typeof appliedScope.domain === 'object' && Array.isArray(appliedScope.domain.values)
+      ? appliedScope.domain.values.filter(Boolean)
+      : [];
+    const hasDomainLimits = domainValues.length > 0 && appliedScope.domain && String(appliedScope.domain.source || '').toLowerCase().includes('limited');
     opts.selectedScope.domain = {
-      mode: domainValue && domainValue !== 'Auto' ? 'explicit' : 'auto',
-      value: domainValue || 'Auto'
+      mode: hasDomainLimits ? 'multi' : (domainValue && domainValue !== 'Auto' ? 'explicit' : 'auto'),
+      value: hasDomainLimits ? domainValues.join(' + ') : (domainValue || 'Auto'),
+      values: hasDomainLimits ? domainValues : []
     };
-    opts.interpretationOverride.domain = domainValue || 'Auto';
+    opts.interpretationOverride.domain = hasDomainLimits ? 'Auto' : (domainValue || 'Auto');
 
     const time = appliedScope.time || null;
     if (time) {
@@ -3570,7 +4502,8 @@
     const domain = options.selectedScope.domain;
     const time = options.selectedScope.time;
     const override = options.interpretationOverride;
-    if (!domain || !['auto', 'explicit'].includes(domain.mode) || typeof domain.value !== 'string') return false;
+    if (!domain || !['auto', 'explicit', 'multi'].includes(domain.mode) || typeof domain.value !== 'string') return false;
+    if (domain.mode === 'multi' && (!Array.isArray(domain.values) || domain.values.length === 0)) return false;
     if (!time || !['auto', 'preset', 'custom'].includes(time.mode) || typeof time.preset !== 'string') return false;
     return ['metric', 'breakdown', 'domain', 'projectScope', 'period'].every((key) => {
       const value = override[key];
@@ -3672,8 +4605,8 @@
   function renderHelpTabContent(tab) {
     if (tab === 'domains') {
       helpTabContent.innerHTML = `
-        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12.5px;">
-          <div class="capability-assumption"><strong>Prototype capability map.</strong> Coverage below reflects synthetic fixtures, not connected production systems. CK1 schema coverage has not yet been validated.</div>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+          <div class="capability-assumption"><strong>CK1 v2.1 capability map loaded.</strong> Data Guide maps the synthetic demo metrics to the supplied 111-table CK1 schema. Coverage indicates schema readiness, not a live production connection.</div>
           <div class="schema-table-card"><strong>Finance</strong> <span class="capability-status available">Available in demo</span><p>Receivables, aging and supplier invoice scenarios.</p></div>
           <div class="schema-table-card"><strong>Sales</strong> <span class="capability-status available">Available in demo</span><p>Executed contracts, buyer ranking and payment schedules.</p></div>
           <div class="schema-table-card"><strong>Property Management</strong> <span class="capability-status available">Available in demo</span><p>Occupancy and lease-renewal scenarios.</p></div>
@@ -3684,13 +4617,13 @@
       `;
     } else if (tab === 'scope') {
       helpTabContent.innerHTML = `
-        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12.5px;">
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
           <p><strong>Architecture Boundaries &amp; Known Limitations:</strong></p>
           <div class="schema-table-card">
             <strong>Prototype behaviour:</strong> This demo presents read-only interactions with synthetic data. It does not prove production data controls.
           </div>
           <div class="schema-table-card">
-            <strong>Catalog Boundaries:</strong> Indexed operational data spans FY2023–FY2026. Pre-2023 payroll and internal corporate HR records (stored in Workday) are out-of-scope.
+            <strong>Catalog Boundaries:</strong> Indexed operational data spans calendar years 2023–2026. A fiscal-year calendar is not configured. Pre-2023 payroll and internal corporate HR records (stored in Workday) are out-of-scope.
           </div>
           <div class="schema-table-card">
             <strong>Ungrounded Forecasting:</strong> External macroeconomic forecasts (e.g. 2030 mortgage interest rates) are unsupported to prevent hallucination.
@@ -3702,7 +4635,7 @@
       `;
     } else if (tab === 'shortcuts') {
       helpTabContent.innerHTML = `
-        <table class="result-data-table" style="font-size: 12.5px;">
+        <table class="result-data-table" style="font-size: 12px;">
           <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
           <tbody>
             <tr><td><kbd>Enter</kbd></td><td>Send prompt / question</td></tr>
@@ -3718,10 +4651,13 @@
 
   function closeAllModalsAndDrawers() {
     dataExplorerDrawer.classList.remove('open');
-        settingsDrawer.classList.remove('open');
+    settingsDrawer.classList.remove('open');
     helpModalBackdrop.classList.remove('open');
     feedbackModalBackdrop.classList.remove('open');
     sourceTableModalBackdrop.classList.remove('open');
+    if (clearHistoryModalBackdrop) clearHistoryModalBackdrop.classList.remove('open');
+    if (domainScopeMenuEl) domainScopeMenuEl.hidden = true;
+    if (domainScopeSelectEl) domainScopeSelectEl.setAttribute('aria-expanded', 'false');
     closeClarificationModal();
     if (editInterpretationModalBackdrop) editInterpretationModalBackdrop.classList.remove('open');
     closeScopeInspector();
@@ -3779,10 +4715,108 @@
     }, 2800);
   }
 
+  function announceAppStatus(message, priority = 'polite') {
+    const target = priority === 'assertive' ? appAlertLiveEl : appStatusLiveEl;
+    if (!target || !message) return;
+    target.textContent = '';
+    window.setTimeout(() => { target.textContent = message; }, 20);
+  }
+
+  function initAccessibleModals() {
+    const modals = Array.from(document.querySelectorAll('.modal-backdrop'));
+    const returnFocus = new WeakMap();
+    const focusableSelector = [
+      'button:not([disabled])',
+      '[href]',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(',');
+
+    const activeModal = () => [...modals].reverse().find(modal => modal.classList.contains('open')) || null;
+    const focusableIn = (modal) => Array.from(modal.querySelectorAll(focusableSelector))
+      .filter(element => !element.hidden && element.getAttribute('aria-hidden') !== 'true' && element.offsetParent !== null);
+
+    modals.forEach((modal) => {
+      modal.setAttribute('aria-hidden', modal.classList.contains('open') ? 'false' : 'true');
+      const dialog = modal.querySelector('[role="dialog"], [role="alertdialog"]');
+      if (dialog) {
+        dialog.setAttribute('aria-modal', 'true');
+        if (!dialog.hasAttribute('tabindex')) dialog.setAttribute('tabindex', '-1');
+      }
+
+      new MutationObserver(() => {
+        const isOpen = modal.classList.contains('open');
+        modal.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+        if (isOpen) {
+          if (!returnFocus.has(modal)) returnFocus.set(modal, document.activeElement);
+          requestAnimationFrame(() => {
+            if (!modal.contains(document.activeElement)) {
+              const preferred = modal.querySelector('[autofocus]') || focusableIn(modal)[0] || dialog;
+              if (preferred && typeof preferred.focus === 'function') preferred.focus();
+            }
+          });
+        } else if (returnFocus.has(modal)) {
+          const trigger = returnFocus.get(modal);
+          returnFocus.delete(modal);
+          requestAnimationFrame(() => {
+            if (trigger && document.contains(trigger) && typeof trigger.focus === 'function') trigger.focus();
+          });
+        }
+      }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+    });
+
+    document.addEventListener('keydown', (event) => {
+      const modal = activeModal();
+      if (!modal) return;
+      if (event.key === 'Escape') {
+        const closeControl = modal.querySelector('.header-icon-btn, [data-modal-close], button[id^="cancel"], button[id^="close"]');
+        if (closeControl) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          closeControl.click();
+        }
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      event.stopImmediatePropagation();
+      const focusable = focusableIn(modal);
+      if (!focusable.length) {
+        event.preventDefault();
+        const dialog = modal.querySelector('[role="dialog"], [role="alertdialog"]');
+        if (dialog) dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!modal.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }, true);
+  }
+
   function updateSendButtonState() {
+    resizeChatInput();
     const hasText = chatInputEl.value.trim().length > 0;
     const isCustomDateValid = validateCustomDateRange();
     sendBtnEl.disabled = !hasText || state.isThinking || !isCustomDateValid;
+  }
+
+  function resizeChatInput() {
+    if (!chatInputEl) return;
+    const maxHeight = 144;
+    chatInputEl.style.height = 'auto';
+    const nextHeight = Math.min(chatInputEl.scrollHeight, maxHeight);
+    chatInputEl.style.height = `${nextHeight}px`;
+    chatInputEl.style.overflowY = chatInputEl.scrollHeight > maxHeight ? 'auto' : 'hidden';
   }
 
   function scrollToBottom() {
@@ -3819,15 +4853,93 @@
     URL.revokeObjectURL(url);
   }
 
+  function initResizablePanels() {
+    const sidebarHandle = document.getElementById('sidebarResizeHandle');
+    const evidenceHandle = document.getElementById('evidenceResizeHandle');
+    const root = document.documentElement;
+    const storageKeys = { sidebar: 'aria_sidebar_width_v1', evidence: 'aria_evidence_width_v1' };
+
+    const limits = (kind) => kind === 'sidebar'
+      ? { min: 180, max: Math.max(220, Math.min(440, window.innerWidth - 520)) }
+      : { min: 320, max: Math.max(360, Math.min(760, window.innerWidth - 360)) };
+
+    const applyWidth = (kind, value, persist = true) => {
+      const range = limits(kind);
+      const width = Math.min(range.max, Math.max(range.min, Math.round(value)));
+      root.style.setProperty(kind === 'sidebar' ? '--sidebar-width' : '--drawer-width', `${width}px`);
+      if (persist) {
+        try { localStorage.setItem(storageKeys[kind], String(width)); } catch (e) { /* Storage is optional. */ }
+      }
+      return width;
+    };
+
+    Object.keys(storageKeys).forEach((kind) => {
+      try {
+        const savedWidth = Number(localStorage.getItem(storageKeys[kind]));
+        if (Number.isFinite(savedWidth) && savedWidth > 0) applyWidth(kind, savedWidth, false);
+      } catch (e) { /* Keep the CSS default. */ }
+    });
+
+    const bindHandle = (handle, kind) => {
+      if (!handle) return;
+      let activePointerId = null;
+      const pointerWidth = (clientX) => kind === 'sidebar'
+        ? clientX - sidebarEl.getBoundingClientRect().left
+        : window.innerWidth - clientX;
+
+      handle.addEventListener('pointerdown', (event) => {
+        if (window.innerWidth <= 820 || event.button !== 0) return;
+        activePointerId = event.pointerId;
+        handle.setPointerCapture(activePointerId);
+        document.body.classList.add('panel-resizing');
+        event.preventDefault();
+      });
+      handle.addEventListener('pointermove', (event) => {
+        if (activePointerId !== event.pointerId) return;
+        applyWidth(kind, pointerWidth(event.clientX), false);
+      });
+
+      const finishResize = (event) => {
+        if (activePointerId === null || event.pointerId !== activePointerId) return;
+        applyWidth(kind, pointerWidth(event.clientX));
+        if (handle.hasPointerCapture(activePointerId)) handle.releasePointerCapture(activePointerId);
+        activePointerId = null;
+        document.body.classList.remove('panel-resizing');
+      };
+      handle.addEventListener('pointerup', finishResize);
+      handle.addEventListener('pointercancel', finishResize);
+
+      handle.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        const panel = kind === 'sidebar' ? sidebarEl : scopeInspectorPanel;
+        const currentWidth = panel.getBoundingClientRect().width;
+        const visualDirection = event.key === 'ArrowRight' ? 1 : -1;
+        const delta = kind === 'sidebar' ? visualDirection * 16 : visualDirection * -16;
+        applyWidth(kind, currentWidth + delta);
+        event.preventDefault();
+      });
+    };
+
+    bindHandle(sidebarHandle, 'sidebar');
+    bindHandle(evidenceHandle, 'evidence');
+    window.addEventListener('resize', () => {
+      if (window.innerWidth <= 820) return;
+      applyWidth('sidebar', sidebarEl.getBoundingClientRect().width, false);
+      applyWidth('evidence', scopeInspectorPanel.getBoundingClientRect().width, false);
+    });
+  }
+
   // =========================================================================
   // 17. ATTACH ALL UI BUTTON LISTENERS (DOM READY)
   // =========================================================================
   document.addEventListener('DOMContentLoaded', () => {
     initTheme();
+    initAccessibleModals();
     initUserIdentity();
     initInputHelpers();
     updateScopeEditorUI();
     initSettingsAndHelp();
+    initResizablePanels();
 
     // Chat Input Keys & Send
     chatInputEl.addEventListener('keydown', (e) => {
@@ -3852,15 +4964,70 @@
     });
 
     // Clear All History
-    clearAllHistoryBtnEl.addEventListener('click', () => {
-      if (confirm('Clear all conversation history for your current profile?')) {
-        state.conversations = [];
-        state.activeConversationId = null;
-        saveConversationsToStorage();
-        renderSidebarConversations();
-        renderActiveConversation();
-        showToast('All conversation history cleared');
-      }
+    const closeClearHistoryModal = () => {
+      clearHistoryModalBackdrop.classList.remove('open');
+      if (clearHistoryTrigger && document.contains(clearHistoryTrigger)) clearHistoryTrigger.focus();
+      clearHistoryTrigger = null;
+    };
+    const openClearHistoryModal = (trigger) => {
+      clearHistoryTrigger = trigger;
+      const count = state.conversations.length;
+      clearHistoryConversationCount.textContent = `${count} ${count === 1 ? 'conversation' : 'conversations'}`;
+      clearHistoryModalBackdrop.classList.add('open');
+      requestAnimationFrame(() => cancelClearHistoryBtn.focus());
+    };
+    clearAllHistoryBtnEl.addEventListener('click', () => openClearHistoryModal(clearAllHistoryBtnEl));
+    closeClearHistoryModalBtn.addEventListener('click', closeClearHistoryModal);
+    cancelClearHistoryBtn.addEventListener('click', closeClearHistoryModal);
+    confirmClearHistoryBtn.addEventListener('click', () => {
+      state.conversations = [];
+      state.activeConversationId = null;
+      saveConversationsToStorage();
+      closeClearHistoryModal();
+      renderSidebarConversations();
+      renderActiveConversation();
+      showToast('All conversation history cleared');
+    });
+    clearHistoryModalBackdrop.addEventListener('click', (event) => {
+      if (event.target === clearHistoryModalBackdrop) closeClearHistoryModal();
+    });
+    clearHistoryModalBackdrop.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') { event.preventDefault(); closeClearHistoryModal(); return; }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(clearHistoryModalBackdrop.querySelectorAll('button:not([disabled])'));
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
+
+    // Context-preserving CSV export
+    closeCsvExportModalBtn.addEventListener('click', closeCsvExportOptions);
+    cancelCsvExportBtn.addEventListener('click', closeCsvExportOptions);
+    confirmCsvExportBtn.addEventListener('click', () => {
+      if (!pendingCsvExport) return;
+      const { msg, conv } = pendingCsvExport;
+      const selected = csvExportModalBackdrop.querySelector('input[name="csvExportRows"]:checked');
+      const rowMode = selected ? selected.value : 'all';
+      const table = msg.resultsData.table;
+      const exportedCount = rowMode === 'filtered' ? filterExportRows(table, msg.tableSearch).length : table.rows.length;
+      const csv = buildContextualCsv(msg, conv, rowMode);
+      const safeTitle = String((table && table.title) || 'query_results').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60) || 'query_results';
+      downloadFile(`${safeTitle}_${rowMode}.csv`, csv, 'text/csv;charset=utf-8');
+      closeCsvExportOptions();
+      showToast(`Downloaded ${exportedCount} ${rowMode === 'filtered' ? 'filtered' : 'total'} rows with scope and freshness context`);
+    });
+    csvExportModalBackdrop.addEventListener('click', (event) => {
+      if (event.target === csvExportModalBackdrop) closeCsvExportOptions();
+    });
+    csvExportModalBackdrop.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') { event.preventDefault(); closeCsvExportOptions(); return; }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(csvExportModalBackdrop.querySelectorAll('button:not([disabled]), input:not([disabled])'));
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     });
 
     // Mobile Hamburger / Desktop Collapse
@@ -3949,15 +5116,24 @@
       showBusinessWorkspaceView('ask');
     });
 
+    tabCapabilitiesBtn.addEventListener('click', () => {
+      explorerActiveTab = 'capabilities';
+      tabCapabilitiesBtn.classList.add('active');
+      tabTablesBtn.classList.remove('active');
+      tabGlossaryBtn.classList.remove('active');
+      renderDataExplorer();
+    });
     tabTablesBtn.addEventListener('click', () => {
       explorerActiveTab = 'tables';
       tabTablesBtn.classList.add('active');
+      tabCapabilitiesBtn.classList.remove('active');
       tabGlossaryBtn.classList.remove('active');
       renderDataExplorer();
     });
     tabGlossaryBtn.addEventListener('click', () => {
       explorerActiveTab = 'glossary';
       tabGlossaryBtn.classList.add('active');
+      tabCapabilitiesBtn.classList.remove('active');
       tabTablesBtn.classList.remove('active');
       renderDataExplorer();
     });
@@ -3998,28 +5174,39 @@
 
     closeSourceTableModalBtn.addEventListener('click', () => sourceTableModalBackdrop.classList.remove('open'));
 
-    if (closeClarificationModalBtn) closeClarificationModalBtn.addEventListener('click', closeClarificationModal);
-    if (cancelClarificationBtn) cancelClarificationBtn.addEventListener('click', closeClarificationModal);
+    if (closeClarificationModalBtn) closeClarificationModalBtn.addEventListener('click', cancelClarificationModal);
+    if (cancelClarificationBtn) cancelClarificationBtn.addEventListener('click', cancelClarificationModal);
     if (confirmClarificationBtn) confirmClarificationBtn.addEventListener('click', confirmClarification);
     if (clarificationOptionsEl) {
       clarificationOptionsEl.addEventListener('change', () => {
-        clarificationOtherInput.value = '';
         confirmClarificationBtn.disabled = false;
-      });
-    }
-    if (clarificationOtherInput) {
-      clarificationOtherInput.addEventListener('input', () => {
-        if (clarificationOtherInput.value.trim()) {
-          clarificationOptionsEl.querySelectorAll('input').forEach((input) => { input.checked = false; });
-        }
-        confirmClarificationBtn.disabled = !clarificationOtherInput.value.trim() && !clarificationOptionsEl.querySelector('input:checked');
       });
     }
     if (clarificationModalBackdrop) {
       clarificationModalBackdrop.addEventListener('click', (event) => {
-        if (event.target === clarificationModalBackdrop) closeClarificationModal();
+        if (event.target === clarificationModalBackdrop) cancelClarificationModal();
       });
       clarificationModalBackdrop.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          cancelClarificationModal();
+          return;
+        }
+        if (/^[1-9]$/.test(event.key)) {
+          const numberedOption = clarificationOptionsEl.querySelector(`input[data-option-number="${event.key}"]`);
+          if (numberedOption) {
+            event.preventDefault();
+            numberedOption.checked = true;
+            confirmClarificationBtn.disabled = false;
+            announceAppStatus(`Option ${event.key} selected: ${numberedOption.getAttribute('data-label')}`);
+          }
+          return;
+        }
+        if (event.key === 'Enter' && clarificationOptionsEl.querySelector('input:checked') && document.activeElement !== cancelClarificationBtn && document.activeElement !== closeClarificationModalBtn) {
+          event.preventDefault();
+          confirmClarification();
+          return;
+        }
         if (event.key !== 'Tab') return;
         const focusable = Array.from(clarificationModalBackdrop.querySelectorAll('button:not([disabled]), input:not([disabled])'));
         if (!focusable.length) return;

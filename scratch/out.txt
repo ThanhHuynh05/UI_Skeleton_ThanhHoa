@@ -1,0 +1,15 @@
+    `).join('');
+    
+      return `<article class="business-source-definition">
+        <div><strong>${escapeHtml(definition.label)}</strong><span>${escapeHtml(definition.domain)}</span></div>
+        <p>${escapeHtml(definition.definition)}</p>
+        <dl><div><dt>Grain</dt><dd>${escapeHtml(definition.grain)}</dd></div><div><dt>Refresh</dt><dd>${escapeHtml(definition.cadence)}</dd></div><div><dt>Owner</dt><dd>${escapeHtml(definition.owner)}</dd></div></dl>
+      </article>`;
+    }).join('');
+
+    const answerBody = state.settings.detailLevel === 'concise' && res.answerConcise
+      ? res.answerConcise
+      : res.answer;
+
+    const isPinned = window.AriaMock.getSavedInsights(state.currentUser ? state.currentUser.id : 'default').some(a => a.sourceMessageId === msg.id || a.id === msg.id);
+

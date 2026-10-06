@@ -3,20 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aria Observability &amp; Telemetry Dashboard</title>
-  <meta name="description" content="Monitoring, tracing, audit logging, and security observability for the Aria AI Agent architecture.">
+  <title>Aria AI Performance & Risk Dashboard</title>
+  <meta name="description" content="Unified observability and evaluation dashboard.">
   <link rel="stylesheet" href="styles.css">
+  <style>
+    .story-section { margin-bottom: 32px; }
+    .story-section h2 { font-size: 18px; margin-bottom: 12px; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+    .collapsible-details { margin-top: 16px; border: 1px solid var(--border-color); border-radius: var(--radius-md); }
+    .collapsible-header { padding: 12px 16px; background: var(--bg-surface); cursor: pointer; font-weight: 600; display: flex; justify-content: space-between; }
+    .collapsible-body { padding: 16px; border-top: 1px solid var(--border-color); }
+    
+    .story-line { margin-bottom: 12px; }
+    .story-label { font-weight: 700; font-size: 12px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+    .story-content { font-size: 14px; color: var(--text-primary); }
+    .action-panel { display: flex; gap: 12px; background: var(--bg-surface); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 24px; align-items: center; justify-content: space-between; }
+    .action-title { font-weight: 600; font-size: 15px; }
+    .action-desc { font-size: 12px; color: var(--text-secondary); }
+  </style>
 </head>
 <body class="font-md dashboard-page">
   <div class="app-container">
-    <!-- Header Layer -->
     <header class="app-header">
       <div class="header-left">
         <a href="index.html" class="header-action-btn" title="Return to Business Workspace">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
           <span>Back to Business Workspace</span>
         </a>
-
         <div class="brand-wrapper" style="margin-left: 8px;">
           <div class="brand-icon" aria-hidden="true" style="background: #475569;">R</div>
           <div class="brand-title">
@@ -24,617 +36,698 @@
             <span class="demo-status-badge">Demo <span aria-hidden="true">&bull;</span> Synthetic data</span>
           </div>
         </div>
-
-        <nav class="header-nav" aria-label="Admin &amp; Research Workspace sections">
-          <a href="eval.html" class="header-nav-link">Evaluation</a>
-          <a href="admin.html" class="header-nav-link active">Observability</a>
-        </nav>
       </div>
-
       <div class="header-right">
-        <div class="user-badge" id="adminUserBadge">
-          <div class="user-badge-dot" aria-hidden="true"></div>
-          <span id="adminUserLabel">Demo persona: <strong>Admin</strong></span>
+        <div class="user-menu-wrapper" id="adminUserBadge">
+          <button type="button" class="user-badge-btn" id="adminUserMenuBtn" aria-label="User profile and roles" aria-expanded="false">
+            <div class="user-badge-dot" aria-hidden="true"></div>
+            <span id="adminUserLabel">Demo persona: <strong>Admin</strong></span>
+            <span class="user-menu-chevron" aria-hidden="true">&#9662;</span>
+          </button>
+          <div class="user-menu-dropdown" id="adminUserMenuDropdown" role="menu">
+            <div class="user-menu-context">
+              <strong>Demo persona</strong>
+              <span>Access and masking are simulated.</span>
+            </div>
+            <a href="index.html" class="user-menu-item" role="menuitem">Return to business workspace</a>
+            <button type="button" class="user-menu-item" id="adminSwitchPersonaBtn" role="menuitem">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+              <span>Switch demo persona</span>
+            </button>
+          </div>
         </div>
-        <button type="button" class="header-icon-btn" id="themeToggleBtn" aria-label="Toggle color theme"></button>
       </div>
     </header>
 
-    <!-- Restricted Screen for Non-Admin Roles -->
     <div id="restrictedView" class="hidden" style="padding: 24px;">
       <div class="admin-restricted-box">
-        <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--warning-bg); color: var(--warning-color); display: flex; align-items: center; justify-content: center; font-size: 24px;">
-          🔒
-        </div>
-        <h2 style="font-size: 18px; font-weight: 700;">Observability Restricted to Admin Role</h2>
+        <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--warning-bg); color: var(--warning-color); display: flex; align-items: center; justify-content: center; font-size: 24px;">🔒</div>
+        <h2 style="font-size: 18px; font-weight: 700;">Dashboard Restricted to Admin Role</h2>
         <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;" id="restrictedExplanation">
-          You are currently signed in with a non-admin role. The Agent Observability, Tracing, and Security Audit dashboard is restricted to the <strong>Data / Admin team</strong> persona.
+          You are currently signed in with a non-admin role. The AI Performance & Risk Dashboard is restricted to the <strong>Data / Admin team</strong>.
         </p>
         <div style="display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: 14px;">
-          <a href="index.html" class="btn-new-chat" style="width: auto; background: var(--bg-surface); color: var(--text-primary); border-color: var(--border-color); padding: 8px 18px; text-decoration: none;">
-            Return to Business Workspace
-          </a>
-          <button type="button" class="btn-new-chat" id="switchToAdminBtn" style="width: auto; background: var(--accent-primary); color: #fff; padding: 8px 20px;">
-            Switch demo persona to Data / Admin
-          </button>
+          <a href="index.html" class="btn-new-chat" style="width: auto; background: var(--bg-surface); color: var(--text-primary); border-color: var(--border-color); padding: 8px 18px; text-decoration: none;">Return to Business Workspace</a>
+          <button type="button" class="btn-new-chat" id="switchToAdminBtn" style="width: auto; background: var(--accent-primary); color: #fff; padding: 8px 20px;">Switch demo persona to Data / Admin</button>
         </div>
-        <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">
-          Note: This switches the demo persona for prototype testing; it does not grant production credentials.
-        </p>
       </div>
     </div>
 
-    <!-- Main Observability Workspace (Data / Admin Role) -->
-    <main class="admin-viewport" id="adminWorkspace">
-      <!-- Title & Action Bar -->
-      <div class="admin-header-row">
-        <div class="admin-title-area">
-          <h1>Agent Observability, Tracing &amp; Audit Trail</h1>
-          <p>Real-time telemetry across Intent Understanding, AST Security Gateways, Feedback metrics, and Session Audits.</p>
-        </div>
-        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-          <button type="button" class="action-tool-btn" id="exportAuditCsvBtnTop" style="padding: 7px 12px; font-weight: 500;">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            <span>Export Audit CSV</span>
-          </button>
-          <button type="button" class="btn-new-chat" id="refreshTracesBtn" style="width: auto; background: var(--bg-surface); color: var(--text-primary); border-color: var(--border-color); padding: 7px 14px;">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-            <span>Refresh Telemetry</span>
-          </button>
-        </div>
+    <main class="admin-viewport journey-container" id="adminWorkspace" style="background: var(--bg-surface);">
+      
+      <!-- Narrative Header -->
+      <div class="answer-journey-only" style="padding: 60px 40px; background: var(--bg-app); border-bottom: 1px solid var(--border-color);">
+        <h1 style="font-family: var(--font-serif); font-size: 48px; margin-bottom: 16px;">Answer Journey</h1>
+        <p style="font-size: 18px; color: var(--text-secondary); max-width: 600px;">
+          An editorial case study of AI performance, observing how Aria interprets, validates, and impacts business operations.
+        </p>
       </div>
 
-      <!-- KPI Summary Cards Grid (5 horizontal cards) -->
-      <div class="kpi-cards-grid">
-        <div class="kpi-card kpi-accent-blue">
-          <div class="kpi-label">Avg Pipeline Latency</div>
-          <div class="kpi-value" id="kpiLatency">--</div>
-          <div class="kpi-meta">5-stage orchestration cycle</div>
+      <!-- 1. The Question -->
+      <section class="journey-step answer-journey-only" style="padding: 60px 40px; background: var(--bg-surface);">
+        <div class="journey-step-number">01</div>
+        <h2 class="journey-step-title">The question</h2>
+        <div style="max-width: 800px; font-size: 24px; font-family: var(--font-serif); color: var(--text-primary); border-left: 2px solid var(--accent-primary); padding-left: 24px;">
+          "What is the total value of pending procurement contracts expiring this quarter?"
         </div>
+      </section>
 
-        <div class="kpi-card kpi-accent-green">
-          <div class="kpi-label">Query Success Rate</div>
-          <div class="kpi-value" id="kpiSuccess">--</div>
-          <div class="kpi-meta"><span class="badge-status success" style="font-size: 10px;">Verified Queries</span></div>
-        </div>
-
-        <div class="kpi-card kpi-accent-purple">
-          <div class="kpi-label">Total Queries Processed</div>
-          <div class="kpi-value" id="kpiQueries">--</div>
-          <div class="kpi-meta">Session &amp; historical requests</div>
-        </div>
-
-        <div class="kpi-card kpi-accent-amber">
-          <div class="kpi-label">Retries &amp; Recovery</div>
-          <div class="kpi-value" id="kpiRetries">--</div>
-          <div class="kpi-meta">Max recovery limit: 2</div>
-        </div>
-
-        <div class="kpi-card kpi-accent-rose">
-          <div class="kpi-label">Security Interceptions</div>
-          <div class="kpi-value" id="kpiBlocked" style="color: var(--danger-color);">--</div>
-          <div class="kpi-meta"><span class="badge-status error" style="font-size: 10px;">Blocked Writes &amp; Injections</span></div>
-        </div>
-      </div>
-
-      <!-- Telemetry Charts Grid (2 columns) -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 16px; width: 100%;">
-        <!-- Latency Over Time (Inline SVG Line Chart) -->
-        <div class="admin-card">
-          <div class="admin-card-header">
-            <div>
-              <div class="admin-card-title">Pipeline Latency Over Time</div>
-              <div style="font-size: 11px; color: var(--text-muted);">Hourly execution latency tracking across 5 pipeline stages</div>
+      <!-- 2. How Aria interpreted it -->
+      <section class="journey-step answer-journey-only" style="padding: 60px 40px; background: var(--bg-app);">
+        <div class="journey-step-number">02</div>
+        <h2 class="journey-step-title">How Aria interpreted it</h2>
+        <div style="max-width: 800px; font-size: 16px; color: var(--text-secondary);">
+          <p style="margin-bottom: 16px;">Aria mapped the query to the <strong>Procurement</strong> domain, setting the metric to <strong>Contract Value</strong> and applying a time filter for <strong>Q3 2026</strong>. It identified "pending" and "expiring" as key record filters.</p>
+          
+          <details class="collapsible-details" style="margin-top: 24px;">
+            <summary class="collapsible-header" style="font-family: var(--font-sans); text-transform: uppercase; font-size: 12px; letter-spacing: 1px;">View technical interpretation</summary>
+            <div class="collapsible-body" style="background: var(--bg-surface); padding: 16px; font-family: var(--font-mono); font-size: 13px;">
+              {"metric": "contract_value", "filters": ["status='pending'", "expiry='current_quarter'"]}
             </div>
-            <span class="brand-badge" style="background: var(--bg-surface);">Target: &lt;2.0s</span>
-          </div>
-          <div style="padding: 16px 20px;">
-            <div class="chart-svg-wrapper" id="latencyChartWrapper"></div>
-          </div>
+          </details>
         </div>
+      </section>
 
-        <!-- Feedback & Thumbs Down Reason Breakdown -->
-        <div class="admin-card">
-          <div class="admin-card-header">
-            <div>
-              <div class="admin-card-title">User Feedback &amp; Reason Breakdown</div>
-              <div style="font-size: 11px; color: var(--text-muted);">User thumbs up/down satisfaction and issue categorization</div>
+      <!-- 3. The answer produced -->
+      <section class="journey-step answer-journey-only" style="padding: 60px 40px; background: var(--bg-surface);">
+        <div class="journey-step-number">03</div>
+        <h2 class="journey-step-title">The answer produced</h2>
+        <div style="max-width: 800px;">
+          <div style="font-size: 48px; font-family: var(--font-serif); margin-bottom: 16px;">$14.2M</div>
+          <p style="font-size: 18px; color: var(--text-secondary);">Across 43 pending contracts identified in the active database.</p>
+        </div>
+      </section>
+
+      <!-- 4. How the answer was validated -->
+      <section class="journey-step answer-journey-only" style="padding: 60px 40px; background: var(--bg-app);">
+        <div class="journey-step-number">04</div>
+        <h2 class="journey-step-title">How the answer was validated</h2>
+        <div style="max-width: 800px; font-size: 16px; color: var(--text-secondary);">
+          <p>The system ran security checks ensuring the user had access to procurement data, applied data masking to vendor PII, and validated the SQL AST against destructive operations.</p>
+          
+          <details class="collapsible-details" style="margin-top: 24px;">
+            <summary class="collapsible-header" style="font-family: var(--font-sans); text-transform: uppercase; font-size: 12px; letter-spacing: 1px;">Security & Validation Logs</summary>
+            <div class="collapsible-body" style="background: var(--bg-surface); padding: 16px; font-family: var(--font-mono); font-size: 13px;">
+              > AST Check: PASS<br>
+              > Role Auth: PASS (Data Admin)<br>
+              > Masking: APPLIED (Vendor ID)
             </div>
-            <span class="badge-status success" id="feedbackStatsLabel" style="font-size: 11px;">--</span>
-          </div>
-          <div style="padding: 16px 20px;">
-            <div class="chart-svg-wrapper" id="feedbackChartWrapper"></div>
-          </div>
+          </details>
         </div>
-      </div>
+      </section>
 
-      <!-- Session Security Audit Trail Table (Layer 3 & 8) -->
-      <div class="admin-card">
-        <div class="admin-card-header">
-          <div>
-            <div class="admin-card-title">Session Security Audit Trail (Layer 3 &amp; 8)</div>
-            <div style="font-size: 11px; color: var(--text-muted);">Captures all answered queries, AST blocks, and access denials in real time</div>
+      <!-- 5. What happened operationally -->
+      <section class="journey-step answer-journey-only" style="padding: 60px 40px; background: var(--bg-surface);">
+        <div class="journey-step-number">05</div>
+        <h2 class="journey-step-title">What happened operationally</h2>
+        <div style="max-width: 800px; font-size: 16px; color: var(--text-secondary);">
+          <p>The demo trace records a pipeline duration of <strong>1.45 seconds</strong> with the retrieval-enriched schema strategy. This single trace is descriptive and is not a strategy comparison.</p>
+          
+          <details class="collapsible-details" style="margin-top: 24px;">
+            <summary class="collapsible-header" style="font-family: var(--font-sans); text-transform: uppercase; font-size: 12px; letter-spacing: 1px;">Trace & Benchmark Data</summary>
+            <div class="collapsible-body" style="background: var(--bg-surface); padding: 16px; font-family: var(--font-mono); font-size: 13px;">
+              > Latency: 1450ms<br>
+              > Strategy: retrieval_enriched<br>
+              > Tokens: 1,420
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <!-- 6. Business impact -->
+      <section class="journey-step answer-journey-only" style="padding: 60px 40px; background: var(--bg-app);">
+        <div class="journey-step-number">06</div>
+        <h2 class="journey-step-title">Business impact</h2>
+        <div style="max-width: 800px; font-size: 18px; color: var(--text-primary); border-left: 2px solid var(--accent-primary); padding-left: 24px;">
+          Identifying these pending renewals early prevents supply chain disruption and optimizes quarterly expenditure.
+        </div>
+      </section>
+
+      <!-- 7. Recommended next action -->
+      <section class="journey-step answer-journey-only" style="padding: 60px 40px; background: var(--bg-surface); border-bottom: none;">
+        <div class="journey-step-number">07</div>
+        <h2 class="journey-step-title">Recommended next action</h2>
+        <div style="max-width: 800px; font-size: 16px;">
+          <p style="margin-bottom: 24px; color: var(--text-secondary);">Review the top 5 highest-value contracts expiring this month and assign renewal workflows to procurement managers.</p>
+          <a class="journey-return-link" href="index.html">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            <span>Return to workspace</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="journey-step observability-section" style="padding: 60px 40px; background: var(--bg-surface);" aria-labelledby="observabilityTitle">
+        <div class="journey-step-number">01</div>
+        <h2 class="journey-step-title" id="observabilityTitle">Observability</h2>
+        <p class="section-intro">Operational telemetry for the demo workspace. This section reports recorded request outcomes and keeps production observations separate from the simulated evaluation below.</p>
+
+        <div class="observability-context" role="note">
+          <div><span>Dataset</span><strong>Demo telemetry</strong></div>
+          <div><span>Observation window</span><strong>Current stored session</strong></div>
+          <div><span>Last event</span><strong id="observabilityLastEvent">Loading…</strong></div>
+          <div><span>Schema coverage</span><strong id="observabilitySchemaCoverage">Loading…</strong></div>
+        </div>
+
+        <div class="observability-kpi-grid">
+          <article><span>Total requests</span><strong id="kpiQueries">—</strong><small>All recorded requests in the current demo store</small></article>
+          <article><span>Successful outcomes</span><strong id="kpiQuality">—</strong><small>SUCCESS or AMBIGUOUS_RESOLVED ÷ traced requests</small></article>
+          <article><span>Average latency</span><strong id="kpiLatency">—</strong><small>Mean end-to-end latency across traces</small></article>
+          <article><span>Guardrail activity</span><strong id="kpiRisk">—</strong><small>Blocked requests and retry attempts</small></article>
+        </div>
+
+        <div class="observability-detail-grid">
+          <article class="observability-card">
+            <div class="benchmark-section-heading"><div><span class="benchmark-eyebrow">Performance</span><h3>Latency timeline</h3></div><span id="latencyStatsLabel" class="observability-stat"></span></div>
+            <div id="latencyChartWrapper"></div>
+          </article>
+          <article class="observability-card">
+            <div class="benchmark-section-heading"><div><span class="benchmark-eyebrow">Answer quality signal</span><h3>User feedback</h3></div><span id="feedbackStatsLabel" class="observability-stat"></span></div>
+            <div id="feedbackChartWrapper"></div>
+          </article>
+        </div>
+
+        <div class="observability-card activity-card">
+          <div class="benchmark-section-heading">
+            <div><span class="benchmark-eyebrow">Request-level evidence</span><h3>Activity and traces</h3></div>
+            <div class="activity-controls">
+              <input id="activitySearchInput" class="form-input" type="search" placeholder="Search question or user" aria-label="Search activity">
+              <select id="activityTypeFilter" class="form-select" aria-label="Filter activity type"><option>All</option><option>Trace</option><option>Audit</option></select>
+            </div>
           </div>
-          <div class="table-toolbar-group">
-            <span class="table-count-badge" id="auditCountBadge">5 records</span>
-            <input type="text" class="table-filter-input" id="auditSearchInput" placeholder="Filter questions or user...">
-            <select class="table-filter-select" id="auditRoleFilter">
-              <option value="All">All Roles</option>
-              <option value="Sales Manager">Sales Manager</option>
-              <option value="Finance Analyst">Finance Analyst</option>
-              <option value="Project Manager">Project Manager</option>
-              <option value="Procurement Officer">Procurement Officer</option>
-              <option value="Executive">Executive</option>
-              <option value="Data / Admin team">Data / Admin team</option>
+          <div class="table-scroll-wrap">
+            <table class="data-table">
+              <thead><tr><th>Actor / time</th><th>Request</th><th>Outcome</th><th>Latency</th><th>Details</th></tr></thead>
+              <tbody id="activityTableBody"></tbody>
+            </table>
+          </div>
+          <div class="observability-definitions">
+            <p><strong>Success:</strong> a completed response, including a clarification that was resolved. <strong>Latency:</strong> elapsed request time in the demo trace.</p>
+            <p><strong>Blocked:</strong> a request stopped by access or safety controls. <strong>Retry:</strong> an additional pipeline attempt after a recoverable failure.</p>
+          </div>
+          <nav class="activity-pagination" aria-label="Activity pagination">
+            <button type="button" class="btn-secondary" id="activityPrevBtn">Previous</button>
+            <span id="activityPageStatus" aria-live="polite">Page 1 of 1</span>
+            <button type="button" class="btn-secondary" id="activityNextBtn">Next</button>
+          </nav>
+        </div>
+      </section>
+
+      <section class="journey-step benchmark-research-section" style="padding: 60px 40px; background: var(--bg-app);" aria-labelledby="benchmarkTitle">
+        <div class="journey-step-number">02</div>
+        <h2 class="journey-step-title" id="benchmarkTitle">Model evaluation benchmark</h2>
+        <div class="simulated-benchmark-notice" role="note">
+          <strong>Simulated benchmark</strong>
+          <span>These fixture results illustrate the evaluation workflow. They are not measured model performance and do not establish a preferred strategy.</span>
+        </div>
+
+        <div class="benchmark-toolbar">
+          <label for="strategySelect">
+            <span>Strategy under evaluation</span>
+            <select id="strategySelect" class="form-select">
+              <option value="full_schema">Full Schema Prompting (Baseline)</option>
+              <option value="schema_retrieval">Schema Retrieval (RAG)</option>
+              <option value="retrieval_enriched">Retrieval + Enriched Metadata</option>
             </select>
-            <select class="table-filter-select" id="auditOutcomeFilter">
-              <option value="All">All Outcomes</option>
-              <option value="ANSWERED">ANSWERED</option>
-              <option value="BLOCKED_WRITE">BLOCKED_WRITE</option>
-              <option value="BLOCKED_INJECTION">BLOCKED_INJECTION</option>
-              <option value="ACCESS_DENIED">ACCESS_DENIED</option>
-              <option value="ERROR_RECOVERY_FAILED">ERROR_FAILED</option>
-            </select>
+          </label>
+          <div class="benchmark-actions">
+            <button type="button" class="btn-new-chat" id="runBenchmarkBtn">Run simulated benchmark</button>
+            <button type="button" class="btn-secondary" id="downloadBenchmarkCsvBtn" disabled>Download run CSV</button>
           </div>
         </div>
+        <div class="benchmark-progress" id="benchmarkProgressBar" style="display:none;" aria-label="Benchmark progress"><div id="progressBarFill"></div></div>
 
-        <div class="table-scroll-wrapper">
-          <table class="result-data-table" id="auditTable">
-            <thead>
-              <tr>
-                <th style="width: 145px;">Timestamp</th>
-                <th style="width: 130px;">User</th>
-                <th style="width: 140px;">Role</th>
-                <th>Question Asked</th>
-                <th style="width: 140px;">Outcome</th>
-                <th style="width: 90px; text-align: right;">Latency</th>
-                <th>Audit Details</th>
-              </tr>
-            </thead>
-            <tbody id="auditTableBody">
-              <!-- Dynamically populated -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Recent Query Traces Table -->
-      <div class="admin-card">
-        <div class="admin-card-header">
-          <div>
-            <div class="admin-card-title">Recent Query Traces (Live Session)</div>
-            <div style="font-size: 11px; color: var(--text-muted);">End-to-end execution metadata, AST verification, and schema lineage</div>
+        <div class="benchmark-run-metadata" aria-live="polite">
+          <div class="benchmark-section-heading">
+            <div><span class="benchmark-eyebrow">Traceability</span><h3>Run metadata</h3></div>
+            <span class="badge-status" id="benchmarkRunStatus">Not run</span>
           </div>
-          <div class="table-toolbar-group">
-            <span class="table-count-badge" id="tracesCountBadge">5 live traces</span>
-            <input type="text" class="table-filter-input" id="tracesSearchInput" placeholder="Filter traces...">
-            <span class="brand-badge" style="background: var(--bg-surface);">Auto-Synchronized</span>
-          </div>
+          <dl class="benchmark-metadata-grid">
+            <div><dt>Run ID</dt><dd id="benchmarkRunId">Not assigned</dd></div>
+            <div><dt>Result type</dt><dd id="benchmarkResultType">Simulated fixture</dd></div>
+            <div><dt>Strategy</dt><dd id="benchmarkStrategy">Not run</dd></div>
+            <div><dt>Model</dt><dd id="benchmarkModel">Not executed</dd></div>
+            <div><dt>Config</dt><dd id="benchmarkConfig">Not run</dd></div>
+            <div><dt>Dataset version</dt><dd id="benchmarkDataset">aria-eval-fixtures@1.0.0</dd></div>
+            <div><dt>Run time</dt><dd id="benchmarkRunTime">Not run</dd></div>
+            <div><dt>Environment</dt><dd id="benchmarkEnvironment">Browser demo</dd></div>
+          </dl>
         </div>
 
-        <div class="table-scroll-wrapper">
-          <table class="result-data-table">
-            <thead>
-              <tr>
-                <th style="width: 100px;">Request ID</th>
-                <th style="width: 145px;">Timestamp</th>
-                <th style="width: 170px;">User &amp; Role</th>
-                <th>Question</th>
-                <th style="width: 90px; text-align: right;">Latency</th>
-                <th style="width: 75px; text-align: center;">Stages</th>
-                <th style="width: 110px;">Status</th>
-                <th style="width: 90px; text-align: center;">Action</th>
-              </tr>
-            </thead>
-            <tbody id="tracesTableBody">
-              <!-- Dynamically populated -->
-            </tbody>
-          </table>
+        <div class="benchmark-summary-grid">
+          <article><span>Simulated pass rate</span><strong id="benchmarkPassRate">Not run</strong><small id="benchmarkPassCount">Binary fixture checks</small></article>
+          <article><span>Simulated latency</span><strong id="benchmarkLatency">Not run</strong><small>Configured estimate per query</small></article>
+          <article><span>Context size</span><strong id="benchmarkTokens">Not run</strong><small>Configured tokens per query</small></article>
+          <article><span>Simulated cost</span><strong id="benchmarkCost">Not run</strong><small>Estimated USD per 1,000 queries</small></article>
         </div>
-      </div>
+
+        <div class="benchmark-definition-note">
+          <h3>Metric definitions</h3>
+          <p><strong>Accuracy / pass rate:</strong> passed fixture assertions divided by all eligible test cases. The pass flags in this demo are predefined; no model response is executed or judged.</p>
+          <p><strong>Cost:</strong> a configured estimate per 1,000 queries based on assumed context usage. It is not an observed invoice, billed amount, or measured production cost.</p>
+        </div>
+
+        <div class="benchmark-chart-card">
+          <h3>Simulated pass rate by category</h3>
+          <div id="categoryChartWrapper" class="benchmark-chart-empty">Run the simulated benchmark to view fixture results.</div>
+        </div>
+
+        <div class="benchmark-results-card">
+          <div class="benchmark-section-heading"><div><span class="benchmark-eyebrow">Fixture-level evidence</span><h3>Run results</h3></div></div>
+          <div class="table-scroll-wrap">
+            <table class="data-table">
+              <thead><tr><th>Category</th><th>Question</th><th>Expected outcome</th><th>Fixture result</th><th>Details</th></tr></thead>
+              <tbody id="benchmarkTableBody"><tr><td colspan="5" class="benchmark-not-run">No run results yet.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 
-  <!-- Trace Inspection Modal -->
-  <div class="modal-backdrop" id="traceModalBackdrop">
-    <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <!-- Unified Inspection Modal -->
+  <div class="modal-backdrop" id="inspectionModalBackdrop">
+    <div class="app-modal" role="dialog" style="max-width: 600px;">
       <div class="modal-header">
-        <div class="modal-title" id="modalTitle">Agent Execution Trace Inspection</div>
-        <button type="button" class="header-icon-btn" id="closeModalBtn" style="padding: 2px 8px;">✕</button>
+        <div class="modal-title" id="inspectionModalTitle">Event Details</div>
+        <button type="button" class="header-icon-btn" id="closeInspectionModalBtn">✕</button>
       </div>
-      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-body" id="inspectionModalBody"></div>
     </div>
   </div>
 
-  <!-- Scripts -->
   <script src="mock-data.js"></script>
   <script>
     (function () {
       'use strict';
-
-      // 1. Role & Identity Check
       let currentUser = null;
-      try {
-        const stored = localStorage.getItem('aria_user_profile');
-        if (stored) currentUser = JSON.parse(stored);
-      } catch (e) {}
+      try { const stored = localStorage.getItem('aria_user_profile'); if (stored) currentUser = JSON.parse(stored); } catch (e) {}
 
       const restrictedView = document.getElementById('restrictedView');
       const adminWorkspace = document.getElementById('adminWorkspace');
-      const adminUserLabel = document.getElementById('adminUserLabel');
-
-      if (currentUser) {
-        adminUserLabel.innerHTML = `Demo persona: <strong>${currentUser.name}</strong>`;
-      }
-
       const isAdmin = Boolean(currentUser && currentUser.role === 'data_admin');
+      
+      if (currentUser) {
+         document.getElementById('adminUserLabel').innerHTML = `Demo persona: <strong>${currentUser.name}</strong>`;
+      }
 
       if (!isAdmin) {
         restrictedView.classList.remove('hidden');
         adminWorkspace.classList.add('hidden');
-        if (currentUser) {
-          document.getElementById('restrictedExplanation').innerHTML = `
-            You are currently signed in as <strong>${currentUser.name} (${currentUser.roleTitle})</strong>.
-            The Agent Observability, Tracing, and Security Audit dashboard is restricted to the <strong>Data / Admin team</strong> persona.
-          `;
-        }
       } else {
         restrictedView.classList.add('hidden');
         adminWorkspace.classList.remove('hidden');
       }
 
       document.getElementById('switchToAdminBtn').addEventListener('click', () => {
-        const adminProfile = {
-          id: 'data_admin',
-          name: 'Alex Thorne (Admin)',
-          role: 'data_admin',
-          roleTitle: 'Data / Admin team'
-        };
-        localStorage.setItem('aria_user_profile', JSON.stringify(adminProfile));
+        localStorage.setItem('aria_user_profile', JSON.stringify({ id: 'data_admin', name: 'Alex Thorne (Admin)', role: 'data_admin', roleTitle: 'Data / Admin team' }));
         location.reload();
       });
 
-      // 2. Theme Initialization
-      let currentTheme = localStorage.getItem('aria_theme') || 'light';
-      const themeBtn = document.getElementById('themeToggleBtn');
-      function applyTheme(t) {
-        document.documentElement.setAttribute('data-theme', t);
-        currentTheme = t;
-        localStorage.setItem('aria_theme', t);
-        if (themeBtn) {
-          themeBtn.innerHTML = t === 'dark'
-            ? `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`
-            : `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
-        }
-        if (isAdmin) {
-          loadTelemetry();
-        }
-      }
-      if (themeBtn) themeBtn.addEventListener('click', () => applyTheme(currentTheme === 'light' ? 'dark' : 'light'));
-      applyTheme(currentTheme);
+      const savedTheme = localStorage.getItem('aria_theme') || 'light';
+      const resolvedTheme = savedTheme === 'system'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : savedTheme;
+      document.documentElement.setAttribute('data-theme', resolvedTheme);
 
-      // 3. Render Telemetry & KPIs
-      function loadTelemetry() {
+      const adminUserMenuBtn = document.getElementById('adminUserMenuBtn');
+      const adminUserMenuDropdown = document.getElementById('adminUserMenuDropdown');
+      adminUserMenuBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const isOpen = adminUserMenuDropdown.classList.toggle('open');
+        adminUserMenuBtn.setAttribute('aria-expanded', String(isOpen));
+      });
+      adminUserMenuDropdown.addEventListener('click', (event) => event.stopPropagation());
+      document.addEventListener('click', () => {
+        adminUserMenuDropdown.classList.remove('open');
+        adminUserMenuBtn.setAttribute('aria-expanded', 'false');
+      });
+      document.getElementById('adminSwitchPersonaBtn').addEventListener('click', () => {
+        localStorage.removeItem('aria_user_profile');
+        window.location.href = 'index.html';
+      });
+
+      let currentStrategyKey = 'full_schema';
+      let benchmarkHasRun = false;
+      let isRunning = false;
+      let benchmarkRun = null;
+      let activityPage = 1;
+      const activityPageSize = 5;
+
+      const legacyDashboard = document.getElementById('strategySelect');
+      if (legacyDashboard) {
+      legacyDashboard.addEventListener('change', (e) => {
+        currentStrategyKey = e.target.value;
+        benchmarkHasRun = false;
+        benchmarkRun = null;
+        document.getElementById('downloadBenchmarkCsvBtn').disabled = true;
+        loadData();
+      });
+      }
+
+      document.getElementById('runBenchmarkBtn').addEventListener('click', () => {
+        if(isRunning) return;
+        isRunning = true;
+        const btn = document.getElementById('runBenchmarkBtn');
+        btn.disabled = true;
+        btn.textContent = 'Running...';
+        const pb = document.getElementById('benchmarkProgressBar');
+        pb.style.display = 'block';
+        let fill = document.getElementById('progressBarFill');
+        fill.style.width = '0%';
+        let p = 0;
+        const int = setInterval(() => {
+          p += 10;
+          fill.style.width = Math.min(100, p) + '%';
+          if (p >= 100) {
+            clearInterval(int);
+            setTimeout(() => {
+              pb.style.display = 'none';
+              isRunning = false;
+              btn.disabled = false;
+              btn.textContent = 'Run simulated benchmark';
+              benchmarkHasRun = true;
+              const strat = window.AriaMock.EVALUATION_STRATEGIES[currentStrategyKey];
+              const executedAt = new Date();
+              benchmarkRun = {
+                id: `sim-${executedAt.toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${currentStrategyKey}`,
+                executedAt: executedAt.toISOString(),
+                strategyKey: currentStrategyKey,
+                strategy: strat.name,
+                model: strat.model,
+                configVersion: strat.configVersion,
+                datasetVersion: strat.datasetVersion,
+                resultType: 'Simulated fixture'
+              };
+              document.getElementById('downloadBenchmarkCsvBtn').disabled = false;
+              loadData();
+            }, 300);
+          }
+        }, 100);
+      });
+
+      function loadData() {
+        const strat = window.AriaMock.EVALUATION_STRATEGIES[currentStrategyKey];
         const store = window.AriaMock.getObservabilityStore();
-
-        document.getElementById('kpiLatency').textContent = (store.metrics.avgLatencyMs / 1000).toFixed(2) + 's';
-        document.getElementById('kpiSuccess').textContent = store.metrics.successRatePct.toFixed(1) + '%';
-        document.getElementById('kpiQueries').textContent = store.metrics.totalQueries;
-        document.getElementById('kpiRetries').textContent = store.metrics.retryCount;
-        document.getElementById('kpiBlocked').textContent = store.metrics.blockedCount || 16;
-
-        renderLatencyChart(store.latencyHistory);
-        renderFeedbackChart(store.feedback);
-        renderAuditTable();
-        renderTracesTable();
+        const latestTrace = (store.traces || [])[0];
+        document.getElementById('kpiQueries').textContent = Number(store.metrics.totalQueries || 0).toLocaleString();
+        document.getElementById('kpiQuality').textContent = Number(store.metrics.successRatePct || 0).toFixed(1) + '%';
+        document.getElementById('kpiLatency').textContent = (Number(store.metrics.avgLatencyMs || 0) / 1000).toFixed(2) + 's';
+        document.getElementById('kpiRisk').textContent = `${store.metrics.blockedCount || 0} blocked · ${store.metrics.retryCount || 0} retries`;
+        document.getElementById('observabilityLastEvent').textContent = latestTrace ? latestTrace.timestamp : 'No recorded trace';
+        document.getElementById('observabilitySchemaCoverage').textContent = `${store.metrics.schemaTablesIndexed || 0} indexed tables`;
+        renderLatencyChart(store.latencyHistory || []);
+        renderFeedbackChart(store.feedback || {});
+        renderActivityTable();
+        document.getElementById('benchmarkRunStatus').textContent = benchmarkHasRun ? 'Simulated · complete' : 'Not run';
+        document.getElementById('benchmarkRunStatus').className = `badge-status ${benchmarkHasRun ? 'success' : ''}`;
+        document.getElementById('benchmarkRunId').textContent = benchmarkRun ? benchmarkRun.id : 'Not assigned';
+        document.getElementById('benchmarkStrategy').textContent = benchmarkRun ? benchmarkRun.strategy : strat.name + ' selected';
+        document.getElementById('benchmarkModel').textContent = benchmarkRun ? benchmarkRun.model : 'Not executed';
+        document.getElementById('benchmarkConfig').textContent = benchmarkRun ? benchmarkRun.configVersion : strat.configVersion;
+        document.getElementById('benchmarkDataset').textContent = strat.datasetVersion;
+        document.getElementById('benchmarkRunTime').textContent = benchmarkRun ? new Date(benchmarkRun.executedAt).toLocaleString() : 'Not run';
+        document.getElementById('benchmarkPassRate').textContent = benchmarkHasRun ? strat.accuracyPct + '%' : 'Not run';
+        document.getElementById('benchmarkPassCount').textContent = benchmarkHasRun ? `${strat.passCount} of ${strat.totalCount} fixture assertions passed` : 'Binary fixture checks';
+        document.getElementById('benchmarkLatency').textContent = benchmarkHasRun ? (strat.avgLatencyMs / 1000).toFixed(2) + 's' : 'Not run';
+        document.getElementById('benchmarkTokens').textContent = benchmarkHasRun ? strat.tokenCount.toLocaleString() : 'Not run';
+        document.getElementById('benchmarkCost').textContent = benchmarkHasRun ? strat.costPer1k : 'Not run';
+        if(benchmarkHasRun) renderCategoryChart();
+        else document.getElementById('categoryChartWrapper').innerHTML = 'Run the simulated benchmark to view fixture results.';
+        renderBenchmarkTable();
       }
 
-      // Inline SVG Line Chart for Latency with gradient area
       function renderLatencyChart(history) {
-        const wrapper = document.getElementById('latencyChartWrapper');
-        if (!wrapper) return;
-        const width = 540;
-        const height = 180;
-        const padX = 45;
-        const padY = 28;
-        const plotW = width - padX * 2;
-        const plotH = height - padY * 2;
-        const maxL = 2.5;
-
-        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        const axisColor = isDark ? '#334155' : '#e2e8f0';
-        const textColor = isDark ? '#94a3b8' : '#64748b';
-        const textPrimaryColor = isDark ? '#f1f5f9' : '#0f172a';
-
-        const pts = (history || []).map((h, i) => {
-          const x = padX + (i / Math.max(1, history.length - 1)) * plotW;
-          const y = height - padY - (h.latency / maxL) * plotH;
-          return { x, y, latency: h.latency, time: h.time };
-        });
-
-        if (pts.length === 0) return;
-
-        const poly = pts.map(p => `${p.x},${p.y}`).join(' ');
-        const areaPts = `${pts[0].x},${height - padY} ${poly} ${pts[pts.length - 1].x},${height - padY}`;
-
-        wrapper.innerHTML = `
-          <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" style="max-width: 100%; height: auto; display: block;" role="img" aria-label="Pipeline Latency Over Time Chart">
-            <defs>
-              <linearGradient id="latencyGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.3"/>
-                <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.02"/>
-              </linearGradient>
-            </defs>
-
-            <!-- Grid lines & Y Axis -->
-            <line x1="${padX}" y1="${height - padY}" x2="${width - padX}" y2="${height - padY}" stroke="${axisColor}"/>
-            <text x="${padX - 8}" y="${height - padY + 4}" font-size="10" text-anchor="end" fill="${textColor}">0s</text>
-
-            <line x1="${padX}" y1="${padY + plotH/2}" x2="${width - padX}" y2="${padY + plotH/2}" stroke="${axisColor}" stroke-dasharray="3"/>
-            <text x="${padX - 8}" y="${padY + plotH/2 + 4}" font-size="10" text-anchor="end" fill="${textColor}">1.25s</text>
-
-            <line x1="${padX}" y1="${padY}" x2="${width - padX}" y2="${padY}" stroke="${axisColor}" stroke-dasharray="3"/>
-            <text x="${padX - 8}" y="${padY + 4}" font-size="10" text-anchor="end" fill="${textColor}">2.5s</text>
-
-            <!-- Area fill -->
-            <polygon fill="url(#latencyGradient)" points="${areaPts}"/>
-
-            <!-- Line -->
-            <polyline fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="${poly}"/>
-
-            <!-- Data points -->
-            ${pts.map(p => `
-              <circle cx="${p.x}" cy="${p.y}" r="4" fill="#2563eb" stroke="#fff" stroke-width="2">
-                <title>${p.time}: ${p.latency}s</title>
-              </circle>
-              <text x="${p.x}" y="${p.y - 8}" font-size="10" font-weight="700" text-anchor="middle" fill="${textPrimaryColor}" font-family="ui-monospace, monospace">${p.latency}s</text>
-              <text x="${p.x}" y="${height - padY + 16}" font-size="10" text-anchor="middle" fill="${textColor}">${p.time}</text>
-            `).join('')}
-          </svg>
-        `;
+         const w = document.getElementById('latencyChartWrapper');
+         if(!history || history.length===0) { w.innerHTML = '<div class="benchmark-chart-empty">No latency samples recorded.</div>'; return; }
+         const values = history.map(h => Number(h.latency) || 0);
+         const max = Math.max(...values, 1);
+         const avg = values.reduce((a,b)=>a+b,0) / values.length;
+         const sorted = [...values].sort((a,b)=>a-b);
+         const p95 = sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * .95) - 1)];
+         document.getElementById('latencyStatsLabel').textContent = `Avg ${avg.toFixed(2)}s · P95 ${p95.toFixed(2)}s`;
+         w.innerHTML = `<div class="latency-bars">${history.map(h => `<div class="latency-bar-item" title="${h.time}: ${Number(h.latency).toFixed(2)} seconds"><div class="latency-bar" style="height:${Math.max(4, (Number(h.latency)/max)*112)}px"></div><small>${h.time}</small></div>`).join('')}</div>`;
       }
 
-      // Inline SVG Bar Chart for Feedback Reasons
       function renderFeedbackChart(feedback) {
-        const wrapper = document.getElementById('feedbackChartWrapper');
-        if (!wrapper) return;
-        const statsLabel = document.getElementById('feedbackStatsLabel');
-        const totalVotes = (feedback.thumbsUp || 0) + (feedback.thumbsDown || 0) || 1;
-        const upPct = Math.round(((feedback.thumbsUp || 0) / totalVotes) * 100);
-        if (statsLabel) {
-          statsLabel.textContent = `👍 ${upPct}% Positive (${feedback.thumbsUp} Up / ${feedback.thumbsDown} Down)`;
-        }
-
-        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        const trackColor = isDark ? '#1e293b' : '#e2e8f0';
-        const textColor = isDark ? '#94a3b8' : '#475569';
-        const textPrimaryColor = isDark ? '#f1f5f9' : '#0f172a';
-
-        const reasons = Object.keys(feedback.reasons || {}).map(k => ({ label: k, count: feedback.reasons[k] }));
-        const maxCount = Math.max(...reasons.map(r => r.count)) || 1;
-        const width = 520;
-        const barHeight = 20;
-        const gap = 12;
-        const height = reasons.length * (barHeight + gap) + 10;
-
-        wrapper.innerHTML = `
-          <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" style="max-width: 100%; height: auto; display: block;" role="img" aria-label="User Feedback Reason Breakdown Chart">
-            ${reasons.map((r, i) => {
-              const y = i * (barHeight + gap) + 4;
-              const barW = Math.max(12, Math.round((r.count / maxCount) * 320));
-              return `
-                <g>
-                  <text x="125" y="${y + 14}" font-size="11.5" font-weight="600" text-anchor="end" fill="${textColor}">${r.label}</text>
-                  <rect x="135" y="${y}" width="320" height="${barHeight}" rx="4" fill="${trackColor}"/>
-                  <rect x="135" y="${y}" width="${barW}" height="${barHeight}" rx="4" fill="#f59e0b">
-                    <title>${r.label}: ${r.count} reports</title>
-                  </rect>
-                  <text x="${145 + barW}" y="${y + 14}" font-size="11" font-weight="700" fill="${textPrimaryColor}" font-family="ui-monospace, monospace">${r.count}</text>
-                </g>
-              `;
-            }).join('')}
-          </svg>
-        `;
+         const w = document.getElementById('feedbackChartWrapper');
+         const tot = (feedback.thumbsUp||0) + (feedback.thumbsDown||0) || 1;
+         const pct = Math.round(((feedback.thumbsUp||0)/tot)*100);
+         document.getElementById('feedbackStatsLabel').textContent = `${pct}% positive · ${tot} ratings`;
+         let html = `<div class="feedback-summary-bar" title="${feedback.thumbsUp || 0} positive, ${feedback.thumbsDown || 0} negative"><span style="width:${pct}%"></span></div><div class="feedback-reasons">`;
+         Object.keys(feedback.reasons||{}).forEach(k => {
+           html += `<div class="feedback-reason"><span>${k}</span><strong>${feedback.reasons[k]}</strong></div>`;
+         });
+         html += '</div>';
+         w.innerHTML = html;
       }
 
-      // 4. Render Audit Table (with live filtering & counter)
-      function renderAuditTable() {
-        const trail = window.AriaMock.getAuditTrail() || [];
-        const searchVal = (document.getElementById('auditSearchInput').value || '').toLowerCase().trim();
-        const roleVal = document.getElementById('auditRoleFilter').value || 'All';
-        const outcomeVal = document.getElementById('auditOutcomeFilter').value || 'All';
-
-        const filtered = trail.filter((item) => {
-          const matchSearch = !searchVal || (item.question || '').toLowerCase().includes(searchVal) || (item.user || '').toLowerCase().includes(searchVal) || (item.details || '').toLowerCase().includes(searchVal);
-          const matchRole = roleVal === 'All' || item.role === roleVal;
-          const matchOutcome = outcomeVal === 'All' || (item.outcome || '').includes(outcomeVal);
-          return matchSearch && matchRole && matchOutcome;
-        });
-
-        // Update count badge
-        const countBadge = document.getElementById('auditCountBadge');
-        if (countBadge) {
-          countBadge.textContent = `${filtered.length} of ${trail.length} records`;
-        }
-
-        const tbody = document.getElementById('auditTableBody');
-        if (filtered.length === 0) {
-          tbody.innerHTML = `
-            <tr>
-              <td colspan="7" style="text-align: center; padding: 36px 20px; color: var(--text-muted);">
-                <div style="font-size: 24px; margin-bottom: 6px;">🔍</div>
-                <div style="font-weight: 600; color: var(--text-primary); font-size: 13px;">No audit records match your filters</div>
-                <div style="font-size: 11.5px; margin-top: 4px;">Try searching for a different keyword or resetting dropdown filters.</div>
-              </td>
-            </tr>
-          `;
-          return;
-        }
-
-        tbody.innerHTML = filtered.map((item) => {
-          let badgeClass = 'badge-status success';
-          if (item.outcome.includes('BLOCKED_WRITE') || item.outcome.includes('BLOCKED_INJECTION') || item.outcome.includes('ERROR')) {
-            badgeClass = 'badge-status error';
-          } else if (item.outcome.includes('ACCESS_DENIED') || item.outcome.includes('WARNING')) {
-            badgeClass = 'badge-status warning';
-          }
-
-          return `
-            <tr>
-              <td style="font-size: 11px; color: var(--text-muted); font-family: ui-monospace, monospace; white-space: nowrap;">${item.timestamp}</td>
-              <td style="font-weight: 600;">${item.user}</td>
-              <td><span class="brand-badge">${item.role}</span></td>
-              <td style="max-width: 270px; word-break: break-word;" title="${item.question}">${item.question}</td>
-              <td><span class="${badgeClass}">${item.outcome}</span></td>
-              <td class="td-number">${(item.latencyMs / 1000).toFixed(2)}s</td>
-              <td style="font-size: 11.5px; color: var(--text-secondary); max-width: 240px; word-break: break-word;">${item.details}</td>
-            </tr>
-          `;
-        }).join('');
+      function renderCategoryChart() {
+         const w = document.getElementById('categoryChartWrapper');
+         const qs = window.AriaMock.BENCHMARK_QUESTIONS || [];
+         const cats = [...new Set(qs.map(q=>q.category))];
+         let html = '<div style="display:flex; flex-direction:column; gap:8px;">';
+         cats.forEach(c => {
+           const items = qs.filter(q=>q.category===c);
+           const passed = items.filter(q => currentStrategyKey === 'full_schema' ? q.fullSchemaPass : (currentStrategyKey === 'schema_retrieval' ? q.retrievalPass : q.enrichedPass)).length;
+           const pct = Math.round((passed/items.length)*100);
+           html += `<div style="display:flex; align-items:center; gap:10px; font-size:12px;">
+             <div style="width:100px;">${c}</div>
+             <div style="flex:1; height:8px; background:var(--bg-hover); border-radius:4px;"><div style="width:${pct}%; height:100%; background:var(--accent-primary); border-radius:4px;"></div></div>
+             <div style="width:30px; text-align:right;">${pct}%</div>
+           </div>`;
+         });
+         html += '</div>';
+         w.innerHTML = html;
       }
 
-      // 5. Render Traces Table (with search & counter)
-      function renderTracesTable() {
-        const store = window.AriaMock.getObservabilityStore();
-        const traces = store.traces || [];
-        const searchInput = document.getElementById('tracesSearchInput');
-        const qFilter = (searchInput ? searchInput.value : '').toLowerCase().trim();
+      function renderActivityTable() {
+         const trail = window.AriaMock.getAuditTrail() || [];
+         const store = window.AriaMock.getObservabilityStore();
+         const traces = store.traces || [];
+         
+         let combined = trail.map(t => ({type:'Audit', time:t.timestamp, user:t.user, role:t.role, q:t.question, out:t.outcome, lat:t.latencyMs, details:t.details, id:t.id}))
+           .concat(traces.map(t => ({type:'Trace', time:t.timestamp, user:t.user, role:t.role, q:t.query, out:t.status, lat:t.latencyMs, details:t.stages + ' stages', id:t.requestId})));
+         
+         const filter = document.getElementById('activitySearchInput').value.toLowerCase();
+         const tFilter = document.getElementById('activityTypeFilter').value;
+         
+         combined = combined.filter(c => (tFilter==='All' || c.type===tFilter) && ((c.q || '').toLowerCase().includes(filter) || (c.user || '').toLowerCase().includes(filter)));
+         combined = combined.map((item, index) => ({ ...item, _originalOrder: index }));
+         combined.sort((a, b) => {
+           const aTime = Date.parse(a.time);
+           const bTime = Date.parse(b.time);
+           if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) return bTime - aTime;
+           if (Number.isFinite(aTime) !== Number.isFinite(bTime)) return Number.isFinite(bTime) ? 1 : -1;
+           return a._originalOrder - b._originalOrder;
+         });
 
-        const filtered = traces.filter((t) => {
-          return !qFilter || (t.query || '').toLowerCase().includes(qFilter) || (t.requestId || '').toLowerCase().includes(qFilter) || (t.user || '').toLowerCase().includes(qFilter);
-        });
+         const totalPages = Math.max(1, Math.ceil(combined.length / activityPageSize));
+         activityPage = Math.min(Math.max(1, activityPage), totalPages);
+         const pageStart = (activityPage - 1) * activityPageSize;
+         const pageItems = combined.slice(pageStart, pageStart + activityPageSize);
+         
+         const tbody = document.getElementById('activityTableBody');
+         tbody.innerHTML = pageItems.length ? pageItems.map(c => `
+           <tr>
+             <td style="font-size:12px;"><strong>${c.user}</strong><br><span style="color:var(--text-muted);">${c.time}</span></td>
+             <td style="font-size:13px; max-width:200px;">
+               <span class="brand-badge" style="font-size: 12px; margin-bottom:4px; display:inline-block;">${c.type}</span><br>
+               ${c.q}
+             </td>
+             <td><span class="badge-status ${c.out.includes('ERROR')||c.out.includes('BLOCKED')||c.out.includes('DENIED')?'error':'success'}">${c.out.replaceAll('_', ' ')}</span></td>
+             <td>${(c.lat/1000).toFixed(2)}s</td>
+             <td><button class="btn-table-action inspect-btn" data-id="${c.id}" data-type="${c.type}">Inspect</button></td>
+           </tr>
+         `).join('') : '<tr><td colspan="5" class="benchmark-not-run">No activities match the current filters.</td></tr>';
 
-        const countBadge = document.getElementById('tracesCountBadge');
-        if (countBadge) {
-          countBadge.textContent = `${filtered.length} of ${traces.length} live traces`;
-        }
-
-        const tbody = document.getElementById('tracesTableBody');
-        if (filtered.length === 0) {
-          tbody.innerHTML = `
-            <tr>
-              <td colspan="8" style="text-align: center; padding: 36px 20px; color: var(--text-muted);">
-                <div style="font-size: 24px; margin-bottom: 6px;">🔍</div>
-                <div style="font-weight: 600; color: var(--text-primary); font-size: 13px;">No query traces match your filter</div>
-              </td>
-            </tr>
-          `;
-          return;
-        }
-
-        tbody.innerHTML = filtered.map((trace) => {
-          let badgeClass = 'badge-status success';
-          if (trace.status.includes('ERROR') || trace.status.includes('BLOCKED')) {
-            badgeClass = 'badge-status error';
-          } else if (trace.status.includes('RETRY')) {
-            badgeClass = 'badge-status warning';
-          }
-
-          return `
-            <tr>
-              <td><code>${trace.requestId}</code></td>
-              <td style="font-size: 11px; color: var(--text-muted); font-family: ui-monospace, monospace;">${trace.timestamp}</td>
-              <td><strong>${trace.user || 'User'}</strong> <span style="font-size: 10.5px; color: var(--text-muted);">(${trace.role || 'Role'})</span></td>
-              <td style="max-width: 260px; word-break: break-word;" title="${trace.query}">${trace.query}</td>
-              <td class="td-number">${(trace.latencyMs / 1000).toFixed(2)}s</td>
-              <td style="text-align: center; font-weight: 600;">${trace.stages}/5</td>
-              <td><span class="${badgeClass}">${trace.status}</span></td>
-              <td style="text-align: center;"><button type="button" class="btn-table-action inspect-btn" data-req="${trace.requestId}">Inspect</button></td>
-            </tr>
-          `;
-        }).join('');
-
-        tbody.querySelectorAll('.inspect-btn').forEach((btn) => {
-          btn.addEventListener('click', () => {
-            const req = btn.getAttribute('data-req');
-            const target = traces.find(t => t.requestId === req);
-            if (target) showTraceModal(target);
-          });
-        });
+         document.getElementById('activityPageStatus').textContent = `Page ${activityPage} of ${totalPages} · ${combined.length} activities`;
+         document.getElementById('activityPrevBtn').disabled = activityPage <= 1;
+         document.getElementById('activityNextBtn').disabled = activityPage >= totalPages;
+         
+         tbody.querySelectorAll('.inspect-btn').forEach(btn => {
+           btn.addEventListener('click', () => openModal(btn.dataset.id, btn.dataset.type));
+         });
       }
 
-      function showTraceModal(trace) {
-        const modalBody = document.getElementById('modalBody');
-        const isErr = trace.status.includes('ERROR') || trace.status.includes('BLOCKED');
-        
-        modalBody.innerHTML = `
-          <div style="display: flex; flex-direction: column; gap: 14px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
-              <div>
-                <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">REQUEST ID:</span> <code>${trace.requestId}</code>
-                <span style="margin-left: 8px; font-size: 11.5px; color: var(--text-muted);">${trace.timestamp}</span>
-              </div>
-              <span class="badge-status ${isErr ? 'error' : 'success'}">${trace.status}</span>
-            </div>
+      function renderBenchmarkTable() {
+         const qs = window.AriaMock.BENCHMARK_QUESTIONS || [];
+         const tbody = document.getElementById('benchmarkTableBody');
+         if(!benchmarkHasRun) { tbody.innerHTML = '<tr><td colspan="5" class="benchmark-not-run">Run the simulated benchmark to view fixture results.</td></tr>'; return; }
+         
+         tbody.innerHTML = qs.map(q => {
+           let pass = currentStrategyKey === 'full_schema' ? q.fullSchemaPass : (currentStrategyKey === 'schema_retrieval' ? q.retrievalPass : q.enrichedPass);
+           return `<tr>
+             <td><span class="brand-badge">${q.category}</span></td>
+             <td style="font-size:13px; max-width:200px;">${q.question}</td>
+             <td style="font-size:12px; color:var(--text-secondary); max-width:200px;">${q.expectedOutcome}</td>
+             <td><span class="${pass?'badge-pass':'badge-fail'}">${pass?'PASS':'FAIL'}</span></td>
+             <td><button class="btn-table-action inspect-bm" data-id="${q.id}">Inspect</button></td>
+           </tr>`;
+         }).join('');
 
-            <!-- Pipeline Execution Stepper -->
-            <div>
-              <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Pipeline Orchestration Stages (${trace.stages} of 5 Completed)</div>
-              <div class="trace-stages-stepper">
-                <div class="trace-step-item step-passed">✓ Stage 1: Intent Understanding</div>
-                <div class="trace-step-item step-passed">✓ Stage 2: Schema Retrieval</div>
-                <div class="trace-step-item ${isErr ? 'step-blocked' : 'step-passed'}">${isErr ? '✕' : '✓'} Stage 3: AST Security Gateway</div>
-                <div class="trace-step-item ${isErr ? '' : 'step-passed'}">${isErr ? '○' : '✓'} Stage 4: Database Execution</div>
-                <div class="trace-step-item ${isErr ? '' : 'step-passed'}">${isErr ? '○' : '✓'} Stage 5: Answer Synthesis</div>
-              </div>
-            </div>
+         tbody.querySelectorAll('.inspect-bm').forEach(btn => {
+           btn.addEventListener('click', () => openModal(btn.dataset.id, 'Benchmark'));
+         });
+      }
 
-            <div class="schema-table-card">
-              <div>User: <strong>${trace.user}</strong> <span class="brand-badge" style="margin-left: 6px;">${trace.role}</span></div>
-              <div style="margin-top: 4px;">Natural Language Query: <em>"${trace.query}"</em></div>
-              <div style="margin-top: 4px;">Total Pipeline Latency: <strong>${trace.latencyMs}ms</strong></div>
-              <div style="margin-top: 4px;">Tables Accessed: ${(trace.tablesUsed || []).map(t => `<code>${t}</code>`).join(' ') || '<span style="color: var(--text-muted);">None (Blocked at Layer 3)</span>'}</div>
-            </div>
+      function openModal(id, type) {
+        let item, whatAsked, whatAnswered, whatHappened, whyMatters, action, advDetails;
+        const readable = value => {
+          if (value === null || value === undefined || value === '') return 'Not recorded';
+          if (Array.isArray(value)) return value.map(readable).join('; ') || 'None';
+          if (typeof value === 'object') return value.label || value.value || value.name || value.key || JSON.stringify(value);
+          return String(value);
+        };
+        const renderAnswerText = value => String(value || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        if(type==='Audit') {
+           document.getElementById('inspectionModalTitle').textContent = 'Audit event details';
+           item = window.AriaMock.getAuditTrail().find(x=>x.id===id);
+           const context = item.context || {};
+           const scope = context.appliedScope || {};
+           const fullQuestion = context.originalQuestion || item.question;
+           const isLegacySelection = !item.context && /^(next|last|current|all time|q[1-4]|fy\d{2,4})\b/i.test(item.question || '');
+           whatAsked = `<div><strong>Original question:</strong> ${fullQuestion || 'Not recorded'}</div>`;
+           if (context.selectedClarification) whatAsked += `<div class="audit-detail-row"><strong>Clarification selected:</strong> ${context.selectedClarification}</div>`;
+           if (context.displayedQuestion && context.displayedQuestion !== fullQuestion && context.displayedQuestion !== context.selectedClarification) whatAsked += `<div class="audit-detail-row"><strong>Displayed rerun question:</strong> ${context.displayedQuestion}</div>`;
+           if (isLegacySelection) whatAsked += `<div class="audit-legacy-note">This legacy event stored only the clarification selection. The original question was not recorded in the older audit format.</div>`;
+           if (context.reconstructedFromLegacyAudit) whatAsked += `<div class="audit-legacy-note">The original question was linked from the preceding clarification audit event. Detailed scope fields unavailable in the legacy record are marked as not recorded.</div>`;
+           const outcomeText = item.outcome === 'ANSWERED'
+             ? 'The request completed and an answer was returned.'
+             : (item.outcome.includes('DENIED') || item.outcome.includes('BLOCKED')
+               ? 'The request was stopped by an access or safety control.'
+               : `The request finished with outcome ${item.outcome.replaceAll('_', ' ')}.`);
+           if (context.answer) {
+             whatAnswered = `<div class="audit-answer-text">${renderAnswerText(context.answer)}</div>`;
+             if (context.answerSummary) whatAnswered += `<div class="audit-answer-meta"><strong>Summary:</strong> ${context.answerSummary}</div>`;
+             if (context.answerDataAsOf) whatAnswered += `<div class="audit-answer-meta"><strong>Data as of:</strong> ${context.answerDataAsOf}</div>`;
+             if (Number.isFinite(context.answerRowCount)) whatAnswered += `<div class="audit-answer-meta"><strong>Rows returned:</strong> ${context.answerRowCount}</div>`;
+             whatAnswered += `<div class="audit-answer-meta"><strong>Recorded outcome:</strong> ${item.outcome.replaceAll('_', ' ')}</div>`;
+             if (context.answerSource === 'demo_fixture_reconstruction') whatAnswered += `<div class="audit-legacy-note">This answer was reconstructed from the matching demo fixture because the older audit event did not store its answer payload.</div>`;
+           } else {
+             whatAnswered = `${outcomeText}<br><strong>Recorded outcome:</strong> ${item.outcome.replaceAll('_', ' ')}<div class="audit-legacy-note">The answer payload was not recorded for this event, so the audit view cannot reproduce the response text.</div>`;
+           }
+           const hasScope = Object.keys(scope).length > 0 || context.domain || context.period;
+           whatHappened = `Request was processed in ${(item.latencyMs/1000).toFixed(2)}s. ${item.details}`;
+           if (hasScope) whatHappened += `<div class="audit-context-grid">
+             <div><span>Metric</span><strong>${readable(context.metric || scope.metric)}</strong></div>
+             <div><span>Grain</span><strong>${readable(context.grain || scope.grain || scope.breakdown)}</strong></div>
+             <div><span>Period</span><strong>${readable(context.period || scope.period || scope.time)}</strong></div>
+             <div><span>Domain / project</span><strong>${readable(context.project || scope.project || scope.projectScope || context.domain || scope.domain)}</strong></div>
+             <div><span>Currency</span><strong>${readable(context.currency || scope.currency)}</strong></div>
+             <div><span>Assumptions</span><strong>${readable(context.assumptions || scope.assumptions)}</strong></div>
+           </div>`;
+           const restrictedOutcome = item.outcome.includes('BLOCKED') || item.outcome.includes('DENIED');
+           whyMatters = restrictedOutcome ? 'Security guardrails prevented access to restricted data or an unsafe operation.' : 'The event preserves the business question, applied scope, outcome, and execution context for verification.';
+           action = restrictedOutcome ? 'Use the documented access workflow or contact the data owner if this request is legitimate.' : 'No action needed.';
+           advDetails = `ID: ${item.id}<br>Time: ${item.timestamp}<br>Actor: ${item.user}<br>Role: ${item.role}<br>Interaction type: ${context.interactionType || 'Legacy audit event'}<br>Executed question: ${context.executedQuestion || item.question}<br>Latency: ${item.latencyMs}ms`;
+        } else if (type==='Trace') {
+           document.getElementById('inspectionModalTitle').textContent = 'Request trace details';
+           item = window.AriaMock.getObservabilityStore().traces.find(x=>x.requestId===id);
+           whatAsked = `User (${item.role}) asked: "${item.query}"`;
+           const traceOutcome = item.status === 'SUCCESS'
+             ? 'The request completed and returned an answer.'
+             : (item.status === 'AMBIGUOUS_RESOLVED'
+               ? 'The request completed after an ambiguity was resolved.'
+               : 'The request did not produce a completed answer.');
+           whatAnswered = `${traceOutcome}<br><strong>Recorded outcome:</strong> ${item.status.replaceAll('_', ' ')}`;
+           whatHappened = `The pipeline completed ${item.stages} of 5 stages in ${(item.latencyMs/1000).toFixed(2)} seconds and consulted ${(item.tablesUsed||[]).length} data sources.`;
+           whyMatters = item.status.includes('ERROR')
+             ? 'The incomplete pipeline can explain a missing or partial answer and should be reviewed before using the result.'
+             : 'This trace connects the user request, final outcome, execution time, and source usage for operational verification.';
+           action = item.status.includes('ERROR') ? 'Inspect the failed stage and retry history before rerunning the request.' : 'No operational intervention is required; retain the trace for comparison.';
+           advDetails = `Request ID: ${item.requestId}<br>Time: ${item.timestamp}<br>Status: ${item.status}<br>Stages: ${item.stages}/5<br>Latency: ${item.latencyMs}ms<br>SQL length: ${item.sqlLength || 0} characters<br>Physical tables: ${(item.tablesUsed||[]).join(', ') || 'None'}`;
+        } else if (type==='Benchmark') {
+           document.getElementById('inspectionModalTitle').textContent = 'Simulated fixture details';
+           item = window.AriaMock.BENCHMARK_QUESTIONS.find(x=>x.id===id);
+           let pass = currentStrategyKey === 'full_schema' ? item.fullSchemaPass : (currentStrategyKey === 'schema_retrieval' ? item.retrievalPass : item.enrichedPass);
+           whatAsked = `Test Question: "${item.question}"`;
+           whatAnswered = `Expected fixture outcome: ${item.expectedOutcome}<br>Predefined fixture result: ${pass?'PASS':'FAIL'}`;
+           whatHappened = `Simulated fixture evaluated with ${window.AriaMock.EVALUATION_STRATEGIES[currentStrategyKey].name}. No model call was executed.`;
+           whyMatters = 'Provides a repeatable test case for the ' + item.category + ' category; it is not measured model evidence.';
+           action = pass ? 'Record this fixture result for comparison; no strategy recommendation is inferred.' : 'Review the fixture, configuration, and expected outcome before a measured experiment.';
+           advDetails = `Run ID: ${benchmarkRun ? benchmarkRun.id : 'N/A'}<br>Test ID: ${item.id}<br>Dataset: ${window.AriaMock.EVALUATION_STRATEGIES[currentStrategyKey].datasetVersion}<br>Ground Truth SQL:<br><code>${item.groundTruthSql || 'N/A'}</code>`;
+        }
 
-            <div style="border-top: 1px solid var(--border-color); padding-top: 10px;">
-              <strong style="font-size: 12px; color: var(--text-primary);">Layer 3 AST Security Gateway Audits:</strong>
-              <ul style="margin-left: 20px; margin-top: 6px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary);">
-                <li>✓ AST Read-Only Enforced: Passed (DDL/DML mutations rejected)</li>
-                <li>✓ Dynamic PII Masking: Active on sensitive customer &amp; financial columns</li>
-                <li>✓ Role Domain Entitlement: Verified for active role <strong>${trace.role}</strong></li>
-                <li>✓ AST Complexity Budget: Checked (Max join depth &le; 4)</li>
-              </ul>
+        document.getElementById('inspectionModalBody').innerHTML = `
+          <div class="story-line">
+            <div class="story-label">What the user asked</div>
+            <div class="story-content">${whatAsked}</div>
+          </div>
+          <div class="story-line">
+            <div class="story-label">What the AI answered</div>
+            <div class="story-content">${whatAnswered}</div>
+          </div>
+          <div class="story-line">
+            <div class="story-label">What happened</div>
+            <div class="story-content">${whatHappened}</div>
+          </div>
+          <div class="story-line">
+            <div class="story-label">Why it matters</div>
+            <div class="story-content">${whyMatters}</div>
+          </div>
+          <div class="story-line">
+            <div class="story-label" style="color:var(--accent-primary);">Recommended Next Action</div>
+            <div class="story-content" style="font-weight:600;">${action}</div>
+          </div>
+          
+          <div class="collapsible-details">
+            <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+              <span>Advanced Implementation Details</span>
+              <span>▼</span>
+            </div>
+            <div class="collapsible-body" style="font-size:12px; font-family:monospace; color:var(--text-secondary); background:var(--bg-hover);">
+              ${advDetails}
             </div>
           </div>
         `;
-        document.getElementById('traceModalBackdrop').classList.add('open');
+        document.getElementById('inspectionModalBackdrop').classList.add('open');
       }
 
-      document.getElementById('closeModalBtn').addEventListener('click', () => {
-        document.getElementById('traceModalBackdrop').classList.remove('open');
+      document.getElementById('closeInspectionModalBtn').addEventListener('click', () => {
+        document.getElementById('inspectionModalBackdrop').classList.remove('open');
+      });
+      document.getElementById('activitySearchInput')?.addEventListener('input', () => { activityPage = 1; renderActivityTable(); });
+      document.getElementById('activityTypeFilter')?.addEventListener('change', () => { activityPage = 1; renderActivityTable(); });
+      document.getElementById('activityPrevBtn').addEventListener('click', () => { activityPage -= 1; renderActivityTable(); });
+      document.getElementById('activityNextBtn').addEventListener('click', () => { activityPage += 1; renderActivityTable(); });
+
+      document.getElementById('downloadBenchmarkCsvBtn').addEventListener('click', () => {
+        if (!benchmarkRun) return;
+        const strat = window.AriaMock.EVALUATION_STRATEGIES[currentStrategyKey];
+        const quote = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
+        const metadata = [
+          ['run_id', benchmarkRun.id], ['result_type', benchmarkRun.resultType], ['strategy', benchmarkRun.strategy],
+          ['model', benchmarkRun.model], ['config_version', benchmarkRun.configVersion], ['dataset_version', benchmarkRun.datasetVersion],
+          ['run_time_utc', benchmarkRun.executedAt], ['accuracy_definition', 'Passed predefined fixture assertions divided by eligible test cases; no model was executed'],
+          ['cost_definition', 'Configured USD estimate per 1,000 queries; not observed or billed cost']
+        ];
+        const rows = [['category','question','expected_outcome','fixture_result']].concat((window.AriaMock.BENCHMARK_QUESTIONS || []).map(q => {
+          const pass = currentStrategyKey === 'full_schema' ? q.fullSchemaPass : (currentStrategyKey === 'schema_retrieval' ? q.retrievalPass : q.enrichedPass);
+          return [q.category, q.question, q.expectedOutcome, pass ? 'PASS' : 'FAIL'];
+        }));
+        const csv = metadata.map(row => row.map(quote).join(',')).join('\r\n') + '\r\n\r\n' + rows.map(row => row.map(quote).join(',')).join('\r\n');
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+        link.download = `${benchmarkRun.id}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
       });
 
-      if (isAdmin) {
-        document.getElementById('refreshTracesBtn').addEventListener('click', loadTelemetry);
-        document.getElementById('auditSearchInput').addEventListener('input', renderAuditTable);
-        document.getElementById('auditRoleFilter').addEventListener('change', renderAuditTable);
-        document.getElementById('auditOutcomeFilter').addEventListener('change', renderAuditTable);
+      loadData();
 
-        const tracesSearch = document.getElementById('tracesSearchInput');
-        if (tracesSearch) tracesSearch.addEventListener('input', renderTracesTable);
+      const closeInspectionModalBtn = document.getElementById('closeInspectionModalBtn');
+      const inspectionModalBackdrop = document.getElementById('inspectionModalBackdrop');
+      closeInspectionModalBtn.addEventListener('click', () => inspectionModalBackdrop.classList.remove('open'));
+      inspectionModalBackdrop.addEventListener('click', (event) => {
+        if (event.target === inspectionModalBackdrop) inspectionModalBackdrop.classList.remove('open');
+      });
 
-        function exportCsv() {
-          const trail = window.AriaMock.getAuditTrail() || [];
-          const rows = [
-            ['Demo • Synthetic data'],
-            ['Prototype export — access rules and masking are simulated'],
-            [],
-            ['ID', 'Timestamp', 'User', 'Role', 'Question', 'Outcome', 'Latency(ms)', 'Details']
-          ];
-          trail.forEach(t => rows.push([t.id, t.timestamp, `"${t.user}"`, `"${t.role}"`, `"${t.question}"`, t.outcome, t.latencyMs, `"${t.details}"`]));
-          const csv = rows.map(r => r.join(',')).join('\n');
-          const blob = new Blob([csv], { type: 'text/csv' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'aria_security_audit_trail.csv';
-          a.click();
-        }
-
-        const exportTop = document.getElementById('exportAuditCsvBtnTop');
-        if (exportTop) exportTop.addEventListener('click', exportCsv);
-      }
     })();
   </script>
 </body>
 </html>
+
