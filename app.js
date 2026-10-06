@@ -40,6 +40,7 @@
     },
     searchQuery: '',
     currentFeedbackMessageId: null,
+    currentFeedbackReason: 'Wrong number',
     voiceRecognition: null,
     isRecordingVoice: false
   };
@@ -1239,12 +1240,12 @@
                 ${canDownload ? `<button type="button" class="action-tool-btn btn-export-csv" data-msg-id="${msg.id}">Export CSV…</button>` : ''}
                 <button type="button" class="action-tool-btn btn-pin-answer ${isSaved ? 'pinned' : ''}" data-msg-id="${msg.id}">${isSaved ? 'Remove from saved' : 'Save insight'}</button>
                 <button type="button" class="action-tool-btn btn-run-again" data-msg-id="${msg.id}">Run again with this scope</button>
-                <button type="button" class="action-tool-btn btn-feedback-up" data-msg-id="${msg.id}">Helpful</button>
-                <button type="button" class="action-tool-btn btn-feedback-down" data-msg-id="${msg.id}">Report an issue</button>
+                <button type="button" class="action-tool-btn btn-feedback-up ${msg.feedback && msg.feedback.type === 'up' ? 'feedback-submitted' : ''}" data-msg-id="${msg.id}">${msg.feedback && msg.feedback.type === 'up' ? 'Helpful · Submitted' : 'Helpful'}</button>
+                <button type="button" class="action-tool-btn btn-feedback-down ${msg.feedback && msg.feedback.type === 'down' ? 'feedback-submitted' : ''}" data-msg-id="${msg.id}">${msg.feedback && msg.feedback.type === 'down' ? 'Edit issue feedback' : 'Report an issue'}</button>
                 ${followUps.length > 0 ? `
                   <div class="answer-followups">
-                    <span>Continue exploring</span>
-                    ${followUps.map((query) => `<button type="button" class="followup-chip" data-query="${escapeHtml(query)}">${escapeHtml(query)}</button>`).join('')}
+                    <span>Continue with the same scope</span>
+                    ${followUps.map((query) => `<button type="button" class="followup-chip" data-query="${escapeHtml(query)}" data-source-msg-id="${msg.id}">${escapeHtml(query)}</button>`).join('')}
                   </div>
                 ` : ''}
               </div>
@@ -1607,22 +1608,58 @@
       if (filtered.length > 0) examples = filtered;
     }
 
+    const taskGroups = [
+      {
+        key: 'Sales',
+        description: 'Contracts and buyer activity',
+        output: 'Ranking',
+        question: examples.find((item) => /contract value|buyer installments/i.test(item.text))
+          || { domain: 'Contracts', text: 'Show total active contract value by project in calendar year 2026' }
+      },
+      {
+        key: 'Finance',
+        description: 'Receivables and collections',
+        output: 'Trend',
+        question: examples.find((item) => /monthly buyer payments/i.test(item.text))
+          || { domain: 'Finance', text: 'Show monthly buyer payments collected from July to September 2026' }
+      },
+      {
+        key: 'Projects',
+        description: 'Delivery and operations',
+        output: 'Comparison',
+        question: examples.find((item) => /construction progress/i.test(item.text))
+          || { domain: 'Construction', text: 'Compare latest construction progress across active project phases' }
+      }
+    ];
+
     chatContainerEl.innerHTML = `
       <section class="welcome-hero" id="welcomeHero">
-        <h1 class="hero-title" style="font-size: 56px; font-weight: normal; margin-bottom: 24px;">What does your business need to understand?</h1>
-        <p class="hero-subtitle" style="font-size: 18px; color: var(--text-secondary); max-width: 600px; margin-bottom: 48px;">
+        <h1 class="hero-title task-home-title">What does your business need to understand?</h1>
+        <p class="hero-subtitle task-home-subtitle">
           Aria analyses your enterprise operations, finance, and project intelligence.
         </p>
 
-        <div class="example-section" style="max-width: 600px; border-left: 1px solid var(--border-color); padding-left: 24px;">
-          <div class="example-section-label" style="font-family: var(--font-sans); text-transform: uppercase; font-size: 12px; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 16px;">
-            <span>Starting points for ${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Sales Manager')}</span>
+        <div class="example-section task-groups-section">
+          <div class="example-section-label task-groups-label">
+            <span>Choose a starting point for ${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Sales Manager')}</span>
+            <small>Select a question to place it in the composer, review scope, then press Ask.</small>
           </div>
-          <div class="example-grid" style="display: flex; flex-direction: column; gap: 12px;">
-            ${examples.slice(0, 3).map((ex) => `
-              <button type="button" class="example-card" data-query="${escapeHtml(ex.text)}" style="text-align: left; background: transparent; border: 1px solid var(--border-color); padding: 16px; font-family: var(--font-serif); font-size: 18px; transition: border-color 0.2s;">
-                <div class="example-card-text" style="color: var(--text-primary);">${escapeHtml(ex.text)}</div>
-              </button>
+          <div class="example-grid task-groups-grid">
+            ${taskGroups.map((group) => `
+              <section class="task-group-card" aria-labelledby="task_group_${group.key}">
+                <div class="task-group-heading">
+                  <div>
+                    <h2 id="task_group_${group.key}">${escapeHtml(group.key)}</h2>
+                    <p>${escapeHtml(group.description)}</p>
+                  </div>
+                  <span class="task-output-badge">${escapeHtml(group.output)}</span>
+                </div>
+                <button type="button" class="example-card" data-query="${escapeHtml(group.question.text)}">
+                  <span class="example-card-meta">${escapeHtml(group.question.domain || group.key)} · ${escapeHtml(group.output)}</span>
+                  <span class="example-card-text">${escapeHtml(group.question.text)}</span>
+                  <span class="example-card-action">Use this question</span>
+                </button>
+              </section>
             `).join('')}
           </div>
         </div>
@@ -1936,26 +1973,27 @@
     thinkingRow.id = `thinking_row_${msgId}`;
 
     const stages = window.AriaMock.PIPELINE_STAGES;
+    const showTechnicalPipeline = Boolean(state.settings.showPipelineDefault);
     thinkingRow.innerHTML = `
       <div class="thinking-container" role="status" aria-label="Aria is processing your question">
         <div class="thinking-header">
           <div class="thinking-title-area">
             <div class="pulse-spinner" aria-hidden="true"></div>
-            <span>Aria Query Pipeline Execution</span>
+            <span>${showTechnicalPipeline ? 'Technical processing details' : 'Aria is preparing your answer'}</span>
           </div>
           <button type="button" class="btn-stop-generating" id="stopGeneratingBtn">
             <svg width="12" height="12" fill="currentColor" viewBox="0 0 20 20"><rect x="4" y="4" width="12" height="12" rx="2"></rect></svg>
             Stop generating
           </button>
         </div>
-        <ul class="stage-trail-list" id="trail_${msgId}" aria-label="Query processing stages">
+        ${showTechnicalPipeline ? `<ul class="stage-trail-list" id="trail_${msgId}" aria-label="Technical query processing stages">
           ${stages.map((st, idx) => `
             <li class="stage-item ${idx === 0 ? 'active' : 'pending'}" id="st_${msgId}_${idx}" ${idx === 0 ? 'aria-current="step"' : ''} aria-label="${idx === 0 ? 'In progress' : 'Pending'}: ${escapeHtml(st.label)}">
               <div class="stage-dot" aria-hidden="true">${idx === 0 ? '●' : '○'}</div>
               <span class="stage-label">${escapeHtml(st.label)}</span>
             </li>
           `).join('')}
-        </ul>
+        </ul>` : `<p class="business-loading-copy" id="business_loading_${msgId}">Understanding your question and checking the available business data…</p>`}
       </div>
     `;
 
@@ -1976,7 +2014,19 @@
 
   function updateThinkingStage(msgId, stageIdx, stageObj, isRetry) {
     const trailEl = document.getElementById(`trail_${msgId}`);
-    if (!trailEl) return;
+    if (!trailEl) {
+      const businessLoading = document.getElementById(`business_loading_${msgId}`);
+      const businessStages = [
+        'Understanding your question…',
+        'Finding the relevant business information…',
+        'Preparing the requested result…',
+        'Checking scope and data boundaries…',
+        'Finalising your answer…'
+      ];
+      if (businessLoading) businessLoading.textContent = businessStages[stageIdx] || 'Preparing your answer…';
+      announceAppStatus(businessStages[stageIdx] || 'Aria is preparing your answer.');
+      return;
+    }
 
     if (isRetry) {
       const retryLi = document.createElement('li');
@@ -2910,7 +2960,16 @@
     chatContainerEl.querySelectorAll('.followup-chip').forEach((chip) => {
       chip.addEventListener('click', () => {
         const query = chip.getAttribute('data-query');
-        processUserPrompt(query);
+        const sourceMsg = conv.messages.find((item) => item.id === chip.getAttribute('data-source-msg-id'));
+        const inheritedScope = sourceMsg && (sourceMsg.appliedScope || (sourceMsg.resultsData && sourceMsg.resultsData.appliedScope));
+        if (inheritedScope) applyExecutionScopeToEditor(buildSavedExecutionOptions(inheritedScope).selectedScope);
+        chatInputEl.value = query;
+        chatInputEl.focus();
+        updateSendButtonState();
+        chatInputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showToast(inheritedScope
+          ? 'Follow-up prepared with the previous answer scope. Review or edit scope, then press Ask.'
+          : 'Follow-up prepared. Review the scope, then press Ask.');
       });
     });
 
@@ -3153,16 +3212,29 @@
       btn.addEventListener('click', () => {
         const msgId = btn.getAttribute('data-msg-id');
         const msg = conv.messages.find((m) => m.id === msgId);
-        window.AriaMock.recordFeedback('up', null, null, conv.title, state.currentUser);
-        btn.style.opacity = '1';
-        btn.style.background = 'var(--success-bg)';
-        showToast('Thank you for positive feedback!');
+        if (!msg) return;
+        const isUpdate = Boolean(msg.feedback);
+        msg.feedback = { type: 'up', reason: null, comment: '', submittedAt: Date.now() };
+        window.AriaMock.recordFeedback('up', null, null, conv.title, state.currentUser, {
+          conversationId: conv.id, messageId: msg.id, replaceExisting: isUpdate
+        });
+        saveConversationsToStorage();
+        renderActiveConversation();
+        showToast(isUpdate ? 'Feedback updated for this answer.' : 'Feedback saved for this answer.');
       });
     });
 
     chatContainerEl.querySelectorAll('.btn-feedback-down').forEach((btn) => {
       btn.addEventListener('click', () => {
         state.currentFeedbackMessageId = btn.getAttribute('data-msg-id');
+        const msg = conv.messages.find((item) => item.id === state.currentFeedbackMessageId);
+        const savedFeedback = msg && msg.feedback && msg.feedback.type === 'down' ? msg.feedback : null;
+        state.currentFeedbackReason = savedFeedback ? savedFeedback.reason : 'Wrong number';
+        feedbackCommentInput.value = savedFeedback ? (savedFeedback.comment || '') : '';
+        feedbackReasonChips.querySelectorAll('.reason-chip-btn').forEach((reasonBtn) => {
+          reasonBtn.classList.toggle('selected', reasonBtn.textContent.trim() === state.currentFeedbackReason);
+        });
+        submitFeedbackBtn.textContent = savedFeedback ? 'Update feedback' : 'Save feedback';
         feedbackModalBackdrop.classList.add('open');
       });
     });
@@ -3261,7 +3333,7 @@
                 <tr>
                   <td><code>${escapeHtml(col.name)}</code></td>
                   <td>${escapeHtml(col.type)}</td>
-                  <td>${col.isPk ? '<span class="brand-badge" style="font-size: 12px;">PK</span>' : (col.isFk ? '<span class="brand-badge" style="font-size: 12px;">FK</span>' : (col.isSensitive ? '🔒 Sensitive' : ''))}</td>
+                  <td>${col.isPk ? '<span class="brand-badge">PK</span>' : (col.isFk ? '<span class="brand-badge">FK</span>' : (col.isSensitive ? '<span class="technical-sensitive-label">Restricted</span>' : ''))}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -4497,6 +4569,35 @@
     return opts;
   }
 
+  function applyExecutionScopeToEditor(selectedScope) {
+    if (!selectedScope) return;
+    state.selectedScope = JSON.parse(JSON.stringify(selectedScope));
+
+    const values = selectedScope.domain && Array.isArray(selectedScope.domain.values)
+      ? selectedScope.domain.values
+      : [];
+    if (domainScopeMenuEl) {
+      domainScopeMenuEl.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+        input.checked = values.includes(input.value);
+      });
+    }
+    state.activeDomainScope = values.length ? values : 'Auto';
+    if (domainScopeSelectLabelEl) domainScopeSelectLabelEl.textContent = values.length
+      ? values.join(' + ')
+      : 'Auto — infer from question';
+    if (domainScopeImpactEl) domainScopeImpactEl.textContent = values.length
+      ? `Search is limited to ${values.join(' and ')}. Access policies still apply separately.`
+      : 'Auto searches domains inferred from the question.';
+
+    const time = selectedScope.time || { mode: 'auto', preset: 'auto', start: null, end: null };
+    if (timeRangeSelectEl) timeRangeSelectEl.value = time.mode === 'custom' ? 'custom' : (time.preset || 'auto');
+    if (customStartDateEl) customStartDateEl.value = time.start || '';
+    if (customEndDateEl) customEndDateEl.value = time.end || '';
+    if (customDateRangeBarEl) customDateRangeBarEl.style.display = time.mode === 'custom' ? 'flex' : 'none';
+    state.activeTimeRange = time.mode === 'auto' ? 'Auto' : (time.preset || 'Custom');
+    updateScopeEditorUI();
+  }
+
   function isSavedExecutionOptionsValid(options) {
     if (!options || !options.selectedScope || !options.interpretationOverride) return false;
     const domain = options.selectedScope.domain;
@@ -4551,6 +4652,17 @@
       showSqlChk.addEventListener('change', () => {
         state.settings.showSqlDefault = showSqlChk.checked;
         renderActiveConversation();
+      });
+    }
+
+    const showPipelineChk = document.getElementById('settingShowPipelineDefault');
+    if (showPipelineChk) {
+      showPipelineChk.checked = Boolean(state.settings.showPipelineDefault);
+      showPipelineChk.addEventListener('change', () => {
+        state.settings.showPipelineDefault = showPipelineChk.checked;
+        showToast(showPipelineChk.checked
+          ? 'Technical processing details will be shown for new requests.'
+          : 'New requests will show a concise business-friendly loading state.');
       });
     }
 
@@ -5154,22 +5266,34 @@
     closeFeedbackModalBtn.addEventListener('click', () => feedbackModalBackdrop.classList.remove('open'));
     cancelFeedbackBtn.addEventListener('click', () => feedbackModalBackdrop.classList.remove('open'));
 
-    let selectedReason = 'Wrong table';
     feedbackReasonChips.querySelectorAll('.reason-chip-btn').forEach((chip) => {
       chip.addEventListener('click', () => {
         feedbackReasonChips.querySelectorAll('.reason-chip-btn').forEach((c) => c.classList.remove('selected'));
         chip.classList.add('selected');
-        selectedReason = chip.textContent.trim();
+        state.currentFeedbackReason = chip.textContent.trim();
       });
     });
 
     submitFeedbackBtn.addEventListener('click', () => {
       const comment = feedbackCommentInput.value.trim();
       const conv = getActiveConversation();
-      window.AriaMock.recordFeedback('down', selectedReason, comment, conv ? conv.title : '', state.currentUser);
+      const msg = conv && conv.messages.find((item) => item.id === state.currentFeedbackMessageId);
+      if (!conv || !msg) {
+        feedbackModalBackdrop.classList.remove('open');
+        showToast('This answer is no longer available for feedback.');
+        return;
+      }
+      const isUpdate = Boolean(msg.feedback);
+      msg.feedback = { type: 'down', reason: state.currentFeedbackReason, comment, submittedAt: Date.now() };
+      window.AriaMock.recordFeedback('down', state.currentFeedbackReason, comment, conv.title, state.currentUser, {
+        conversationId: conv.id, messageId: msg.id, replaceExisting: isUpdate
+      });
+      saveConversationsToStorage();
       feedbackModalBackdrop.classList.remove('open');
       feedbackCommentInput.value = '';
-      showToast('Thank you! Feedback recorded for model review.');
+      state.currentFeedbackMessageId = null;
+      renderActiveConversation();
+      showToast(isUpdate ? 'Feedback updated for this answer.' : 'Feedback saved for this answer.');
     });
 
     closeSourceTableModalBtn.addEventListener('click', () => sourceTableModalBackdrop.classList.remove('open'));

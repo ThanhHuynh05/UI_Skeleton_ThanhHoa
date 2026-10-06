@@ -407,12 +407,12 @@
         <button type="button" class="header-icon-btn" id="closeFeedbackModalBtn">✕</button>
       </div>
       <div class="modal-body">
-        <p style="font-size: 12px; color: var(--text-secondary);">Help us improve model grounding by sharing why this answer was unhelpful:</p>
+        <p class="feedback-help">Tell us what was wrong with this specific answer. You can return later and edit your feedback.</p>
         <div style="display: flex; flex-wrap: wrap; gap: 6px;" id="feedbackReasonChips">
-          <button type="button" class="reason-chip-btn">Wrong table</button>
-          <button type="button" class="reason-chip-btn">Wrong filter</button>
-          <button type="button" class="reason-chip-btn">Wrong numbers</button>
-          <button type="button" class="reason-chip-btn">Unclear answer</button>
+          <button type="button" class="reason-chip-btn">Wrong number</button>
+          <button type="button" class="reason-chip-btn">Wrong interpretation</button>
+          <button type="button" class="reason-chip-btn">Outdated data</button>
+          <button type="button" class="reason-chip-btn">Hard to understand</button>
           <button type="button" class="reason-chip-btn">Other</button>
         </div>
         <div>
@@ -420,7 +420,7 @@
         </div>
         <div style="display: flex; justify-content: flex-end; gap: 8px;">
           <button type="button" class="action-tool-btn" id="cancelFeedbackBtn">Cancel</button>
-          <button type="button" class="action-tool-btn" id="submitFeedbackBtn" style="background: var(--accent-primary); color: #fff;">Submit Feedback</button>
+          <button type="button" class="action-tool-btn" id="submitFeedbackBtn" style="background: var(--accent-primary); color: #fff;">Save feedback</button>
         </div>
       </div>
     </div>

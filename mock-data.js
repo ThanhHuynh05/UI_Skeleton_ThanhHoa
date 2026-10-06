@@ -139,6 +139,10 @@
     { group: 'Visual examples', expected: 'Pie chart', text: 'Show the composition of active contract value by project in calendar year 2026' },
     { group: 'Visual examples', expected: 'Table fallback', text: 'Compare each project’s latest construction progress with a 75% review threshold' },
     { group: 'Result patterns', expected: 'Ranking', text: 'Show total active contract value by project in calendar year 2026' },
+    { group: 'Result patterns', expected: 'KPI', text: 'What is our total active contract value this year?' },
+    { group: 'Result patterns', expected: 'Trend', text: 'Show monthly buyer payments collected from July to September 2026' },
+    { group: 'Result patterns', expected: 'Entity detail', text: 'What is the contractual delay liquidated damages clause for Parkview Heights?' },
+    { group: 'Result patterns', expected: 'Comparison', text: 'Compare each project’s latest construction progress with a 75% review threshold' },
     { group: 'Result patterns', expected: 'Ranking', text: 'Which projects have the highest outstanding buyer installments in 2026?' },
     { group: 'Result patterns', expected: 'Ranking', text: 'Compare latest construction progress across active project phases' },
     { group: 'Result patterns', expected: 'Record list', text: 'Break down Skyline Residences overdue installments by buyer contract' },
@@ -2011,10 +2015,10 @@ GROUP BY p.asset_sub_type;`,
       thumbsUp: 124,
       thumbsDown: 18,
       reasons: {
-        'Wrong table': 5,
-        'Wrong filter': 4,
-        'Wrong numbers': 3,
-        'Unclear answer': 4,
+        'Wrong number': 3,
+        'Wrong interpretation': 5,
+        'Outdated data': 4,
+        'Hard to understand': 4,
         'Other': 2
       }
     },
@@ -2134,18 +2138,50 @@ GROUP BY p.asset_sub_type;`,
     }
   }
 
-  function recordFeedback(feedbackType, reason, comment, queryText, currentUser) {
+  function recordFeedback(feedbackType, reason, comment, queryText, currentUser, context = {}) {
     try {
       const store = getObservabilityStore();
-      if (feedbackType === 'up') {
-        store.feedback.thumbsUp += 1;
-      } else {
-        store.feedback.thumbsDown += 1;
-        if (reason && store.feedback.reasons[reason] !== undefined) {
-          store.feedback.reasons[reason] += 1;
-        } else if (reason) {
-          store.feedback.reasons[reason] = 1;
+      store.feedback.byResult = store.feedback.byResult || {};
+      const resultKey = context.conversationId && context.messageId
+        ? `${context.conversationId}:${context.messageId}`
+        : null;
+      const previous = resultKey ? store.feedback.byResult[resultKey] : null;
+      const adjustReason = (label, delta) => {
+        if (!label) return;
+        const current = Number(store.feedback.reasons[label] || 0);
+        store.feedback.reasons[label] = Math.max(0, current + delta);
+      };
+
+      if (!previous) {
+        if (feedbackType === 'up') {
+          store.feedback.thumbsUp += 1;
+        } else {
+          store.feedback.thumbsDown += 1;
+          adjustReason(reason, 1);
         }
+      } else if (previous.type !== feedbackType) {
+        if (previous.type === 'up') store.feedback.thumbsUp = Math.max(0, store.feedback.thumbsUp - 1);
+        if (previous.type === 'down') {
+          store.feedback.thumbsDown = Math.max(0, store.feedback.thumbsDown - 1);
+          adjustReason(previous.reason, -1);
+        }
+        if (feedbackType === 'up') store.feedback.thumbsUp += 1;
+        if (feedbackType === 'down') {
+          store.feedback.thumbsDown += 1;
+          adjustReason(reason, 1);
+        }
+      } else if (feedbackType === 'down' && previous.reason !== reason) {
+        adjustReason(previous.reason, -1);
+        adjustReason(reason, 1);
+      }
+
+      if (resultKey) {
+        store.feedback.byResult[resultKey] = {
+          type: feedbackType,
+          reason: reason || null,
+          comment: comment || '',
+          updatedAt: new Date().toISOString()
+        };
       }
       localStorage.setItem('aria_observability_v2', JSON.stringify(store));
       logAuditEvent(
@@ -2154,7 +2190,7 @@ GROUP BY p.asset_sub_type;`,
         queryText,
         feedbackType === 'up' ? 'FEEDBACK_POSITIVE' : 'FEEDBACK_NEGATIVE',
         0,
-        `Reason: ${reason || 'N/A'}. Comment: ${comment || 'N/A'}`
+        `Result: ${context.messageId || 'Not recorded'}. Reason: ${reason || 'N/A'}. Comment: ${comment || 'N/A'}`
       );
     } catch (e) {
       console.warn('Failed to record feedback', e);
