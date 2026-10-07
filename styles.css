@@ -28,6 +28,9 @@
   --accent-border: #dcb3b3;
   --accent-text: #802323;
   --focus-ring: #802323;
+  --control-bg: #ffffff;
+  --control-disabled-bg: #eae7e1;
+  --control-disabled-text: #625b59;
 
   --success-color: #2b593f;
   --success-bg: #eaf3ed;
@@ -101,8 +104,8 @@
 
   --text-primary: #f5f4f1;
   --text-secondary: #bcb7b0;
-  --text-muted: #8b8381;
-  --text-inverse: #151313;
+  --text-muted: #aaa29f;
+  --text-inverse: #ffffff;
 
   --accent-primary: #a83c3c;
   --accent-hover: #c44e4e;
@@ -110,6 +113,9 @@
   --accent-border: #4d2323;
   --accent-text: #eebfbf;
   --focus-ring: #eebfbf;
+  --control-bg: #201d1d;
+  --control-disabled-bg: #2a2626;
+  --control-disabled-text: #bcb7b0;
 
   --success-color: #5bb07e;
   --success-bg: #143020;
@@ -172,9 +178,9 @@ button {
 }
 
 :where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
-  outline: 3px solid var(--focus-ring) !important;
-  outline-offset: 3px !important;
-  box-shadow: 0 0 0 2px var(--bg-surface) !important;
+  outline: 2px solid var(--focus-ring) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
 }
 
 a {
@@ -1597,9 +1603,8 @@ a:hover {
 }
 
 .scope-select-control:focus {
-  outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px var(--accent-subtle);
+  box-shadow: none;
 }
 
 .domain-multiselect-trigger {
@@ -1686,7 +1691,9 @@ a:hover {
 }
 .input-box-wrapper:focus-within {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 1px var(--accent-primary);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .chat-input-field {
@@ -1707,6 +1714,12 @@ a:hover {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+/* The wrapper owns the chat input focus indicator, avoiding a nested ring. */
+.chat-input-field:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .composer-actions {
@@ -2353,9 +2366,8 @@ body.dashboard-page .app-header {
 }
 
 .table-filter-input:focus {
-  outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px var(--accent-subtle);
+  box-shadow: none;
 }
 
 .table-filter-select {
@@ -2370,9 +2382,8 @@ body.dashboard-page .app-header {
 }
 
 .table-filter-select:focus {
-  outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px var(--accent-subtle);
+  box-shadow: none;
 }
 
 .table-count-badge {
@@ -2652,9 +2663,8 @@ details[open] .sql-chevron { transform: rotate(180deg); }
 }
 
 .scope-period-control .time-range-select:focus {
-  outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 1px var(--accent-primary);
+  box-shadow: none;
 }
 
 .scope-auto-rule {
@@ -2716,7 +2726,6 @@ details[open] .sql-chevron { transform: rotate(180deg); }
 }
 
 .date-input:focus {
-  outline: none;
   border-color: var(--accent-primary);
 }
 
@@ -5022,6 +5031,29 @@ small,
 .form-input,.form-select,input[type="search"],input[type="text"],input[type="date"],textarea,select {
   min-height:44px; border-radius:var(--radius-control); font-size:var(--type-body); line-height:1.4;
 }
+
+/* Theme-aware native controls. These classes previously inherited the browser's
+   white control surface, which made light text unreadable in dark mode. */
+.form-input,.form-select,.scope-select,
+input[type="search"],input[type="text"],input[type="date"] {
+  border:1px solid var(--border-strong);
+  background-color:var(--control-bg);
+  color:var(--text-primary);
+}
+.form-input,.scope-select,input[type="search"],input[type="text"],input[type="date"] { padding:8px 12px; }
+.form-select,.scope-select:is(select) { padding:8px 36px 8px 12px; }
+input::placeholder,textarea::placeholder { color:var(--text-muted); opacity:1; }
+select option { background:var(--control-bg); color:var(--text-primary); }
+input:disabled,select:disabled,textarea:disabled,
+input[readonly] {
+  border-color:var(--border-color);
+  background:var(--control-disabled-bg);
+  color:var(--control-disabled-text);
+  opacity:1;
+  cursor:not-allowed;
+}
+[data-theme="dark"] { color-scheme:dark; }
+[data-theme="dark"] a { color:var(--accent-text); }
 
 /* Cards, drawers, tables and statuses */
 .agent-response-card,.observability-card,.benchmark-run-metadata,
