@@ -5354,42 +5354,22 @@ GROUP BY p.asset_sub_type;`,
         } else if (lower.includes('marketing') || lower.includes('headcount') || lower.includes('2021')) {
           matchedData = QUERY_RESPONSES['Show total internal marketing headcount budget variance for FY2021'];
         } else {
-          // Dynamic fallback for any other general enterprise question
+          // The prototype must never invent a successful business result for an
+          // unverified question. Only deterministic fixtures have ground truth.
           const fallbackDomain = (resolvedScope.domain && resolvedScope.domain !== 'All Domains') ? resolvedScope.domain : 'All Domains';
           matchedData = {
             type: 'results',
+            resultState: 'unsupported',
             domain: fallbackDomain,
-            summary: 'Understood intent, retrieved schema across 2 tables, generated and validated query (1.4s)',
-            answer: `Synthesized operational records matching **"${trimmed}"** across enterprise tables:`,
-            plainEnglishExplanation: (fallbackDomain !== 'All Domains') ? `This query filters operational entities matching your parameters in the ${fallbackDomain} domain.` : `This cross-domain query aggregates operational records across enterprise domains without domain restriction.`,
-            dataAsOf: '2026-09-28 00:00 UTC',
-            confidenceNote: 'Standard confidence (90%). Schema verified.',
-            table: {
-              title: `Records matching: ${trimmed}`,
-              headers: ['Entity / Record', 'Domain', 'Fiscal Period', 'Status', 'Allocated Value ($M)'],
-              columns: ['entity', 'domain', 'period', 'status', 'value'],
-              types: ['string', 'string', 'string', 'badge', 'number'],
-              rows: [
-                { entity: 'Core Operational Package 01', domain: 'Projects', period: '2026-Q3', status: 'Active', value: 4.20 },
-                { entity: 'Primary Subcontract Package 04', domain: 'Procurement', period: '2026-Q3', status: 'Pending Review', value: 2.85 },
-                { entity: 'Residential Tower Phase 3', domain: 'Construction', period: '2026-Q3', status: 'On Track', value: 6.10 }
-              ]
-            },
-            chart: {
-              title: 'Record Value Distribution ($M)',
-              unit: '$M',
-              items: [
-                { label: 'Tower Phase 3', value: 6.10, color: '#3b82f6', highlight: true },
-                { label: 'Asset Alpha', value: 4.20, color: '#10b981' },
-                { label: 'Subcontract 04', value: 2.85, color: '#f59e0b' }
-              ]
-            },
-            sources: [
-              { name: 'dim_projects', records: '104 projects', description: 'Core projects dimension.' },
-              { name: 'general_ledger_summaries', records: '45,000 rows', description: 'General ledger summary records.' }
-            ],
-            sql: `-- Aria General NL-to-SQL Template\nSELECT p.project_name, p.asset_type, gl.fiscal_period, gl.status, SUM(gl.amount) AS total_val\nFROM enterprise_dw.dim_projects p\nJOIN enterprise_dw.general_ledger_summaries gl ON p.project_id = gl.project_id\nWHERE gl.fiscal_period = '2026-Q3'\nGROUP BY p.project_name, p.asset_type, gl.fiscal_period, gl.status\nLIMIT 5;`,
-            followUps: ['Filter by specific division or department', 'Export summarized result to CSV']
+            summary: 'No verified synthetic fixture is available for this question.',
+            answer: `The demo cannot answer **"${trimmed}"** from its verified synthetic scenarios.`,
+            plainEnglishExplanation: 'This question is outside the verified operational scenarios available in the prototype. No query was executed and no records or confidence score were generated.',
+            dataAsOf: 'Not applicable — no data queried',
+            sources: [],
+            followUps: [
+              'Open Data Guide to see supported business questions',
+              'Edit scope and ask a question covered by the demo'
+            ]
           };
         }
       }
