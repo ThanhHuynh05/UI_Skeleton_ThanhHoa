@@ -390,6 +390,15 @@
     return newConv;
   }
 
+  function startNewChat() {
+    createNewConversation('New Conversation');
+    closeConversationSearch();
+    showToast('Started new conversation');
+    if (typeof updateRailActiveState === 'function') showBusinessWorkspaceView('ask');
+    if (window.innerWidth <= 820) sidebarEl.classList.remove('open');
+    announceAppStatus('Started a new conversation.');
+  }
+
   function conversationSearchText(conversation) {
     const messageText = (conversation.messages || []).map((message) => [
       message.text,
@@ -441,9 +450,19 @@
       : `${results.length} recent ${results.length === 1 ? 'conversation' : 'conversations'}`;
 
     if (!results.length) {
-      historySearchResultsEl.innerHTML = `<div class="history-search-empty">${query
-        ? `No conversations match “${escapeHtml(historySearchDialogInputEl.value.trim())}”. Try another title or message phrase.`
-        : 'No conversations yet. Start a new chat to build your history.'}</div>`;
+      const hasConversationHistory = state.conversations.length > 0;
+      historySearchResultsEl.innerHTML = hasConversationHistory
+        ? `<div class="history-search-empty">No conversations match “${escapeHtml(historySearchDialogInputEl.value.trim())}”. Try another title or message phrase.</div>`
+        : `<div class="history-search-empty">
+            <strong>No conversations yet</strong>
+            <span>Start a new chat to build your history.</span>
+            <button type="button" class="btn-new-chat history-empty-new-chat">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>New Chat</span>
+            </button>
+          </div>`;
+      const emptyNewChatBtn = historySearchResultsEl.querySelector('.history-empty-new-chat');
+      if (emptyNewChatBtn) emptyNewChatBtn.addEventListener('click', startNewChat);
       return;
     }
 
@@ -485,8 +504,9 @@
 
     if (convs.length === 0) {
       sidebarConversationsListEl.innerHTML = `
-        <div style="padding: 16px 8px; text-align: center; color: var(--text-muted); font-size: 12px;">
-          No conversations yet.<br>Click "New Chat" to begin.
+        <div class="sidebar-history-empty">
+          <strong>No conversations yet</strong>
+          <span>Start a new chat to build your history.</span>
         </div>
       `;
       return;
@@ -5190,11 +5210,7 @@
     sendBtnEl.addEventListener('click', handleSendMessage);
 
     // New Chat Button
-    newChatBtnEl.addEventListener('click', () => {
-      createNewConversation('New Conversation');
-      showToast('Started new conversation');
-      if (typeof updateRailActiveState === 'function') showBusinessWorkspaceView('ask');
-    });
+    newChatBtnEl.addEventListener('click', startNewChat);
 
     // Conversation search dialog (distinct from filtering rows inside a result).
     openHistorySearchBtnEl.addEventListener('click', openConversationSearch);
