@@ -38,7 +38,6 @@
       domain: { mode: 'auto', value: 'Auto', values: [] },
       time: { mode: 'auto', preset: 'auto', start: null, end: null }
     },
-    searchQuery: '',
     currentFeedbackMessageId: null,
     currentFeedbackReason: 'Wrong number',
     voiceRecognition: null,
@@ -53,12 +52,19 @@
   const voiceInputBtnEl = document.getElementById('voiceInputBtn');
   const typeaheadPopupEl = document.getElementById('typeaheadPopup');
   const sidebarConversationsListEl = document.getElementById('sidebarConversationsList');
-  const historySearchInputEl = document.getElementById('historySearchInput');
+  const openHistorySearchBtnEl = document.getElementById('openHistorySearchBtn');
+  const historySearchModalBackdrop = document.getElementById('historySearchModalBackdrop');
+  const closeHistorySearchBtnEl = document.getElementById('closeHistorySearchBtn');
+  const historySearchDialogInputEl = document.getElementById('historySearchDialogInput');
+  const historySearchResultsEl = document.getElementById('historySearchResults');
+  const historySearchStatusEl = document.getElementById('historySearchStatus');
   const newChatBtnEl = document.getElementById('newChatBtn');
   const clearAllHistoryBtnEl = document.getElementById('clearAllHistoryBtn');
   const themeToggleBtnEl = document.getElementById('themeToggleBtn');
   const mobileMenuBtnEl = document.getElementById('mobileMenuBtn');
   const sidebarEl = document.getElementById('sidebar');
+  const sidebarMobileBackdropEl = document.getElementById('sidebarMobileBackdrop');
+  const closeMobileSidebarBtnEl = document.getElementById('closeMobileSidebarBtn');
   const userMenuBtnEl = document.getElementById('userMenuBtn');
   const userMenuDropdownEl = document.getElementById('userMenuDropdown');
   const headerUserLabelEl = document.getElementById('headerUserLabel');
@@ -273,6 +279,13 @@
   function updateUserBadge() {
     if (!state.currentUser) return;
     headerUserLabelEl.innerHTML = `Demo persona: <strong>${escapeHtml(state.currentUser.name)}</strong>`;
+    const menuPersonaName = document.getElementById('userMenuPersonaName');
+    const menuPersonaRole = document.getElementById('userMenuPersonaRole');
+    if (menuPersonaName) menuPersonaName.textContent = state.currentUser.name;
+    if (menuPersonaRole) menuPersonaRole.textContent = state.currentUser.roleTitle || state.currentUser.role || 'Demo user';
+    if (userMenuBtnEl) {
+      userMenuBtnEl.setAttribute('aria-label', `Current demo persona: ${state.currentUser.name}, ${state.currentUser.roleTitle || state.currentUser.role || 'Demo user'}. Open user menu`);
+    }
     const adminNav = document.getElementById('adminWorkspaceNav');
     if (adminNav) {
       adminNav.style.display = state.currentUser.role === 'data_admin' ? 'block' : 'none';
@@ -336,27 +349,103 @@
     return newConv;
   }
 
+  function conversationSearchText(conversation) {
+    const messageText = (conversation.messages || []).map((message) => [
+      message.text,
+      message.originalQuery,
+      message.question,
+      message.message,
+      message.resultsData && message.resultsData.answer
+    ].filter(Boolean).join(' ')).join(' ');
+    return `${conversation.title || ''} ${messageText}`.toLowerCase();
+  }
+
+  function conversationSearchSnippet(conversation, query) {
+    const candidates = (conversation.messages || []).flatMap((message) => [
+      message.text,
+      message.originalQuery,
+      message.resultsData && message.resultsData.answer,
+      message.message
+    ]).filter(Boolean).map(String);
+    const match = candidates.find((text) => text.toLowerCase().includes(query)) || candidates[0] || 'No messages in this conversation yet.';
+    const normalized = match.replace(/\s+/g, ' ').trim();
+    return normalized.length > 140 ? `${normalized.slice(0, 137)}…` : normalized;
+  }
+
+  function openConversationFromSearch(conversationId) {
+    const conversation = state.conversations.find((item) => item.id === conversationId);
+    if (!conversation) return;
+    state.activeConversationId = conversationId;
+    saveConversationsToStorage();
+    historySearchModalBackdrop.classList.remove('open');
+    renderSidebarConversations();
+    renderActiveConversation();
+    showBusinessWorkspaceView('ask', { focusComposer: false });
+    if (window.innerWidth <= 820) {
+      sidebarEl.classList.remove('open');
+      mobileMenuBtnEl.focus();
+    }
+    announceAppStatus(`Opened conversation: ${conversation.title}.`);
+  }
+
+  function renderConversationSearchResults() {
+    if (!historySearchResultsEl || !historySearchStatusEl) return;
+    const query = historySearchDialogInputEl.value.trim().toLowerCase();
+    const results = [...state.conversations]
+      .filter((conversation) => !query || conversationSearchText(conversation).includes(query))
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    historySearchStatusEl.textContent = query
+      ? `${results.length} matching ${results.length === 1 ? 'conversation' : 'conversations'}`
+      : `${results.length} recent ${results.length === 1 ? 'conversation' : 'conversations'}`;
+
+    if (!results.length) {
+      historySearchResultsEl.innerHTML = `<div class="history-search-empty">${query
+        ? `No conversations match “${escapeHtml(historySearchDialogInputEl.value.trim())}”. Try another title or message phrase.`
+        : 'No conversations yet. Start a new chat to build your history.'}</div>`;
+      return;
+    }
+
+    historySearchResultsEl.innerHTML = results.map((conversation) => `
+      <button type="button" class="history-search-result" data-conversation-id="${escapeHtml(conversation.id)}">
+        <span class="history-search-result-title">${escapeHtml(conversation.title || 'Untitled conversation')}</span>
+        <span class="history-search-result-snippet">${escapeHtml(conversationSearchSnippet(conversation, query))}</span>
+        <span class="history-search-result-meta">${new Date(conversation.updatedAt || conversation.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+      </button>
+    `).join('');
+
+    historySearchResultsEl.querySelectorAll('.history-search-result').forEach((result) => {
+      result.addEventListener('click', () => openConversationFromSearch(result.getAttribute('data-conversation-id')));
+    });
+  }
+
+  function openConversationSearch() {
+    if (!historySearchModalBackdrop) return;
+    const otherOpenModal = document.querySelector('.modal-backdrop.open:not(#historySearchModalBackdrop)');
+    if (otherOpenModal) return;
+    historySearchDialogInputEl.value = '';
+    renderConversationSearchResults();
+    if (window.innerWidth <= 820) sidebarEl.classList.remove('open');
+    historySearchModalBackdrop.classList.add('open');
+    requestAnimationFrame(() => historySearchDialogInputEl.focus());
+  }
+
+  function closeConversationSearch() {
+    historySearchModalBackdrop.classList.remove('open');
+  }
+
   // =========================================================================
   // 3. SIDEBAR GROUPING & RENDERING (Pinned, Today, Yesterday, Earlier)
   // =========================================================================
   function renderSidebarConversations() {
     if (!sidebarConversationsListEl) return;
 
-    let convs = [...state.conversations];
-    const query = state.searchQuery.toLowerCase().trim();
-
-    if (query) {
-      convs = convs.filter((c) => {
-        const titleMatch = c.title.toLowerCase().includes(query);
-        const msgMatch = (c.messages || []).some((m) => (m.text || '').toLowerCase().includes(query));
-        return titleMatch || msgMatch;
-      });
-    }
+    const convs = [...state.conversations];
 
     if (convs.length === 0) {
       sidebarConversationsListEl.innerHTML = `
         <div style="padding: 16px 8px; text-align: center; color: var(--text-muted); font-size: 12px;">
-          ${query ? 'No matching conversations.' : 'No conversations yet.<br>Click "New Chat" to begin.'}
+          No conversations yet.<br>Click "New Chat" to begin.
         </div>
       `;
       return;
@@ -402,7 +491,7 @@
         saveConversationsToStorage();
         renderSidebarConversations();
         renderActiveConversation();
-        if (typeof updateRailActiveState === 'function') showBusinessWorkspaceView('ask');
+        if (typeof updateRailActiveState === 'function') showBusinessWorkspaceView('ask', { focusComposer: false });
         if (window.innerWidth <= 820) sidebarEl.classList.remove('open');
       });
 
@@ -562,7 +651,6 @@
     understandingHtml += '<h3 style="font-family: var(--font-serif); font-size: 20px; margin-bottom: 16px;">Applied Scope</h3>';
     understandingHtml += '<div style="margin-bottom: 24px; color: var(--text-secondary); font-size: 14px; line-height: 1.6;">';
     understandingHtml += generateAppliedScopeHtml(scope);
-    understandingHtml += '<button type="button" class="action-tool-btn evidence-edit-interpretation-btn" style="margin-top: 12px;">Edit interpretation</button>';
     understandingHtml += '</div></div>';
 
     // Evidence tab
@@ -631,15 +719,15 @@
       });
     }
 
-    const editInterpretationButton = body.querySelector('.evidence-edit-interpretation-btn');
-    if (editInterpretationButton) {
+    body.querySelectorAll('.btn-edit-interpretation').forEach((editInterpretationButton) => {
       editInterpretationButton.addEventListener('click', () => {
         const conv = getActiveConversation();
         if (!conv) return;
-        evidenceDesk.classList.remove('open');
-        openEditInterpretationModal(conv, msg.id);
+        const sourceMsgId = editInterpretationButton.getAttribute('data-msg-id') || msg.id;
+        closeScopeInspector(false);
+        openEditInterpretationModal(conv, sourceMsgId);
       });
-    }
+    });
     
     // Reset tabs
     const tabs = evidenceDesk.querySelectorAll('.drawer-tab');
@@ -671,7 +759,12 @@
       });
     });
     
+    activeScopeInspectorTriggerBtn = document.activeElement;
+    evidenceDesk.inert = false;
     evidenceDesk.classList.add('open');
+    evidenceDesk.setAttribute('aria-hidden', 'false');
+    if (scopeInspectorBackdrop) scopeInspectorBackdrop.classList.add('open');
+    requestAnimationFrame(() => closeScopeInspectorBtn && closeScopeInspectorBtn.focus());
   }
 
     chatContainerEl.querySelectorAll('.btn-open-evidence').forEach((button) => {
@@ -3369,7 +3462,8 @@
     if (railDataGuideBtn) railDataGuideBtn.classList.toggle('active', activeItem === 'data_guide');
   }
 
-  function showBusinessWorkspaceView(viewName) {
+  function showBusinessWorkspaceView(viewName, options = {}) {
+    const focusComposer = options.focusComposer !== false;
     const chatViewport = document.getElementById('chatViewport');
     const savedInsightsViewport = document.getElementById('savedInsightsViewport');
 
@@ -3388,7 +3482,7 @@
       if (chatViewport) chatViewport.style.display = 'flex';
       if (savedInsightsViewport) savedInsightsViewport.style.display = 'none';
       updateRailActiveState('ask');
-      if (chatInputEl && window.innerWidth > 820) chatInputEl.focus();
+      if (focusComposer && chatInputEl && window.innerWidth > 820) chatInputEl.focus();
     } else if (viewName === 'saved') {
       if (chatViewport) chatViewport.style.display = 'none';
       if (savedInsightsViewport) savedInsightsViewport.style.display = 'flex';
@@ -3547,6 +3641,7 @@
     scopeInspectorBody.querySelectorAll('.btn-edit-interpretation').forEach((btn) => {
       btn.addEventListener('click', () => {
         const msgId = btn.getAttribute('data-msg-id');
+        closeScopeInspector(false);
         openEditInterpretationModal(conv, msgId);
       });
     });
@@ -3562,6 +3657,7 @@
     renderScopeInspectorContent(msg, conv);
 
     if (scopeInspectorPanel) {
+      scopeInspectorPanel.inert = false;
       scopeInspectorPanel.classList.add('open');
       scopeInspectorPanel.setAttribute('aria-hidden', 'false');
     }
@@ -3573,15 +3669,16 @@
     }
   }
 
-  function closeScopeInspector() {
+  function closeScopeInspector(restoreFocus = true) {
     if (scopeInspectorPanel) {
       scopeInspectorPanel.classList.remove('open');
       scopeInspectorPanel.setAttribute('aria-hidden', 'true');
+      scopeInspectorPanel.inert = true;
     }
     if (scopeInspectorBackdrop) {
       scopeInspectorBackdrop.classList.remove('open');
     }
-    if (activeScopeInspectorTriggerBtn && typeof activeScopeInspectorTriggerBtn.focus === 'function') {
+    if (restoreFocus && activeScopeInspectorTriggerBtn && typeof activeScopeInspectorTriggerBtn.focus === 'function') {
       try { activeScopeInspectorTriggerBtn.focus(); } catch (e) {}
     }
     activeScopeInspectorTriggerBtn = null;
@@ -4701,10 +4798,10 @@
         e.preventDefault();
         chatInputEl.focus();
       }
-      // Ctrl+K / Cmd+K = focus history search
+      // Ctrl+K / Cmd+K = open the dedicated conversation search dialog
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        historySearchInputEl.focus();
+        openConversationSearch();
       }
     });
   }
@@ -4772,6 +4869,7 @@
     if (domainScopeSelectEl) domainScopeSelectEl.setAttribute('aria-expanded', 'false');
     closeClarificationModal();
     if (editInterpretationModalBackdrop) editInterpretationModalBackdrop.classList.remove('open');
+    if (historySearchModalBackdrop) historySearchModalBackdrop.classList.remove('open');
     closeScopeInspector();
     showBusinessWorkspaceView('ask');
     userMenuDropdownEl.classList.remove('open');
@@ -5069,10 +5167,37 @@
       if (typeof updateRailActiveState === 'function') showBusinessWorkspaceView('ask');
     });
 
-    // History Search
-    historySearchInputEl.addEventListener('input', () => {
-      state.searchQuery = historySearchInputEl.value;
-      renderSidebarConversations();
+    // Conversation search dialog (distinct from filtering rows inside a result).
+    openHistorySearchBtnEl.addEventListener('click', openConversationSearch);
+    closeHistorySearchBtnEl.addEventListener('click', closeConversationSearch);
+    historySearchDialogInputEl.addEventListener('input', renderConversationSearchResults);
+    historySearchModalBackdrop.addEventListener('click', (event) => {
+      if (event.target === historySearchModalBackdrop) closeConversationSearch();
+    });
+    historySearchDialogInputEl.addEventListener('keydown', (event) => {
+      const firstResult = historySearchResultsEl.querySelector('.history-search-result');
+      if (event.key === 'ArrowDown' && firstResult) {
+        event.preventDefault();
+        firstResult.focus();
+      } else if (event.key === 'Enter' && firstResult) {
+        event.preventDefault();
+        firstResult.click();
+      }
+    });
+    historySearchResultsEl.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+      const results = Array.from(historySearchResultsEl.querySelectorAll('.history-search-result'));
+      const currentIndex = results.indexOf(document.activeElement);
+      if (currentIndex < 0) return;
+      event.preventDefault();
+      if (event.key === 'ArrowUp' && currentIndex === 0) {
+        historySearchDialogInputEl.focus();
+        return;
+      }
+      const nextIndex = event.key === 'ArrowDown'
+        ? Math.min(currentIndex + 1, results.length - 1)
+        : Math.max(currentIndex - 1, 0);
+      results[nextIndex].focus();
     });
 
     // Clear All History
@@ -5146,10 +5271,35 @@
     mobileMenuBtnEl.addEventListener('click', () => {
       if (window.innerWidth <= 820) {
         sidebarEl.classList.toggle('open');
+        mobileMenuBtnEl.setAttribute('aria-expanded', sidebarEl.classList.contains('open') ? 'true' : 'false');
       } else {
         sidebarEl.classList.toggle('collapsed');
       }
     });
+    if (sidebarMobileBackdropEl) {
+      sidebarMobileBackdropEl.addEventListener('click', () => {
+        sidebarEl.classList.remove('open');
+        requestAnimationFrame(() => mobileMenuBtnEl.focus());
+      });
+      new MutationObserver(() => {
+        const isMobileOpen = sidebarEl.classList.contains('open') && window.innerWidth <= 820;
+        sidebarMobileBackdropEl.classList.toggle('open', isMobileOpen);
+        mobileMenuBtnEl.setAttribute('aria-expanded', isMobileOpen ? 'true' : 'false');
+        sidebarEl.inert = window.innerWidth <= 820 && !isMobileOpen;
+      }).observe(sidebarEl, { attributes: true, attributeFilter: ['class'] });
+      window.addEventListener('resize', () => {
+        const isMobileOpen = sidebarEl.classList.contains('open') && window.innerWidth <= 820;
+        sidebarMobileBackdropEl.classList.toggle('open', isMobileOpen);
+        sidebarEl.inert = window.innerWidth <= 820 && !isMobileOpen;
+      });
+      sidebarEl.inert = window.innerWidth <= 820 && !sidebarEl.classList.contains('open');
+    }
+    if (closeMobileSidebarBtnEl) {
+      closeMobileSidebarBtnEl.addEventListener('click', () => {
+        sidebarEl.classList.remove('open');
+        requestAnimationFrame(() => mobileMenuBtnEl.focus());
+      });
+    }
 
     // User Profile Dropdown Toggle
     userMenuBtnEl.addEventListener('click', (e) => {
@@ -5215,6 +5365,35 @@
     }
     if (scopeInspectorBackdrop) {
       scopeInspectorBackdrop.addEventListener('click', closeScopeInspector);
+    }
+    if (scopeInspectorPanel) {
+      scopeInspectorPanel.addEventListener('keydown', (event) => {
+        if (!scopeInspectorPanel.classList.contains('open')) return;
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          closeScopeInspector();
+          return;
+        }
+        if (event.key !== 'Tab') return;
+        const focusable = Array.from(scopeInspectorPanel.querySelectorAll(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
+        )).filter((element) => !element.closest('[hidden]') && element.offsetParent !== null);
+        if (!focusable.length) {
+          event.preventDefault();
+          scopeInspectorPanel.focus();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      });
     }
 
     // Drawers Open / Close

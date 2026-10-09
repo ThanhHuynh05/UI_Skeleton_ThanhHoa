@@ -309,8 +309,8 @@
   </div>
 
   <!-- Unified Inspection Modal -->
-  <div class="modal-backdrop" id="inspectionModalBackdrop">
-    <div class="app-modal" role="dialog" style="max-width: 600px;">
+  <div class="modal-backdrop" id="inspectionModalBackdrop" aria-hidden="true">
+    <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="inspectionModalTitle" tabindex="-1" style="max-width: 600px;">
       <div class="modal-header">
         <div class="modal-title" id="inspectionModalTitle">Event Details</div>
         <button type="button" class="header-icon-btn" id="closeInspectionModalBtn">✕</button>
@@ -674,22 +674,22 @@
             <div class="story-content" style="font-weight:600;">${action}</div>
           </div>
           
-          <div class="collapsible-details">
-            <div class="collapsible-header" onclick="this.parentElement.classList.toggle('open')">
+          <details class="collapsible-details">
+            <summary class="collapsible-header">
               <span>Advanced Implementation Details</span>
               <span>▼</span>
-            </div>
+            </summary>
             <div class="collapsible-body" style="font-size:12px; font-family:monospace; color:var(--text-secondary); background:var(--bg-hover);">
               ${advDetails}
             </div>
-          </div>
+          </details>
         `;
-        document.getElementById('inspectionModalBackdrop').classList.add('open');
+        inspectionModalTrigger = document.activeElement;
+        inspectionModalBackdrop.classList.add('open');
+        inspectionModalBackdrop.setAttribute('aria-hidden', 'false');
+        requestAnimationFrame(() => closeInspectionModalBtn.focus());
       }
 
-      document.getElementById('closeInspectionModalBtn').addEventListener('click', () => {
-        document.getElementById('inspectionModalBackdrop').classList.remove('open');
-      });
       document.getElementById('activitySearchInput')?.addEventListener('input', () => { activityPage = 1; renderActivityTable(); });
       document.getElementById('activityTypeFilter')?.addEventListener('change', () => { activityPage = 1; renderActivityTable(); });
       document.getElementById('activityPrevBtn').addEventListener('click', () => { activityPage -= 1; renderActivityTable(); });
@@ -721,9 +721,44 @@
 
       const closeInspectionModalBtn = document.getElementById('closeInspectionModalBtn');
       const inspectionModalBackdrop = document.getElementById('inspectionModalBackdrop');
-      closeInspectionModalBtn.addEventListener('click', () => inspectionModalBackdrop.classList.remove('open'));
+      let inspectionModalTrigger = null;
+      closeInspectionModalBtn.setAttribute('aria-label', 'Close event details');
+      const closeInspectionModal = () => {
+        inspectionModalBackdrop.classList.remove('open');
+        inspectionModalBackdrop.setAttribute('aria-hidden', 'true');
+        const returnTarget = inspectionModalTrigger;
+        inspectionModalTrigger = null;
+        if (returnTarget && document.contains(returnTarget)) requestAnimationFrame(() => returnTarget.focus());
+      };
+      closeInspectionModalBtn.addEventListener('click', closeInspectionModal);
       inspectionModalBackdrop.addEventListener('click', (event) => {
-        if (event.target === inspectionModalBackdrop) inspectionModalBackdrop.classList.remove('open');
+        if (event.target === inspectionModalBackdrop) closeInspectionModal();
+      });
+      document.addEventListener('keydown', (event) => {
+        if (!inspectionModalBackdrop.classList.contains('open')) return;
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeInspectionModal();
+          return;
+        }
+        if (event.key !== 'Tab') return;
+        const focusable = Array.from(inspectionModalBackdrop.querySelectorAll(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
+        )).filter(element => element.offsetParent !== null);
+        if (!focusable.length) {
+          event.preventDefault();
+          inspectionModalBackdrop.querySelector('[role="dialog"]').focus();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       });
 
     })();
