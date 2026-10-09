@@ -302,9 +302,13 @@
   <!-- =========================================================================
        DATA EXPLORER DRAWER (Group D)
        ========================================================================= -->
-  <div class="app-drawer" id="dataExplorerDrawer" role="dialog" aria-label="Business Data Guide">
+  <div class="app-drawer" id="dataExplorerDrawer" role="dialog" aria-modal="true" aria-label="Business Data Guide">
     <div class="drawer-header">
       <div style="font-weight: 700; font-size: 16px;">Business Data Guide</div>
+      <button type="button" class="header-icon-btn drawer-expand-btn" id="expandExplorerBtn" aria-label="Expand Business Data Guide" aria-pressed="false" title="Expand panel">
+        <svg class="expand-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M21 16v5h-5"></path></svg>
+        <svg class="restore-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"></path></svg>
+      </button>
       <button type="button" class="header-icon-btn" id="closeExplorerBtn">✕</button>
     </div>
     <div class="drawer-body">
@@ -326,7 +330,7 @@
     </div>
   </div>
 
-
+  <button type="button" class="data-guide-backdrop" id="dataGuideBackdrop" aria-label="Close Business Data Guide" tabindex="-1"></button>
 
   <!-- =========================================================================
        SETTINGS DRAWER (Group H)

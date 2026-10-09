@@ -95,6 +95,47 @@
   const dataExplorerDrawer = document.getElementById('dataExplorerDrawer');
   const navDataExplorerBtn = document.getElementById('navDataExplorerBtn');
   const closeExplorerBtn = document.getElementById('closeExplorerBtn');
+  const expandExplorerBtn = document.getElementById('expandExplorerBtn');
+  const dataGuideBackdrop = document.getElementById('dataGuideBackdrop');
+
+  // Keep Data Guide chrome independent from the larger DOMContentLoaded chain:
+  // a failure in an unrelated module must not disable Expand or Close.
+  if (dataExplorerDrawer) {
+    dataExplorerDrawer.addEventListener('click', (event) => {
+      if (event.target.closest('#closeExplorerBtn')) {
+        dataExplorerDrawer.classList.remove('open');
+        showBusinessWorkspaceView('ask', { focusComposer: false });
+        return;
+      }
+      if (event.target.closest('#expandExplorerBtn')) {
+        const isExpanded = dataExplorerDrawer.classList.toggle('expanded');
+        expandExplorerBtn.setAttribute('aria-pressed', isExpanded ? 'true' : 'false');
+        expandExplorerBtn.setAttribute('aria-label', isExpanded ? 'Restore Business Data Guide size' : 'Expand Business Data Guide');
+        expandExplorerBtn.title = isExpanded ? 'Restore panel size' : 'Expand panel';
+      }
+    });
+  }
+  if (dataGuideBackdrop) {
+    dataGuideBackdrop.addEventListener('click', () => {
+      dataExplorerDrawer.classList.remove('open');
+      showBusinessWorkspaceView('ask', { focusComposer: false });
+    });
+    new MutationObserver(() => {
+      const isOpen = dataExplorerDrawer.classList.contains('open');
+      dataGuideBackdrop.classList.toggle('open', isOpen);
+      document.body.classList.toggle('data-guide-open', isOpen);
+      if (!isOpen) {
+        if (dataExplorerDrawer.classList.contains('expanded')) {
+          dataExplorerDrawer.classList.remove('expanded');
+        }
+        if (expandExplorerBtn) {
+          expandExplorerBtn.setAttribute('aria-pressed', 'false');
+          expandExplorerBtn.setAttribute('aria-label', 'Expand Business Data Guide');
+          expandExplorerBtn.title = 'Expand panel';
+        }
+      }
+    }).observe(dataExplorerDrawer, { attributes: true, attributeFilter: ['class'] });
+  }
   const tabTablesBtn = document.getElementById('tabTablesBtn');
   const tabCapabilitiesBtn = document.getElementById('tabCapabilitiesBtn');
   const tabGlossaryBtn = document.getElementById('tabGlossaryBtn');
@@ -787,7 +828,7 @@
     const rerunScope = msg.scopeEditSummary;
     return `
       <div class="chat-row user-row" id="msg_row_${msg.id}">
-        <div class="user-bubble-container">
+        <article class="user-bubble-container" aria-label="${msg.isScopeRerun ? 'Question re-run with edited scope' : 'User question'}">
           <div class="conversation-turn-label question-turn-label">${msg.isScopeRerun ? 'Re-run with edited scope' : 'Your question'}</div>
           <div class="user-bubble">${escapeHtml(msg.text)}</div>
           ${rerunScope ? `
@@ -797,10 +838,11 @@
             </div>
           ` : ''}
           <div class="user-bubble-meta">
+            <span class="user-turn-version">${msg.isScopeRerun ? 'Edited scope version' : 'Original prompt'}</span>
             <span>${msg.time || ''}</span>
-            ${isLastUserTurn ? `<span class="user-edit-btn" data-msg-id="${msg.id}" data-text="${escapeHtml(msg.text)}">Edit</span>` : ''}
+            ${isLastUserTurn ? `<button type="button" class="user-edit-btn" data-msg-id="${msg.id}" data-text="${escapeHtml(msg.text)}">Edit question</button>` : ''}
           </div>
-        </div>
+        </article>
       </div>
     `;
   }
@@ -1054,7 +1096,6 @@
     const project = scope.projectScope ? scope.projectScope.label : 'All projects';
     const domain = scope.domain ? (scope.domain.label || scope.domain.value || scope.domain) : 'All domains';
     const currency = scope.currencyObj ? scope.currencyObj.label : (scope.currency || 'Not specified');
-    const msgId = msg ? msg.id : '';
     return `
       <details class="result-scope-disclosure">
         <summary>
@@ -1063,14 +1104,6 @@
           <span class="result-scope-summary-action">Review or edit</span>
         </summary>
         <div class="result-scope-expanded">
-          ${msgId ? `
-            <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
-              <button type="button" class="action-tool-btn btn-inspect-scope" data-msg-id="${msgId}" style="font-size: 12px; padding: 4px 10px;">
-                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                <span>Open in Scope &amp; Sources panel</span>
-              </button>
-            </div>
-          ` : ''}
           ${generateInterpretationHtml(scope, msg)}
         </div>
       </details>
@@ -3052,6 +3085,8 @@
     // 5. Follow-up Chips
     chatContainerEl.querySelectorAll('.followup-chip').forEach((chip) => {
       chip.addEventListener('click', () => {
+        const actionsMenu = chip.closest('.answer-actions-menu');
+        if (actionsMenu) actionsMenu.removeAttribute('open');
         const query = chip.getAttribute('data-query');
         const sourceMsg = conv.messages.find((item) => item.id === chip.getAttribute('data-source-msg-id'));
         const inheritedScope = sourceMsg && (sourceMsg.appliedScope || (sourceMsg.resultsData && sourceMsg.resultsData.appliedScope));
@@ -3060,9 +3095,11 @@
         chatInputEl.focus();
         updateSendButtonState();
         chatInputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        showToast(inheritedScope
+        const followUpStatus = inheritedScope
           ? 'Follow-up prepared with the previous answer scope. Review or edit scope, then press Ask.'
-          : 'Follow-up prepared. Review the scope, then press Ask.');
+          : 'Follow-up prepared. Review the scope, then press Ask.';
+        if (window.innerWidth > 820) showToast(followUpStatus);
+        else announceAppStatus(followUpStatus);
       });
     });
 
@@ -3353,14 +3390,6 @@
       });
     });
 
-    // 19. Review Scope & Sources Inspector
-    chatContainerEl.querySelectorAll('.btn-inspect-scope').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const msgId = btn.getAttribute('data-msg-id');
-        const msg = conv.messages.find(item => item.id === msgId);
-        if (msg) openEvidenceDesk(msg);
-      });
-    });
   }
 
   // =========================================================================
@@ -5402,11 +5431,6 @@
       renderDataExplorer();
       updateRailActiveState('data_guide');
     });
-    closeExplorerBtn.addEventListener('click', () => {
-      dataExplorerDrawer.classList.remove('open');
-      showBusinessWorkspaceView('ask');
-    });
-
     tabCapabilitiesBtn.addEventListener('click', () => {
       explorerActiveTab = 'capabilities';
       tabCapabilitiesBtn.classList.add('active');
