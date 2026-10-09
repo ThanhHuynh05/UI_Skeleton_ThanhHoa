@@ -484,8 +484,37 @@
           <div id="clarificationOptions" class="clarification-modal-options"></div>
         </fieldset>
         <div class="clarification-modal-actions">
+          <button type="button" class="action-tool-btn" id="adjustClarificationQuestionBtn">Adjust question</button>
           <button type="button" class="action-tool-btn" id="cancelClarificationBtn">Cancel</button>
           <button type="button" class="action-tool-btn primary" id="confirmClarificationBtn" disabled>Confirm</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Question revisions are confirmed before a new run and retain the prior turn. -->
+  <div class="modal-backdrop" id="adjustQuestionModalBackdrop">
+    <div class="app-modal adjust-question-modal" role="dialog" aria-modal="true" aria-labelledby="adjustQuestionModalTitle" aria-describedby="adjustQuestionModalHelp">
+      <div class="modal-header">
+        <div>
+          <div class="modal-eyebrow">Create a linked revision</div>
+          <div class="modal-title" id="adjustQuestionModalTitle">Adjust question</div>
+        </div>
+        <button type="button" class="header-icon-btn" id="closeAdjustQuestionModalBtn" aria-label="Cancel adjusting question">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="adjustQuestionModalHelp" class="adjust-question-help">Rephrase the question or add the missing period, project, or business detail. The previous question and answer will remain in the conversation as superseded.</p>
+        <label class="adjust-question-field" for="adjustQuestionInput">
+          <span>Revised question</span>
+          <textarea id="adjustQuestionInput" rows="5"></textarea>
+        </label>
+        <section class="adjust-question-scope" aria-labelledby="adjustQuestionScopeTitle">
+          <span id="adjustQuestionScopeTitle">Scope used for the new run</span>
+          <strong id="adjustQuestionScopeSummary"></strong>
+        </section>
+        <div class="adjust-question-actions">
+          <button type="button" class="action-tool-btn" id="cancelAdjustQuestionBtn">Cancel</button>
+          <button type="button" class="action-tool-btn primary" id="confirmAdjustQuestionBtn">Confirm &amp; run</button>
         </div>
       </div>
     </div>

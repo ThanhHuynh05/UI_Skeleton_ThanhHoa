@@ -4400,6 +4400,52 @@ details[open] .sql-chevron { transform: rotate(180deg); }
   margin-top: 24px;
 }
 
+.adjust-question-modal { width: min(640px, calc(100vw - 32px)); }
+.adjust-question-help { margin: 0 0 18px; color: var(--text-secondary); font-size: 14px; line-height: 1.55; }
+.adjust-question-field { display: grid; gap: 8px; color: var(--text-primary); font-size: 13px; font-weight: 700; }
+.adjust-question-field textarea {
+  width: 100%;
+  min-height: 128px;
+  resize: vertical;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--control-bg);
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 400;
+  line-height: 1.55;
+}
+.adjust-question-field textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.adjust-question-scope {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--accent-primary);
+  border-radius: var(--radius-control);
+  background: var(--bg-app);
+}
+.adjust-question-scope > span { color: var(--text-muted); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.adjust-question-scope > strong { color: var(--text-primary); font-size: 14px; line-height: 1.5; }
+.adjust-question-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.clarification-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.question-version-note {
+  width: fit-content;
+  margin-bottom: 6px;
+  color: var(--user-turn-fg);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.user-turn-superseded { opacity: .72; }
+.user-turn-superseded:hover,
+.user-turn-superseded:focus-within { opacity: 1; }
+.agent-response-card.answer-superseded { opacity: .76; }
+.agent-response-card.answer-superseded:hover,
+.agent-response-card.answer-superseded:focus-within { opacity: 1; }
+
 .clarification-modal .action-tool-btn,
 .clarification-modal .header-icon-btn {
   border-radius: 8px !important;
@@ -5188,14 +5234,33 @@ body.panel-resizing iframe {
   line-height: 1.5;
 }
 
-.user-scope-rerun-summary strong,
-.user-scope-rerun-summary span {
-  display: block;
-}
-
-.user-scope-rerun-summary strong {
-  margin-bottom: 2px;
+.user-scope-rerun-summary summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   color: var(--text-primary);
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+.user-scope-rerun-summary summary::-webkit-details-marker { display: none; }
+.user-scope-rerun-summary summary::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform .15s ease;
+}
+.user-scope-rerun-summary[open] summary::after { transform: rotate(225deg) translate(-2px, -2px); }
+.user-scope-rerun-detail {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid currentColor;
+  overflow-wrap: anywhere;
 }
 
 .result-provenance {
@@ -5630,6 +5695,9 @@ button > svg,a[class] > svg,.header-icon-btn svg {
   .task-group-card { padding:12px; }
   .answer-actions-popover,.result-state-actions,.clear-history-actions { grid-template-columns:1fr; flex-direction:column; }
   .answer-actions-popover .action-tool-btn,.result-state-actions .action-tool-btn,.clear-history-actions .action-tool-btn { width:100%; }
+  .adjust-question-actions { flex-direction: column-reverse; }
+  .adjust-question-actions .action-tool-btn,
+  .clarification-card-actions .action-tool-btn { width: 100%; }
 }
 
 @keyframes slideDownToast {
@@ -5848,7 +5916,7 @@ html body :where(.action-tool-btn.danger, .user-menu-item.danger):hover:not(:dis
   background: rgba(0, 0, 0, .16);
   color: var(--user-turn-fg);
 }
-.user-bubble-container .user-scope-rerun-summary strong { color: var(--user-turn-fg); }
+.user-bubble-container .user-scope-rerun-summary summary { color: var(--user-turn-fg); }
 
 .agent-response-card:not(.result-state-card) {
   width: 100%;

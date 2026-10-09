@@ -80,4 +80,4 @@ At each viewport verify no page-level horizontal scrolling, no clipped modal, re
 
 ## Clarification product decision
 
-The current clarification modal intentionally uses predefined options and number-key selection. Free-text clarification was removed by the latest product decision. If the original R2-16 acceptance still requires “type another answer,” record this as an accepted deviation or reopen that requirement.
+Clarification keeps predefined options and number-key selection for fast resolution, and now also provides **Adjust question** for free-text rephrasing or missing details. Confirming a revision creates a linked user-turn version, displays the scope used for the new run, and retains the prior question/answer as superseded. Cancelling must leave the original turn unchanged and must not start a run.

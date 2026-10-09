@@ -178,6 +178,13 @@
   const clarificationOriginalQuestionTextEl = document.getElementById('clarificationOriginalQuestionText');
   const clarificationOptionsEl = document.getElementById('clarificationOptions');
   const clarificationUnderstoodEl = document.getElementById('clarificationUnderstood');
+  const adjustClarificationQuestionBtn = document.getElementById('adjustClarificationQuestionBtn');
+  const adjustQuestionModalBackdrop = document.getElementById('adjustQuestionModalBackdrop');
+  const closeAdjustQuestionModalBtn = document.getElementById('closeAdjustQuestionModalBtn');
+  const cancelAdjustQuestionBtn = document.getElementById('cancelAdjustQuestionBtn');
+  const confirmAdjustQuestionBtn = document.getElementById('confirmAdjustQuestionBtn');
+  const adjustQuestionInput = document.getElementById('adjustQuestionInput');
+  const adjustQuestionScopeSummary = document.getElementById('adjustQuestionScopeSummary');
   const clearHistoryModalBackdrop = document.getElementById('clearHistoryModalBackdrop');
   const closeClearHistoryModalBtn = document.getElementById('closeClearHistoryModalBtn');
   const cancelClearHistoryBtn = document.getElementById('cancelClearHistoryBtn');
@@ -197,6 +204,9 @@
 
   let activeClarificationMessageId = null;
   let activeClarificationTrigger = null;
+  let activeAdjustmentUserMessageId = null;
+  let activeAdjustmentTrigger = null;
+  let activeAdjustmentScope = null;
 
   const domainScopeSelectEl = document.getElementById('domainScopeSelect');
   const domainScopeSelectLabelEl = document.getElementById('domainScopeSelectLabel');
@@ -846,21 +856,29 @@
 
   function renderUserMessageHtml(msg, isLastUserTurn) {
     const rerunScope = msg.scopeEditSummary;
+    const isRevision = Boolean(msg.revisionOfUserMessageId);
+    const isSuperseded = Boolean(msg.supersededByUserMessageId);
+    const turnLabel = isRevision ? 'Revised question' : (msg.isScopeRerun ? 'Re-run with edited scope' : 'Your question');
+    const visibleQuestion = msg.isScopeRerun
+      ? String(msg.text || '').replace(/\s*\(Applied scope:[\s\S]*\)\??\s*$/i, '').trim()
+      : msg.text;
     return `
       <div class="chat-row user-row" id="msg_row_${msg.id}">
-        <article class="user-bubble-container" aria-label="${msg.isScopeRerun ? 'Question re-run with edited scope' : 'User question'}">
-          <div class="conversation-turn-label question-turn-label">${msg.isScopeRerun ? 'Re-run with edited scope' : 'Your question'}</div>
-          <div class="user-bubble">${escapeHtml(msg.text)}</div>
+        <article class="user-bubble-container ${isSuperseded ? 'user-turn-superseded' : ''}" aria-label="${escapeHtml(turnLabel)}">
+          <div class="conversation-turn-label question-turn-label">${escapeHtml(turnLabel)}</div>
+          ${isSuperseded ? '<div class="question-version-note">Superseded by a revised question below</div>' : ''}
+          ${isRevision ? '<div class="question-version-note">Linked to the original question above</div>' : ''}
+          <div class="user-bubble">${escapeHtml(visibleQuestion)}</div>
           ${rerunScope ? `
-            <div class="user-scope-rerun-summary" aria-label="Edited scope applied to this re-run">
-              <strong>Updated applied scope</strong>
-              <span>${escapeHtml(rerunScope)}</span>
-            </div>
+            <details class="user-scope-rerun-summary">
+              <summary>Updated applied scope</summary>
+              <div class="user-scope-rerun-detail">${escapeHtml(rerunScope)}</div>
+            </details>
           ` : ''}
           <div class="user-bubble-meta">
-            <span class="user-turn-version">${msg.isScopeRerun ? 'Edited scope version' : 'Original prompt'}</span>
+            <span class="user-turn-version">${isRevision ? 'Revised prompt' : (msg.isScopeRerun ? 'Edited scope version' : 'Original prompt')}</span>
             <span>${msg.time || ''}</span>
-            ${isLastUserTurn ? `<button type="button" class="user-edit-btn" data-msg-id="${msg.id}" data-text="${escapeHtml(msg.text)}">Edit question</button>` : ''}
+            ${!isSuperseded ? `<button type="button" class="user-edit-btn" data-msg-id="${msg.id}">Adjust question</button>` : ''}
           </div>
         </article>
       </div>
@@ -1334,7 +1352,8 @@
 
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
-        <div class="agent-response-card" data-msg-id="${msg.id}">
+        <div class="agent-response-card ${msg.isSuperseded ? 'answer-superseded' : ''}" data-msg-id="${msg.id}">
+          ${msg.isSuperseded ? '<div class="superseded-callout">Superseded by a revised question. This answer is retained for comparison.</div>' : ''}
           <div class="conversation-turn-label answer-turn-label">
             <span class="answer-turn-mark" aria-hidden="true">A</span>
             <span>${msg.runAgainOfMessageId ? 'Aria answer · Run again' : (msg.sourceMessageId ? 'Aria answer · Reinterpreted scope' : 'Aria answer')}</span>
@@ -1451,13 +1470,15 @@
     const opts = msg.options || [];
 
     const resolved = Boolean(msg.resolvedAt || msg.resolvedPayload);
+    const superseded = Boolean(msg.isSuperseded);
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
-        <div class="agent-response-card clarification-status-card ${resolved ? 'is-resolved' : ''}">
-          <div class="result-state-label">${resolved ? 'Clarification confirmed' : 'Clarification needed'}</div>
-          <h3>${escapeHtml(resolved ? (msg.resolvedChoice || 'Scope confirmed') : 'One choice is needed before I run this question')}</h3>
+        <div class="agent-response-card clarification-status-card ${resolved ? 'is-resolved' : ''} ${superseded ? 'answer-superseded' : ''}">
+          ${superseded ? '<div class="superseded-callout">Superseded by the revised question below. No run can be started from this clarification.</div>' : ''}
+          <div class="result-state-label">${superseded ? 'Superseded clarification' : (resolved ? 'Clarification confirmed' : 'Clarification needed')}</div>
+          <h3>${escapeHtml(superseded ? 'This clarification is no longer active' : (resolved ? (msg.resolvedChoice || 'Scope confirmed') : 'One choice is needed before I run this question'))}</h3>
           <p>${escapeHtml(msg.question || 'Please confirm the intended meaning or scope.')}</p>
-          ${resolved
+          ${superseded ? '' : (resolved
             ? `<div class="clarification-resolution">
                 <div><strong>Selected:</strong> ${escapeHtml(msg.resolvedChoice || '')}</div>
                 <span class="clarification-locked-note">
@@ -1465,7 +1486,10 @@
                   Confirmed request locked
                 </span>
               </div>`
-            : `<button type="button" class="action-tool-btn primary btn-open-clarification" data-msg-id="${msg.id}">Answer clarification</button>`}
+            : `<div class="clarification-card-actions">
+                <button type="button" class="action-tool-btn primary btn-open-clarification" data-msg-id="${msg.id}">Answer clarification</button>
+                <button type="button" class="action-tool-btn btn-adjust-question" data-msg-id="${msg.id}">Adjust question</button>
+              </div>`)}
         </div>
       </div>
     `;
@@ -1567,6 +1591,96 @@
     activeClarificationMessageId = null;
     if (activeClarificationTrigger && document.contains(activeClarificationTrigger)) activeClarificationTrigger.focus();
     activeClarificationTrigger = null;
+  }
+
+  function findUserMessageForTurn(conv, messageOrId) {
+    if (!conv) return null;
+    const message = typeof messageOrId === 'string'
+      ? conv.messages.find((item) => item.id === messageOrId)
+      : messageOrId;
+    if (!message) return null;
+    if (message.role === 'user') return message;
+    const index = conv.messages.findIndex((item) => item.id === message.id);
+    for (let i = index - 1; i >= 0; i -= 1) {
+      if (conv.messages[i].role === 'user') return conv.messages[i];
+    }
+    return null;
+  }
+
+  function getAdjustmentScope(conv, userMessage) {
+    const userIndex = conv.messages.findIndex((item) => item.id === userMessage.id);
+    let appliedScope = null;
+    for (let i = userIndex + 1; i < conv.messages.length; i += 1) {
+      const item = conv.messages[i];
+      if (item.role === 'user') break;
+      appliedScope = item.appliedScope || (item.resultsData && item.resultsData.appliedScope) || appliedScope;
+    }
+    return appliedScope
+      ? buildSavedExecutionOptions(appliedScope).selectedScope
+      : JSON.parse(JSON.stringify(state.selectedScope));
+  }
+
+  function formatAdjustmentScope(scope) {
+    const domain = scope && scope.domain
+      ? (Array.isArray(scope.domain.values) && scope.domain.values.length
+          ? scope.domain.values.join(' + ')
+          : (scope.domain.value || 'Auto — infer from question'))
+      : 'Auto — infer from question';
+    const time = scope && scope.time
+      ? (scope.time.mode === 'custom'
+          ? `${scope.time.start || 'Start date'} to ${scope.time.end || 'End date'}`
+          : (scope.time.label || scope.time.preset || 'Auto — infer from question'))
+      : 'Auto — infer from question';
+    return `Business area: ${domain} · Period: ${time}`;
+  }
+
+  function openAdjustQuestionModal(messageId, trigger) {
+    const conv = getActiveConversation();
+    const userMessage = findUserMessageForTurn(conv, messageId);
+    if (!conv || !userMessage || !adjustQuestionModalBackdrop) return;
+    activeAdjustmentUserMessageId = userMessage.id;
+    activeAdjustmentTrigger = trigger || null;
+    activeAdjustmentScope = getAdjustmentScope(conv, userMessage);
+    adjustQuestionInput.value = userMessage.text || '';
+    adjustQuestionScopeSummary.textContent = formatAdjustmentScope(activeAdjustmentScope);
+    adjustQuestionModalBackdrop.classList.add('open');
+    requestAnimationFrame(() => {
+      adjustQuestionInput.focus();
+      adjustQuestionInput.setSelectionRange(adjustQuestionInput.value.length, adjustQuestionInput.value.length);
+    });
+  }
+
+  function closeAdjustQuestionModal() {
+    if (!adjustQuestionModalBackdrop) return;
+    adjustQuestionModalBackdrop.classList.remove('open');
+    if (activeAdjustmentTrigger && document.contains(activeAdjustmentTrigger)) activeAdjustmentTrigger.focus();
+    activeAdjustmentUserMessageId = null;
+    activeAdjustmentTrigger = null;
+    activeAdjustmentScope = null;
+  }
+
+  function confirmAdjustedQuestion() {
+    const revisedQuestion = adjustQuestionInput.value.trim();
+    if (!revisedQuestion || state.isThinking) return;
+    const conv = getActiveConversation();
+    const original = conv && conv.messages.find((item) => item.id === activeAdjustmentUserMessageId && item.role === 'user');
+    if (!original) return;
+    if (revisedQuestion === String(original.text || '').trim()) {
+      showToast('Add or change some information before running the revision.');
+      adjustQuestionInput.focus();
+      return;
+    }
+    const originalId = original.id;
+    const executionScope = JSON.parse(JSON.stringify(activeAdjustmentScope || state.selectedScope));
+    closeAdjustQuestionModal();
+    processUserPrompt(revisedQuestion, {
+      interpretationConfirmed: true,
+      originalQuestion: revisedQuestion,
+      displayPromptText: revisedQuestion,
+      selectedScope: executionScope,
+      revisionOfUserMessageId: originalId
+    });
+    showToast('Running the revised question. The previous turn is retained as superseded.');
   }
 
   function cancelClarificationModal() {
@@ -1903,8 +2017,24 @@
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         timestamp: Date.now(),
         isScopeRerun: Boolean(options.sourceMessageId),
-        scopeEditSummary: options.scopeEditSummary || null
+        scopeEditSummary: options.scopeEditSummary || null,
+        revisionOfUserMessageId: options.revisionOfUserMessageId || null
       };
+      if (options.revisionOfUserMessageId) {
+        const originalIndex = conv.messages.findIndex((item) => item.id === options.revisionOfUserMessageId && item.role === 'user');
+        if (originalIndex >= 0) {
+          conv.messages[originalIndex].supersededByUserMessageId = userMsgId;
+          conv.messages[originalIndex].supersededAt = Date.now();
+          for (let i = originalIndex + 1; i < conv.messages.length; i += 1) {
+            if (conv.messages[i].role === 'user') break;
+            conv.messages[i].isSuperseded = true;
+            conv.messages[i].supersededByUserMessageId = userMsgId;
+            if (conv.messages[i].type === 'clarification' && !conv.messages[i].resolvedAt) {
+              conv.messages[i].clarificationDismissedAt = Date.now();
+            }
+          }
+        }
+      }
       conv.messages.push(userMsg);
       conv.updatedAt = Date.now();
       saveConversationsToStorage();
@@ -1982,7 +2112,13 @@
       auditContext: {
         originalQuestion: options.originalQuestion || promptText,
         displayedQuestion: options.displayPromptText || promptText,
-        interactionType: options.retryAttempt ? 'retry' : (options.runAgainOfMessageId ? 'run_again' : (options.clarificationPayload ? 'clarification_selection' : (options.sourceMessageId ? 'scope_rerun' : 'question'))),
+        interactionType: options.retryAttempt
+          ? 'retry'
+          : (options.runAgainOfMessageId
+              ? 'run_again'
+              : (options.revisionOfUserMessageId
+                  ? 'question_revision'
+                  : (options.clarificationPayload ? 'clarification_selection' : (options.sourceMessageId ? 'scope_rerun' : 'question')))),
         selectedClarification: options.clarificationPayload ? promptText : null
       },
       signal: state.activeAbortController.signal
@@ -2020,6 +2156,7 @@
         appliedScope: result.appliedScope || null,
         understoodFields: result.understoodFields || null,
         sourceMessageId: options.sourceMessageId || null,
+        revisionOfUserMessageId: options.revisionOfUserMessageId || null,
         runAgainOfMessageId: options.runAgainOfMessageId || null,
         runRootMessageId: options.runRootMessageId || null,
         runNumber: options.runNumber || 1,
@@ -2715,20 +2852,8 @@
       question = question.replace(explicitPeriodPattern, periodLabel);
     }
 
-    const appliedClauses = [];
-    if (!hadExplicitPeriod && periodLabel) appliedClauses.push(`period: ${periodLabel}`);
-    if (scope.project && scope.project !== 'All active projects' && scope.project !== 'All enterprise projects') {
-      appliedClauses.push(`project: ${scope.project}`);
-    }
-    if (scope.domain && scope.domain !== 'Auto' && scope.domain !== 'All Domains') {
-      appliedClauses.push(`domain: ${scope.domain}`);
-    }
-    if (scope.metric) appliedClauses.push(`metric: ${scope.metric}`);
-    if (scope.grain) appliedClauses.push(`grain: ${scope.grain}`);
-
-    if (appliedClauses.length > 0) {
-      question = `${question.replace(/[?.!]+$/, '')} (Applied scope: ${appliedClauses.join('; ')})?`;
-    }
+    // Keep the visible question readable. The full metric, grain, project,
+    // domain and assumption set is rendered in the expandable scope panel.
     return question;
   }
 
@@ -2993,12 +3118,12 @@
     // 3. User Edit Button
     chatContainerEl.querySelectorAll('.user-edit-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const text = btn.getAttribute('data-text');
-        chatInputEl.value = text;
-        chatInputEl.focus();
-        updateSendButtonState();
-        showToast('Editing last question. Press Enter to resend.');
+        openAdjustQuestionModal(btn.getAttribute('data-msg-id'), btn);
       });
+    });
+
+    chatContainerEl.querySelectorAll('.btn-adjust-question').forEach((btn) => {
+      btn.addEventListener('click', () => openAdjustQuestionModal(btn.getAttribute('data-msg-id'), btn));
     });
 
     chatContainerEl.querySelectorAll('.btn-revise-question').forEach((btn) => {
@@ -5520,6 +5645,19 @@
     if (closeClarificationModalBtn) closeClarificationModalBtn.addEventListener('click', cancelClarificationModal);
     if (cancelClarificationBtn) cancelClarificationBtn.addEventListener('click', cancelClarificationModal);
     if (confirmClarificationBtn) confirmClarificationBtn.addEventListener('click', confirmClarification);
+    if (adjustClarificationQuestionBtn) {
+      adjustClarificationQuestionBtn.addEventListener('click', () => {
+        const messageId = activeClarificationMessageId;
+        const conv = getActiveConversation();
+        const msg = conv && conv.messages.find((item) => item.id === messageId);
+        if (msg && !msg.resolvedAt) {
+          msg.clarificationDismissedAt = Date.now();
+          saveConversationsToStorage();
+        }
+        closeClarificationModal();
+        openAdjustQuestionModal(messageId, null);
+      });
+    }
     if (clarificationOptionsEl) {
       clarificationOptionsEl.addEventListener('change', () => {
         confirmClarificationBtn.disabled = false;
@@ -5553,6 +5691,33 @@
         if (event.key !== 'Tab') return;
         const focusable = Array.from(clarificationModalBackdrop.querySelectorAll('button:not([disabled]), input:not([disabled])'));
         if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      });
+    }
+
+    if (closeAdjustQuestionModalBtn) closeAdjustQuestionModalBtn.addEventListener('click', closeAdjustQuestionModal);
+    if (cancelAdjustQuestionBtn) cancelAdjustQuestionBtn.addEventListener('click', closeAdjustQuestionModal);
+    if (confirmAdjustQuestionBtn) confirmAdjustQuestionBtn.addEventListener('click', confirmAdjustedQuestion);
+    if (adjustQuestionInput) {
+      adjustQuestionInput.addEventListener('input', () => {
+        confirmAdjustQuestionBtn.disabled = !adjustQuestionInput.value.trim();
+      });
+    }
+    if (adjustQuestionModalBackdrop) {
+      adjustQuestionModalBackdrop.addEventListener('click', (event) => {
+        if (event.target === adjustQuestionModalBackdrop) closeAdjustQuestionModal();
+      });
+      adjustQuestionModalBackdrop.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeAdjustQuestionModal();
+          return;
+        }
+        if (event.key !== 'Tab') return;
+        const focusable = Array.from(adjustQuestionModalBackdrop.querySelectorAll('button:not([disabled]), textarea:not([disabled])'));
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
