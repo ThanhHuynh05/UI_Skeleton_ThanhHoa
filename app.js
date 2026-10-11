@@ -26,7 +26,6 @@
     activeAbortController: null,
     settings: {
       theme: 'light',
-      fontSize: 'font-md',
       detailLevel: 'detailed',
       showSqlDefault: false,
       showPipelineDefault: false,
@@ -5107,18 +5106,6 @@
       btn.addEventListener('click', () => {
         const choice = btn.getAttribute('data-theme-choice');
         setTheme(choice);
-      });
-    });
-
-    // Font Scale Buttons
-    settingsDrawer.querySelectorAll('.font-choice-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const fontClass = btn.getAttribute('data-font');
-        document.body.classList.remove('font-sm', 'font-md', 'font-lg');
-        document.body.classList.add(fontClass);
-        settingsDrawer.querySelectorAll('.font-choice-btn').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        state.settings.fontSize = fontClass;
       });
     });
 

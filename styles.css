@@ -178,10 +178,6 @@
 }
 
 /* Font Size Scales */
-body.font-sm { --font-scale: 14px; font-size: 14px; }
-body.font-md { --font-scale: 14px; font-size: 14px; }
-body.font-lg { --font-scale: 16px; font-size: 16px; }
-
 /* Compact mode */
 body.compact-mode .chat-inner-container { gap: 12px; }
 body.compact-mode .agent-response-card { padding: 12px 14px; gap: 10px; }
@@ -5853,7 +5849,8 @@ body.dashboard-page {
 }
 
 .admin-sidebar-footer {
-  display: grid;
+  display: flex;
+  align-items: center;
   gap: 8px;
   margin-top: auto;
   padding: 12px;
@@ -5861,6 +5858,7 @@ body.dashboard-page {
 }
 
 .admin-settings-link {
+  order: 2;
   width: 44px;
   height: 44px;
   border-radius: var(--radius-control);
@@ -5868,7 +5866,7 @@ body.dashboard-page {
 }
 
 .admin-settings-link span { display: none; }
-.admin-user-menu { position: relative; min-width: 0; }
+.admin-user-menu { position: relative; min-width: 0; flex: 1; order: 1; }
 
 .admin-persona-button {
   display: flex;
@@ -5912,7 +5910,9 @@ body.dashboard-page {
 .admin-sidebar.collapsed .admin-sidebar-nav { padding-inline: 10px; }
 .admin-sidebar.collapsed .admin-nav-item { justify-content: center; padding-inline: 0; }
 .admin-sidebar.collapsed .admin-persona-button { justify-content: center; padding-inline: 0; }
-.admin-sidebar.collapsed .admin-settings-link { margin-inline: auto; }
+.admin-sidebar.collapsed .admin-sidebar-footer { flex-direction: column; }
+.admin-sidebar.collapsed .admin-settings-link { margin-inline: auto; order: 1; }
+.admin-sidebar.collapsed .admin-user-menu { flex: 0 0 auto; order: 2; }
 .admin-sidebar.collapsed .admin-user-menu .user-menu-dropdown { left: calc(100% + 12px); bottom: 0; }
 
 .admin-main-shell { position: relative; min-width: 0; min-height: 100dvh; background: var(--bg-app); }
@@ -5988,6 +5988,9 @@ body.dashboard-page > .app-container > .app-header { display: none !important; }
   .admin-sidebar.collapsed .admin-sidebar-toggle { order: initial; }
   .admin-sidebar.collapsed .admin-nav-item { justify-content: flex-start; padding-inline: 14px; }
   .admin-sidebar.collapsed .admin-persona-button { justify-content: flex-start; padding-inline: 10px; }
+  .admin-sidebar.collapsed .admin-sidebar-footer { flex-direction: row; }
+  .admin-sidebar.collapsed .admin-user-menu { flex: 1; order: 1; }
+  .admin-sidebar.collapsed .admin-settings-link { margin-inline: 0; order: 2; }
   .admin-mobile-nav-toggle {
     display: inline-flex;
     position: sticky;
