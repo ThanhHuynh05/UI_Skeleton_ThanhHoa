@@ -62,6 +62,8 @@
   const clearAllHistoryBtnEl = document.getElementById('clearAllHistoryBtn');
   const themeToggleBtnEl = document.getElementById('themeToggleBtn');
   const mobileMenuBtnEl = document.getElementById('mobileMenuBtn');
+  const mobileSidebarLauncherBtnEl = document.getElementById('mobileSidebarLauncherBtn');
+  const desktopSidebarCloseBtnEl = document.getElementById('desktopSidebarCloseBtn');
   const sidebarEl = document.getElementById('sidebar');
   const sidebarMobileBackdropEl = document.getElementById('sidebarMobileBackdrop');
   const closeMobileSidebarBtnEl = document.getElementById('closeMobileSidebarBtn');
@@ -590,6 +592,19 @@
     showToast('Conversation saved as Markdown');
   }
 
+  function exportConversationAsDoc(conv) {
+    const body = (conv.messages || []).map((message) => {
+      if (message.role === 'user') {
+        return `<h2>User question</h2><p>${escapeHtml(message.text || '')}</p>`;
+      }
+      const answer = message.resultsData ? message.resultsData.answer : (message.message || '');
+      return `<h2>Aria answer</h2><p>${escapeHtml(answer).replace(/\n/g, '<br>')}</p>`;
+    }).join('');
+    const documentHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(conv.title)}</title><style>body{font-family:Arial,sans-serif;line-height:1.55;max-width:760px;margin:40px auto;color:#222}h1{border-bottom:1px solid #ccc;padding-bottom:12px}h2{font-size:16px;margin-top:28px}p{white-space:normal}</style></head><body><h1>${escapeHtml(conv.title)}</h1>${body}</body></html>`;
+    downloadFile(`${conv.title.replace(/[^a-zA-Z0-9]/g, '_')}.doc`, documentHtml, 'application/msword');
+    showToast('Conversation exported to Docs');
+  }
+
   // =========================================================================
   // 3. SIDEBAR CONVERSATION RENDERING
   // =========================================================================
@@ -779,17 +794,19 @@
     }
 
     let html = `
-      <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); margin-bottom: 8px;">
-        <div style="font-size: 13px; font-weight: 600; color: var(--text-secondary);">${escapeHtml(conv.title)}</div>
-        <div style="display: flex; gap: 6px;">
-          <button type="button" class="action-tool-btn" id="exportConvBtn" title="Export conversation as Markdown">
-            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            Export .md
+      <div class="active-conversation-header">
+        <div class="active-conversation-actions">
+          <button type="button" class="active-conversation-menu-trigger" id="activeConversationMenuBtn" aria-label="Conversation actions" aria-haspopup="menu" aria-expanded="false" title="Conversation actions">
+            <svg width="32" height="32" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.3"></circle><circle cx="12" cy="12" r="2.3"></circle><circle cx="12" cy="19" r="2.3"></circle></svg>
           </button>
-          <button type="button" class="action-tool-btn" id="printConvBtn" title="Print conversation / Save PDF">
-            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-            Print PDF
-          </button>
+          <div class="active-conversation-menu" id="activeConversationMenu" role="menu" aria-label="Conversation actions">
+            <button type="button" class="conv-menu-item" id="activePinConvBtn" role="menuitem"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 17v5"></path><path d="m5 17 2-7V4h10v6l2 7z"></path></svg><span>${conv.pinned ? 'Unpin' : 'Pin'}</span></button>
+            <button type="button" class="conv-menu-item" id="activeRenameConvBtn" role="menuitem"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg><span>Rename</span></button>
+            <button type="button" class="conv-menu-item" id="exportConvDocBtn" role="menuitem"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="14" y2="17"></line></svg><span>Export to Docs</span></button>
+            <button type="button" class="conv-menu-item" id="printConvBtn" role="menuitem"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v12"></path><polyline points="7 10 12 15 17 10"></polyline><path d="M5 21h14"></path></svg><span>Download PDF</span></button>
+            <div class="conv-menu-separator" role="separator"></div>
+            <button type="button" class="conv-menu-item danger" id="activeDeleteConvBtn" role="menuitem"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg><span>Delete</span></button>
+          </div>
         </div>
       </div>
     `;
@@ -3162,21 +3179,61 @@
   // 10. EVENT HANDLERS ON CHAT INTERACTIONS (Group A, B, C)
   // =========================================================================
   function attachConversationEventHandlers(conv) {
-    // 1. Export Conversation
-    const exportBtn = document.getElementById('exportConvBtn');
-    if (exportBtn) {
-      exportBtn.addEventListener('click', () => exportConversationAsMarkdown(conv));
+    const menuBtn = document.getElementById('activeConversationMenuBtn');
+    const menu = document.getElementById('activeConversationMenu');
+    const closeMenu = () => {
+      if (!menu || !menuBtn) return;
+      menu.classList.remove('open');
+      menuBtn.setAttribute('aria-expanded', 'false');
+    };
+    if (menuBtn && menu) {
+      menuBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const willOpen = !menu.classList.contains('open');
+        menu.classList.toggle('open', willOpen);
+        menuBtn.setAttribute('aria-expanded', String(willOpen));
+        if (willOpen) requestAnimationFrame(() => document.addEventListener('click', closeMenu, { once: true }));
+      });
+      menu.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          closeMenu();
+          menuBtn.focus();
+        }
+      });
     }
 
-    // 2. Print Conversation
     const printBtn = document.getElementById('printConvBtn');
     if (printBtn) {
       printBtn.addEventListener('click', () => {
+        closeMenu();
         window.print();
       });
     }
 
-    // 3. User Edit Button
+    document.getElementById('exportConvDocBtn')?.addEventListener('click', () => {
+      closeMenu();
+      exportConversationAsDoc(conv);
+    });
+
+    const triggerSidebarAction = (selector) => {
+      const item = Array.from(sidebarConversationsListEl.querySelectorAll('.conversation-item'))
+        .find((candidate) => candidate.getAttribute('data-conv-id') === conv.id);
+      item?.querySelector(selector)?.click();
+    };
+    document.getElementById('activePinConvBtn')?.addEventListener('click', () => {
+      closeMenu();
+      triggerSidebarAction('.btn-pin-conv');
+    });
+    document.getElementById('activeRenameConvBtn')?.addEventListener('click', () => {
+      closeMenu();
+      triggerSidebarAction('.btn-rename-conv');
+    });
+    document.getElementById('activeDeleteConvBtn')?.addEventListener('click', () => {
+      closeMenu();
+      triggerSidebarAction('.btn-delete-conv');
+    });
+
+    // User Edit Button
     chatContainerEl.querySelectorAll('.user-edit-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         openAdjustQuestionModal(btn.getAttribute('data-msg-id'), btn);
@@ -5527,6 +5584,24 @@
         mobileMenuBtnEl.setAttribute('aria-expanded', sidebarEl.classList.contains('collapsed') ? 'false' : 'true');
       }
     });
+    if (desktopSidebarCloseBtnEl) {
+      desktopSidebarCloseBtnEl.addEventListener('click', () => {
+        if (window.innerWidth <= 820) {
+          sidebarEl.classList.remove('open');
+          requestAnimationFrame(() => mobileSidebarLauncherBtnEl?.focus());
+        } else {
+          sidebarEl.classList.add('collapsed');
+          mobileMenuBtnEl.setAttribute('aria-expanded', 'false');
+          requestAnimationFrame(() => mobileMenuBtnEl.focus());
+        }
+      });
+    }
+    if (mobileSidebarLauncherBtnEl) {
+      mobileSidebarLauncherBtnEl.addEventListener('click', () => {
+        sidebarEl.classList.add('open');
+        mobileMenuBtnEl.setAttribute('aria-expanded', 'true');
+      });
+    }
     if (sidebarMobileBackdropEl) {
       sidebarMobileBackdropEl.addEventListener('click', () => {
         sidebarEl.classList.remove('open');
