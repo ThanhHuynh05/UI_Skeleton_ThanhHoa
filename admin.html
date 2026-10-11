@@ -22,42 +22,55 @@
   </style>
 </head>
 <body class="font-md dashboard-page">
-  <div class="app-container">
-    <header class="app-header">
-      <div class="header-left">
-        <a href="index.html" class="header-action-btn" title="Return to Business Workspace">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-          <span>Back to Business Workspace</span>
-        </a>
-        <div class="brand-wrapper" style="margin-left: 8px;">
-          <div class="brand-icon" aria-hidden="true" style="background: #475569;">R</div>
-          <div class="brand-title">
-            <span>Aria Admin / Research</span>
-            <span class="demo-status-badge">Demo <span aria-hidden="true">&bull;</span> Synthetic data</span>
-          </div>
-        </div>
+  <div class="admin-app-shell">
+    <aside class="admin-sidebar" id="adminSidebar" aria-label="Aria admin navigation">
+      <div class="admin-sidebar-brand">
+        <div class="admin-brand-mark" aria-hidden="true">A</div>
+        <span class="admin-brand-name">Aria</span>
+        <button type="button" class="admin-sidebar-toggle" id="adminSidebarToggle" aria-label="Collapse sidebar" aria-expanded="true">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path><path d="m15 9-3 3 3 3"></path></svg>
+        </button>
       </div>
-      <div class="header-right">
-        <div class="user-menu-wrapper" id="adminUserBadge">
-          <button type="button" class="user-badge-btn" id="adminUserMenuBtn" aria-label="User profile and roles" aria-expanded="false">
-            <div class="user-badge-dot" aria-hidden="true"></div>
-            <span id="adminUserLabel">Demo persona: <strong>Admin</strong></span>
+
+      <nav class="admin-sidebar-nav" aria-label="Admin views">
+        <a href="index.html" class="admin-nav-item" title="Back to workspace">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path></svg>
+          <span>Back to workspace</span>
+        </a>
+        <button type="button" class="admin-nav-item active" id="observabilityNavBtn" aria-current="page">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9"></path><path d="M10 19V5"></path><path d="M16 19v-7"></path><path d="M22 19V3"></path></svg>
+          <span>Observability</span>
+        </button>
+        <button type="button" class="admin-nav-item" id="evaluationNavBtn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11 12 14 22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+          <span>Evaluation</span>
+        </button>
+      </nav>
+
+      <div class="admin-sidebar-footer">
+        <a href="index.html" class="admin-settings-link" title="Workspace settings" aria-label="Workspace settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.09A1.7 1.7 0 0 0 8.95 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.09A1.7 1.7 0 0 0 4.6 8.95a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06A1.7 1.7 0 0 0 8.97 4.6 1.7 1.7 0 0 0 10 3.04V3h4v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 10H21v4h-.09A1.7 1.7 0 0 0 19.4 15Z"></path></svg>
+          <span>Settings</span>
+        </a>
+        <div class="user-menu-wrapper admin-user-menu" id="adminUserBadge">
+          <button type="button" class="admin-persona-button" id="adminUserMenuBtn" aria-label="User profile and roles" aria-expanded="false">
+            <span class="admin-persona-avatar" aria-hidden="true">A</span>
+            <span class="admin-persona-copy" id="adminUserLabel"><strong>Admin</strong><small>Data / Admin team</small></span>
             <span class="user-menu-chevron" aria-hidden="true">&#9662;</span>
           </button>
           <div class="user-menu-dropdown" id="adminUserMenuDropdown" role="menu">
-            <div class="user-menu-context">
-              <strong>Demo persona</strong>
-              <span>Access and masking are simulated.</span>
-            </div>
+            <div class="user-menu-context"><strong>Demo persona</strong><span>Access and masking are simulated.</span></div>
             <a href="index.html" class="user-menu-item" role="menuitem">Return to business workspace</a>
-            <button type="button" class="user-menu-item" id="adminSwitchPersonaBtn" role="menuitem">
-              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
-              <span>Switch demo persona</span>
-            </button>
+            <button type="button" class="user-menu-item" id="adminSwitchPersonaBtn" role="menuitem"><span>Switch demo persona</span></button>
           </div>
         </div>
       </div>
-    </header>
+    </aside>
+
+    <div class="admin-main-shell">
+      <button type="button" class="admin-mobile-nav-toggle" id="adminMobileNavToggle" aria-label="Open navigation" aria-expanded="false">
+        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+      </button>
 
     <div id="restrictedView" class="hidden" style="padding: 24px;">
       <div class="admin-restricted-box">
@@ -73,7 +86,7 @@
       </div>
     </div>
 
-    <main class="admin-viewport journey-container" id="adminWorkspace" style="background: var(--bg-surface);">
+    <main class="admin-viewport journey-container" id="adminWorkspace">
       
       <!-- Narrative Header -->
       <div class="answer-journey-only" style="padding: 60px 40px; background: var(--bg-app); border-bottom: 1px solid var(--border-color);">
@@ -179,9 +192,8 @@
         </div>
       </section>
 
-      <section class="journey-step observability-section" style="padding: 60px 40px; background: var(--bg-surface);" aria-labelledby="observabilityTitle">
-        <div class="journey-step-number">01</div>
-        <h2 class="journey-step-title" id="observabilityTitle">Observability</h2>
+      <section class="journey-step observability-section admin-dashboard-view" id="observabilityView" aria-labelledby="observabilityTitle">
+        <div class="admin-page-heading"><span>Operations</span><h1 id="observabilityTitle">Observability</h1></div>
         <p class="section-intro">Operational telemetry for the demo workspace. This section reports recorded request outcomes and keeps production observations separate from the simulated evaluation below.</p>
 
         <div class="observability-context" role="note">
@@ -235,9 +247,8 @@
         </div>
       </section>
 
-      <section class="journey-step benchmark-research-section" style="padding: 60px 40px; background: var(--bg-app);" aria-labelledby="benchmarkTitle">
-        <div class="journey-step-number">02</div>
-        <h2 class="journey-step-title" id="benchmarkTitle">Model evaluation benchmark</h2>
+      <section class="journey-step benchmark-research-section admin-dashboard-view hidden" id="evaluationView" aria-labelledby="benchmarkTitle">
+        <div class="admin-page-heading"><span>Research</span><h1 id="benchmarkTitle">Model evaluation benchmark</h1></div>
         <div class="simulated-benchmark-notice" role="note">
           <strong>Simulated benchmark</strong>
           <span>These fixture results illustrate the evaluation workflow. They are not measured model performance and do not establish a preferred strategy.</span>
@@ -306,6 +317,7 @@
       </section>
 
     </main>
+    </div>
   </div>
 
   <!-- Unified Inspection Modal -->
@@ -331,7 +343,7 @@
       const isAdmin = Boolean(currentUser && currentUser.role === 'data_admin');
       
       if (currentUser) {
-         document.getElementById('adminUserLabel').innerHTML = `Demo persona: <strong>${currentUser.name}</strong>`;
+         document.getElementById('adminUserLabel').innerHTML = `<strong>${currentUser.name}</strong><small>${currentUser.roleTitle || 'Data / Admin team'}</small>`;
       }
 
       if (!isAdmin) {
@@ -352,6 +364,41 @@
         ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
         : savedTheme;
       document.documentElement.setAttribute('data-theme', resolvedTheme);
+
+      const adminSidebar = document.getElementById('adminSidebar');
+      const adminSidebarToggle = document.getElementById('adminSidebarToggle');
+      const adminMobileNavToggle = document.getElementById('adminMobileNavToggle');
+      const observabilityNavBtn = document.getElementById('observabilityNavBtn');
+      const evaluationNavBtn = document.getElementById('evaluationNavBtn');
+      const observabilityView = document.getElementById('observabilityView');
+      const evaluationView = document.getElementById('evaluationView');
+
+      const setAdminView = (view) => {
+        const showEvaluation = view === 'evaluation';
+        observabilityView.classList.toggle('hidden', showEvaluation);
+        evaluationView.classList.toggle('hidden', !showEvaluation);
+        observabilityNavBtn.classList.toggle('active', !showEvaluation);
+        evaluationNavBtn.classList.toggle('active', showEvaluation);
+        observabilityNavBtn.toggleAttribute('aria-current', !showEvaluation);
+        evaluationNavBtn.toggleAttribute('aria-current', showEvaluation);
+        history.replaceState(null, '', showEvaluation ? '#evaluation' : '#observability');
+        adminSidebar.classList.remove('mobile-open');
+        adminMobileNavToggle.setAttribute('aria-expanded', 'false');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      observabilityNavBtn.addEventListener('click', () => setAdminView('observability'));
+      evaluationNavBtn.addEventListener('click', () => setAdminView('evaluation'));
+      adminSidebarToggle.addEventListener('click', () => {
+        const collapsed = adminSidebar.classList.toggle('collapsed');
+        adminSidebarToggle.setAttribute('aria-expanded', String(!collapsed));
+        adminSidebarToggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+      });
+      adminMobileNavToggle.addEventListener('click', () => {
+        const open = adminSidebar.classList.toggle('mobile-open');
+        adminMobileNavToggle.setAttribute('aria-expanded', String(open));
+      });
+      setAdminView(location.hash === '#evaluation' ? 'evaluation' : 'observability');
 
       const adminUserMenuBtn = document.getElementById('adminUserMenuBtn');
       const adminUserMenuDropdown = document.getElementById('adminUserMenuDropdown');
