@@ -5282,7 +5282,7 @@ GROUP BY p.asset_sub_type;`,
               },
               options: buildConflictOptions(conflict, effectiveScope, questionScope, trimmed)
             });
-          }, 350);
+          }, 3000);
           return;
         }
 
@@ -5386,8 +5386,8 @@ GROUP BY p.asset_sub_type;`,
             logQueryToObservability(trimmed, 'AMBIGUOUS', elapsed, ['metadata_business_glossary'], '', currentUser);
             logAuditEvent(currentUser.name, currentUser.roleTitle, trimmed, 'AMBIGUOUS_CLARIFICATION_REQUESTED', elapsed, 'Awaiting user chip selection.', baseAuditContext);
             resolve(matchedData);
-          }, 450);
-        }, 450);
+          }, 1500);
+        }, 1500);
         return;
       }
 

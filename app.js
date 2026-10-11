@@ -43,6 +43,7 @@
     voiceRecognition: null,
     isRecordingVoice: false
   };
+  let activeClarificationKeyHandler = null;
 
   // DOM Elements
   const chatMessagesEl = document.getElementById('chatMessages');
@@ -786,6 +787,10 @@
   // 4. RENDERING ACTIVE CONVERSATION & IDLE STATE
   // =========================================================================
   function renderActiveConversation() {
+    if (activeClarificationKeyHandler) {
+      document.removeEventListener('keydown', activeClarificationKeyHandler);
+      activeClarificationKeyHandler = null;
+    }
     const conv = getActiveConversation();
 
     if (!conv || !conv.messages || conv.messages.length === 0) {
@@ -992,7 +997,6 @@
           <div class="user-bubble-meta">
             <span class="user-turn-version">${isRevision ? 'Revised prompt' : (msg.isScopeRerun ? 'Edited scope version' : 'Original prompt')}</span>
             <span>${msg.time || ''}</span>
-            ${!isSuperseded ? `<button type="button" class="user-edit-btn" data-msg-id="${msg.id}">Adjust question</button>` : ''}
           </div>
         </article>
       </div>
@@ -1567,6 +1571,7 @@
     ].filter((item) => item.value);
 
     const resolved = Boolean(msg.resolvedAt || msg.resolvedPayload);
+    if (resolved) return '';
     const superseded = Boolean(msg.isSuperseded);
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
@@ -1596,14 +1601,18 @@
                 </span>
               </div>`
             : `<div class="clarification-chips" role="group" aria-label="Clarification choices">
-                ${opts.map((opt) => {
+                <div class="clarification-key-hint">Select an option or press ${opts.length === 2 ? '1, 2, or 3' : opts.map((_, index) => index + 1).join(', ')}</div>
+                ${opts.map((opt, index) => {
                   const payload = typeof opt.payload === 'object' ? JSON.stringify(opt.payload) : String(opt.payload || opt.label || '');
-                  return `<button type="button" class="clarification-chip" data-msg-id="${msg.id}" data-payload='${escapeHtml(payload)}' data-label="${escapeHtml(opt.label)}">
-                    <span>${escapeHtml(opt.label)}</span>
+                  return `<button type="button" class="clarification-chip" data-msg-id="${msg.id}" data-payload='${escapeHtml(payload)}' data-label="${escapeHtml(opt.label)}" data-clarification-key="${index + 1}" aria-keyshortcuts="${index + 1}">
+                    <span class="clarification-choice-content"><span class="clarification-choice-number">${index + 1}</span><span>${escapeHtml(opt.label)}</span></span>
                     <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
                   </button>`;
                 }).join('')}
-                <button type="button" class="action-tool-btn btn-adjust-question" data-msg-id="${msg.id}">Adjust question</button>
+                ${opts.length === 2 ? `<button type="button" class="clarification-chip btn-adjust-question" data-msg-id="${msg.id}" data-clarification-key="3" aria-keyshortcuts="3">
+                  <span class="clarification-choice-content"><span class="clarification-choice-number">3</span><span>Adjust question</span></span>
+                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>` : ''}
               </div>`)}
         </div>
       </div>
@@ -2196,10 +2205,38 @@
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           timestamp: Date.now()
         };
-        conv.messages.push(confirmationMsg);
-        conv.updatedAt = Date.now();
-        saveConversationsToStorage();
-        renderActiveConversation();
+        state.isThinking = true;
+        chatContainerEl.setAttribute('aria-busy', 'true');
+        updateSendButtonState();
+        const clarificationController = new AbortController();
+        state.activeAbortController = clarificationController;
+        renderThinkingBubble(confirmationMsg.id, {
+          title: 'Aria is thinking…',
+          copy: 'Reviewing your question and preparing the interpretation for confirmation…'
+        });
+
+        const clarificationTimer = window.setTimeout(() => {
+          if (clarificationController.signal.aborted) return;
+          state.isThinking = false;
+          state.activeAbortController = null;
+          chatContainerEl.setAttribute('aria-busy', 'false');
+          updateSendButtonState();
+          conv.messages.push(confirmationMsg);
+          conv.updatedAt = Date.now();
+          saveConversationsToStorage();
+          renderActiveConversation();
+          announceAppStatus('Clarification ready. Review the interpretation and choose an option.');
+        }, 3000);
+
+        clarificationController.signal.addEventListener('abort', () => {
+          window.clearTimeout(clarificationTimer);
+          state.isThinking = false;
+          state.activeAbortController = null;
+          chatContainerEl.setAttribute('aria-busy', 'false');
+          document.getElementById(`thinking_row_${confirmationMsg.id}`)?.remove();
+          updateSendButtonState();
+          announceAppStatus('Clarification preparation stopped.');
+        }, { once: true });
         return;
       }
     }
@@ -2365,7 +2402,7 @@
   // =========================================================================
   // 7. THINKING PIPELINE ANIMATION & STOP BUTTON (Group A)
   // =========================================================================
-  function renderThinkingBubble(msgId) {
+  function renderThinkingBubble(msgId, options = {}) {
     const thinkingRow = document.createElement('div');
     thinkingRow.className = 'chat-row agent-row';
     thinkingRow.id = `thinking_row_${msgId}`;
@@ -2377,7 +2414,7 @@
         <div class="thinking-header">
           <div class="thinking-title-area">
             <div class="pulse-spinner" aria-hidden="true"></div>
-            <span>${showTechnicalPipeline ? 'Technical processing details' : 'Aria is preparing your answer'}</span>
+            <span>${escapeHtml(options.title || 'Aria is thinking…')}</span>
           </div>
           <button type="button" class="btn-stop-generating" id="stopGeneratingBtn">
             <svg width="12" height="12" fill="currentColor" viewBox="0 0 20 20"><rect x="4" y="4" width="12" height="12" rx="2"></rect></svg>
@@ -2391,7 +2428,7 @@
               <span class="stage-label">${escapeHtml(st.label)}</span>
             </li>
           `).join('')}
-        </ul>` : `<p class="business-loading-copy" id="business_loading_${msgId}">Understanding your question and checking the available business data…</p>`}
+        </ul>` : `<p class="business-loading-copy" id="business_loading_${msgId}">${escapeHtml(options.copy || 'Understanding your question and checking the available business data…')}</p>`}
       </div>
     `;
 
@@ -3260,6 +3297,43 @@
     chatContainerEl.querySelectorAll('.btn-adjust-question').forEach((btn) => {
       btn.addEventListener('click', () => openAdjustQuestionModal(btn.getAttribute('data-msg-id'), btn));
     });
+
+    const clarificationGroups = Array.from(chatContainerEl.querySelectorAll('.clarification-chips'));
+    const activeClarificationGroup = clarificationGroups[clarificationGroups.length - 1];
+    const clarificationKeyChoices = activeClarificationGroup
+      ? Array.from(activeClarificationGroup.querySelectorAll('[data-clarification-key]'))
+      : [];
+    if (clarificationKeyChoices.length) {
+      activeClarificationKeyHandler = (event) => {
+        if (event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+        const target = event.target;
+        const isEmptyComposer = target === chatInputEl && !chatInputEl.value.trim();
+        if (target && (target.matches('input, textarea, select') || target.isContentEditable) && !isEmptyComposer) return;
+
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          const currentIndex = clarificationKeyChoices.indexOf(document.activeElement);
+          const direction = event.key === 'ArrowDown' ? 1 : -1;
+          const nextIndex = currentIndex < 0
+            ? 0
+            : (currentIndex + direction + clarificationKeyChoices.length) % clarificationKeyChoices.length;
+          const nextChoice = clarificationKeyChoices[nextIndex];
+          const nextLabel = nextChoice.querySelector('.clarification-choice-content > span:last-child');
+          nextChoice.focus();
+          announceAppStatus(`Option ${nextChoice.getAttribute('data-clarification-key')}: ${nextLabel ? nextLabel.textContent.trim() : nextChoice.textContent.trim()}`);
+          return;
+        }
+
+        const choice = clarificationKeyChoices.find((button) => button.getAttribute('data-clarification-key') === event.key);
+        if (!choice || choice.disabled || !document.contains(choice)) return;
+        event.preventDefault();
+        choice.click();
+      };
+      document.addEventListener('keydown', activeClarificationKeyHandler);
+      requestAnimationFrame(() => {
+        if (document.contains(clarificationKeyChoices[0])) clarificationKeyChoices[0].focus({ preventScroll: true });
+      });
+    }
 
     chatContainerEl.querySelectorAll('.btn-revise-question').forEach((btn) => {
       btn.addEventListener('click', () => {

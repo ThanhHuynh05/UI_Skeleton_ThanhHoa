@@ -3649,6 +3649,34 @@ details[open] .sql-chevron { transform: rotate(180deg); }
   margin-top: 16px;
 }
 
+.clarification-key-hint {
+  margin-bottom: 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.clarification-choice-content {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.clarification-choice-number {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .inline-interpretation {
   margin: 18px 0;
   overflow: hidden;
@@ -3736,9 +3764,9 @@ details[open] .sql-chevron { transform: rotate(180deg); }
   background: var(--bg-hover);
 }
 
-.clarification-chips > .btn-adjust-question {
-  justify-self: start;
-  margin-top: 2px;
+.clarification-chip:focus {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
 }
 
 .conflict-option-btn:disabled,
