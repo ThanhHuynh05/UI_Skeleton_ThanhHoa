@@ -147,6 +147,10 @@
   const settingsDrawer = document.getElementById('settingsDrawer');
   const settingsBtn = document.getElementById('settingsBtn');
   const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+  const settingsPreferencesTabBtn = document.getElementById('settingsPreferencesTabBtn');
+  const settingsHelpTabBtn = document.getElementById('settingsHelpTabBtn');
+  const settingsPreferencesPanel = document.getElementById('settingsPreferencesPanel');
+  const settingsHelpPanel = document.getElementById('settingsHelpPanel');
 
   const helpModalBackdrop = document.getElementById('helpModalBackdrop');
   const helpModalBtn = document.getElementById('helpModalBtn');
@@ -3220,9 +3224,7 @@
 
     chatContainerEl.querySelectorAll('.btn-access-guidance').forEach((btn) => {
       btn.addEventListener('click', () => {
-        helpModalBackdrop.classList.add('open');
-        setActiveHelpTab(helpTabScopeBtn);
-        renderHelpTabContent('scope');
+        openSettingsHelp('scope');
       });
     });
 
@@ -4943,6 +4945,9 @@
   // 15. SETTINGS, HELP MODAL & GLOBAL SHORTCUTS (Group H)
   // =========================================================================
   function initSettingsAndHelp() {
+    settingsPreferencesTabBtn.addEventListener('click', () => setSettingsSection('preferences'));
+    settingsHelpTabBtn.addEventListener('click', () => setSettingsSection('help'));
+
     // Theme Choice Buttons in Settings Drawer
     settingsDrawer.querySelectorAll('.theme-choice-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -5037,6 +5042,24 @@
     });
   }
 
+  function setSettingsSection(section) {
+    const showHelp = section === 'help';
+    settingsPreferencesPanel.hidden = showHelp;
+    settingsHelpPanel.hidden = !showHelp;
+    settingsPreferencesTabBtn.classList.toggle('active', !showHelp);
+    settingsHelpTabBtn.classList.toggle('active', showHelp);
+    settingsPreferencesTabBtn.setAttribute('aria-selected', String(!showHelp));
+    settingsHelpTabBtn.setAttribute('aria-selected', String(showHelp));
+  }
+
+  function openSettingsHelp(tab = 'domains') {
+    settingsDrawer.classList.add('open');
+    setSettingsSection('help');
+    const tabButton = tab === 'scope' ? helpTabScopeBtn : (tab === 'shortcuts' ? helpTabShortcutsBtn : helpTabDomainsBtn);
+    setActiveHelpTab(tabButton);
+    renderHelpTabContent(tab);
+  }
+
   function setActiveHelpTab(activeBtn) {
     [helpTabDomainsBtn, helpTabScopeBtn, helpTabShortcutsBtn].forEach((b) => b.classList.remove('active'));
     activeBtn.classList.add('active');
@@ -5075,16 +5098,13 @@
       `;
     } else if (tab === 'shortcuts') {
       helpTabContent.innerHTML = `
-        <table class="result-data-table" style="font-size: 12px;">
-          <thead><tr><th>Shortcut</th><th>Action</th></tr></thead>
-          <tbody>
-            <tr><td><kbd>Enter</kbd></td><td>Send prompt / question</td></tr>
-            <tr><td><kbd>Shift + Enter</kbd></td><td>Insert newline in input</td></tr>
-            <tr><td><kbd>/</kbd></td><td>Focus natural-language question input</td></tr>
-            <tr><td><kbd>Ctrl + K</kbd> / <kbd>Cmd + K</kbd></td><td>Focus conversation history search box</td></tr>
-            <tr><td><kbd>Esc</kbd></td><td>Close any active modal or drawer</td></tr>
-          </tbody>
-        </table>
+        <div class="settings-shortcuts-list" aria-label="Keyboard shortcuts">
+          <div class="settings-shortcut-item"><kbd>Enter</kbd><span>Send prompt / question</span></div>
+          <div class="settings-shortcut-item"><kbd>Shift + Enter</kbd><span>Insert newline in input</span></div>
+          <div class="settings-shortcut-item"><kbd>/</kbd><span>Focus natural-language question input</span></div>
+          <div class="settings-shortcut-item"><kbd>Ctrl + K / Cmd + K</kbd><span>Focus conversation history search box</span></div>
+          <div class="settings-shortcut-item"><kbd>Esc</kbd><span>Close any active modal or drawer</span></div>
+        </div>
       `;
     }
   }
@@ -5092,7 +5112,7 @@
   function closeAllModalsAndDrawers() {
     dataExplorerDrawer.classList.remove('open');
     settingsDrawer.classList.remove('open');
-    helpModalBackdrop.classList.remove('open');
+    if (helpModalBackdrop) helpModalBackdrop.classList.remove('open');
     feedbackModalBackdrop.classList.remove('open');
     sourceTableModalBackdrop.classList.remove('open');
     if (clearHistoryModalBackdrop) clearHistoryModalBackdrop.classList.remove('open');
@@ -5565,7 +5585,7 @@
       railAskBtn.addEventListener('click', () => {
         dataExplorerDrawer.classList.remove('open');
                 settingsDrawer.classList.remove('open');
-        helpModalBackdrop.classList.remove('open');
+        if (helpModalBackdrop) helpModalBackdrop.classList.remove('open');
         showBusinessWorkspaceView('ask');
         if (window.innerWidth <= 820 && sidebarEl) {
           sidebarEl.classList.remove('open');
@@ -5631,7 +5651,7 @@
     }
 
     // Drawers Open / Close
-    navDataExplorerBtn.addEventListener('click', () => {
+    if (navDataExplorerBtn) navDataExplorerBtn.addEventListener('click', () => {
             dataExplorerDrawer.classList.add('open');
       renderDataExplorer();
       updateRailActiveState('data_guide');
@@ -5664,11 +5684,14 @@
     });
 
 
-    settingsBtn.addEventListener('click', () => settingsDrawer.classList.add('open'));
+    settingsBtn.addEventListener('click', () => {
+      setSettingsSection('preferences');
+      settingsDrawer.classList.add('open');
+    });
     closeSettingsBtn.addEventListener('click', () => settingsDrawer.classList.remove('open'));
 
-    helpModalBtn.addEventListener('click', () => helpModalBackdrop.classList.add('open'));
-    closeHelpModalBtn.addEventListener('click', () => helpModalBackdrop.classList.remove('open'));
+    if (helpModalBtn && helpModalBackdrop) helpModalBtn.addEventListener('click', () => openSettingsHelp('domains'));
+    if (closeHelpModalBtn && helpModalBackdrop) closeHelpModalBtn.addEventListener('click', () => helpModalBackdrop.classList.remove('open'));
 
     // Feedback Modal Submission
     closeFeedbackModalBtn.addEventListener('click', () => feedbackModalBackdrop.classList.remove('open'));

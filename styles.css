@@ -575,6 +575,82 @@ a:hover {
   color: var(--text-primary);
 }
 
+.settings-primary-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-surface);
+}
+.settings-primary-tab {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+.settings-primary-tab:hover { background: var(--bg-hover); color: var(--text-primary); }
+.settings-primary-tab.active {
+  border-bottom-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+#settingsDrawer [hidden] { display: none !important; }
+.settings-help-panel {
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.settings-help-intro { display: grid; gap: 4px; }
+.settings-help-intro span { color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+.settings-help-panel .schema-table-card {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.settings-help-panel .explorer-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+}
+.settings-help-panel .explorer-tab-btn {
+  min-width: 0;
+  padding: 8px 6px;
+  white-space: normal;
+  line-height: 1.35;
+  text-align: center;
+}
+.settings-shortcuts-list {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  border-top: 1px solid var(--border-color);
+}
+.settings-shortcut-item {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+.settings-shortcut-item kbd {
+  width: fit-content;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+.settings-shortcut-item span {
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 @media (min-width: 821px) {
   .sidebar-account { position: relative; }
   .sidebar-account .user-menu-wrapper { position: static; }
