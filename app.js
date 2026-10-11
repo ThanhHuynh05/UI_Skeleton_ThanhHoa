@@ -824,6 +824,10 @@
   function openEvidenceDesk(msg) {
     const res = msg.resultsData || {};
     const scope = msg.appliedScope || res.appliedScope || {};
+    const conversationMenu = document.getElementById('activeConversationMenu');
+    const conversationMenuButton = document.getElementById('activeConversationMenuBtn');
+    if (conversationMenu) conversationMenu.classList.remove('open');
+    if (conversationMenuButton) conversationMenuButton.setAttribute('aria-expanded', 'false');
     
     const evidenceDesk = document.getElementById('scopeInspectorPanel');
     const body = document.getElementById('scopeInspectorBody');
@@ -961,10 +965,6 @@
 
     // Attach dynamic handlers
     attachConversationEventHandlers(conv);
-    const pendingClarification = conv.messages.find((message) => message.type === 'clarification' && !message.resolvedAt && !message.resolvedPayload && !message.clarificationDismissedAt);
-    if (pendingClarification && clarificationModalBackdrop && !clarificationModalBackdrop.classList.contains('open')) {
-      requestAnimationFrame(() => openClarificationModal(pendingClarification.id, chatContainerEl.querySelector(`[data-msg-id="${pendingClarification.id}"]`)));
-    }
     scrollToBottom();
   }
 
@@ -1433,28 +1433,15 @@
     const activeView = getActiveResultView(msg, pattern, res);
     const scope = msg.appliedScope || res.appliedScope;
     
-    // 1. Business area and reporting period
-    const area = scope && scope.domain ? (scope.domain.label || scope.domain.value || scope.domain) : 'Enterprise';
-    const period = scope && scope.time ? scope.time.label : (scope && scope.periodLabel ? scope.periodLabel : 'Current scope');
-    
-    // 2. Direct answer headline
+    // 1. Direct answer headline
     const headline = res.answer || 'Business Analysis';
     
-    // 3. Primary number or conclusion
+    // 2. Primary number or conclusion
     const highlights = getAnswerHighlights(headline, scope);
     const primaryNumber = highlights.primary || '';
     
-    // 4. Concise interpretation
-    const interpretationText = `Based on ${escapeHtml(area)} data for ${escapeHtml(period)}, analysis indicates key patterns.`;
-    
-    // 5. Supporting visual or data
+    // 3. Supporting visual or data
     const evidenceHtml = renderEvidenceHtml(res, msg, pattern, activeView);
-    
-    // 6. Why it matters
-    const whyItMatters = "Understanding these metrics enables proactive operational adjustments and better financial forecasting.";
-    
-    // 7. Recommended next action
-    const nextAction = "Review underlying records in Evidence Desk or drill down by region.";
     const userId = state.currentUser ? state.currentUser.id : 'default';
     const savedInsights = window.AriaMock && window.AriaMock.getSavedInsights
       ? window.AriaMock.getSavedInsights(userId)
@@ -1475,9 +1462,6 @@
           ${renderRunMetadata(msg, scope)}
           <div class="message-content">
             <div class="brief-container">
-              <div class="brief-meta">
-                ${escapeHtml(area)} · ${escapeHtml(period)}
-              </div>
               <div class="brief-headline">
                 ${formatMarkdownBold(headline)}
               </div>
@@ -1486,30 +1470,16 @@
                   ${escapeHtml(primaryNumber)}
                 </div>
               ` : ''}
-              <div class="brief-interpretation">
-                ${interpretationText}
-              </div>
-              ${renderCompactScope(scope, msg)}
-              ${renderBusinessProvenance(res)}
-              
               <div class="brief-evidence">
                 ${evidenceHtml}
               </div>
-              
-              <div class="brief-why">
-                <strong style="text-transform: uppercase; font-size: 12px; letter-spacing: 1px; margin-bottom: 8px; display: block; color: var(--text-muted);">Why it matters</strong>
-                ${whyItMatters}
-              </div>
-              
-              <div class="brief-action">
-                Action: ${nextAction}
-              </div>
+              ${renderBusinessProvenance(res)}
             </div>
           </div>
           
           <div class="agent-footer answer-footer">
             <div class="answer-primary-actions">
-              <button type="button" class="action-tool-btn btn-open-evidence" data-msg-id="${msg.id}">Open Evidence Desk</button>
+              <button type="button" class="action-tool-btn btn-open-evidence" data-msg-id="${msg.id}">Evidence Desk</button>
             </div>
             <details class="answer-actions-menu">
               <summary class="action-tool-btn">More actions</summary>
@@ -1582,6 +1552,19 @@
 
   function renderClarificationHtml(msg) {
     const opts = msg.options || [];
+    const understood = msg.understoodFields || {};
+    const fieldValue = (value) => value && typeof value === 'object'
+      ? (value.label || value.value || value.key || '')
+      : value;
+    const interpretationItems = [
+      { label: 'Metric', value: fieldValue(understood.metric) },
+      { label: 'Breakdown', value: fieldValue(understood.grain || understood.breakdown) },
+      { label: 'Period', value: fieldValue(understood.period) },
+      { label: 'Business area', value: fieldValue(understood.domain || understood.businessArea) },
+      { label: 'Project scope', value: fieldValue(understood.projectScope) },
+      { label: 'Currency / unit', value: fieldValue(understood.currency) },
+      { label: 'Assumptions', value: Array.isArray(understood.assumptions) ? understood.assumptions.join(' · ') : fieldValue(understood.assumptions) }
+    ].filter((item) => item.value);
 
     const resolved = Boolean(msg.resolvedAt || msg.resolvedPayload);
     const superseded = Boolean(msg.isSuperseded);
@@ -1591,6 +1574,18 @@
           ${superseded ? '<div class="superseded-callout">Superseded by the revised question below. No run can be started from this clarification.</div>' : ''}
           <div class="result-state-label">${superseded ? 'Superseded clarification' : (resolved ? 'Clarification confirmed' : 'Clarification needed')}</div>
           <h3>${escapeHtml(superseded ? 'This clarification is no longer active' : (resolved ? (msg.resolvedChoice || 'Scope confirmed') : 'One choice is needed before I run this question'))}</h3>
+          ${interpretationItems.length ? `<section class="inline-interpretation" aria-label="How Aria interpreted your question">
+            <div class="inline-interpretation-heading">
+              <span>How I interpreted your question</span>
+              <span class="inline-interpretation-status">${resolved ? 'Applied to this run' : 'Review before running'}</span>
+            </div>
+            <dl class="inline-interpretation-grid">
+              ${interpretationItems.map((item) => `<div>
+                <dt>${escapeHtml(item.label)}</dt>
+                <dd>${escapeHtml(item.value)}</dd>
+              </div>`).join('')}
+            </dl>
+          </section>` : ''}
           <p>${escapeHtml(msg.question || 'Please confirm the intended meaning or scope.')}</p>
           ${superseded ? '' : (resolved
             ? `<div class="clarification-resolution">
@@ -1600,8 +1595,14 @@
                   Confirmed request locked
                 </span>
               </div>`
-            : `<div class="clarification-card-actions">
-                <button type="button" class="action-tool-btn primary btn-open-clarification" data-msg-id="${msg.id}">Answer clarification</button>
+            : `<div class="clarification-chips" role="group" aria-label="Clarification choices">
+                ${opts.map((opt) => {
+                  const payload = typeof opt.payload === 'object' ? JSON.stringify(opt.payload) : String(opt.payload || opt.label || '');
+                  return `<button type="button" class="clarification-chip" data-msg-id="${msg.id}" data-payload='${escapeHtml(payload)}' data-label="${escapeHtml(opt.label)}">
+                    <span>${escapeHtml(opt.label)}</span>
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                  </button>`;
+                }).join('')}
                 <button type="button" class="action-tool-btn btn-adjust-question" data-msg-id="${msg.id}">Adjust question</button>
               </div>`)}
         </div>
@@ -3030,6 +3031,9 @@
     const selectedPeriodLabel = editInterpPeriod && editInterpPeriod.selectedOptions[0]
       ? editInterpPeriod.selectedOptions[0].textContent.trim() : selectedPeriod;
     const selectedCurrencyLabel = editInterpCurrency ? editInterpCurrency.value : 'Not specified';
+    const displayedPeriodLabel = selectedPeriod === 'custom' && startDate && endDate
+      ? `${startDate} to ${endDate}`
+      : selectedPeriodLabel;
     const scopeEditSummary = [
       `Metric: ${selectedMetricLabel}`,
       `Grain: ${selectedGrainLabel}`,
@@ -3053,6 +3057,19 @@
     // Completed results become superseded; a pre-run confirmation is instead
     // locked with the edited interpretation that will be executed.
     if (isPreRunConfirmation) {
+      // Keep the inline confirmation card in sync with the values that will be
+      // used for execution. Previously it retained the pre-edit snapshot.
+      srcMsg.understoodFields = {
+        ...(srcMsg.understoodFields || {}),
+        metric: selectedMetricLabel,
+        grain: selectedGrainLabel,
+        period: displayedPeriodLabel,
+        domain: selectedDomain,
+        projectScope: selectedProjectLabel,
+        currency: selectedCurrencyLabel,
+        assumptions: checkedAssumptions
+      };
+      srcMsg.interpretationOverride = { ...overrides };
       srcMsg.resolvedPayload = { type: 'interpretation_confirmation', edited: true };
       srcMsg.resolvedChoice = 'Edited interpretation';
       srcMsg.resolvedAt = Date.now();
@@ -3285,12 +3302,7 @@
       });
     });
 
-    // 4. Clarification is resolved in a modal and can only be confirmed once.
-    chatContainerEl.querySelectorAll('.btn-open-clarification').forEach((btn) => {
-      btn.addEventListener('click', () => openClarificationModal(btn.getAttribute('data-msg-id'), btn));
-    });
-
-    // Legacy chips may exist in conversations saved by an older prototype build.
+    // Clarification choices resolve directly in the conversation thread.
     chatContainerEl.querySelectorAll('.clarification-chip').forEach((chip) => {
       chip.addEventListener('click', () => {
         const rawPayload = chip.getAttribute('data-payload');
@@ -3306,39 +3318,50 @@
           parsedPayload = null;
         }
 
+        const targetMsg = msgId ? conv.messages.find((m) => m.id === msgId) : null;
+        if (!targetMsg || targetMsg.resolvedAt || targetMsg.resolvedPayload || state.isThinking) return;
+
         if (parsedPayload && parsedPayload.resolution === 'edit_scope') {
-          if (scopeEditorBarEl) {
-            scopeEditorBarEl.classList.remove('scope-editor-pulse');
-            void scopeEditorBarEl.offsetWidth;
-            scopeEditorBarEl.classList.add('scope-editor-pulse');
-            scopeEditorBarEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          if (targetMsg.subtype === 'interpretation_confirmation') {
+            openEditInterpretationModal(conv, targetMsg.id);
+            showToast('Edit the interpretation, then apply it to run the query.');
+          } else {
+            if (scopeEditorBarEl) {
+              scopeEditorBarEl.classList.remove('scope-editor-pulse');
+              void scopeEditorBarEl.offsetWidth;
+              scopeEditorBarEl.classList.add('scope-editor-pulse');
+              scopeEditorBarEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+            if (domainScopeSelectEl) domainScopeSelectEl.focus();
+            showToast('Adjust the business area or revise your question, then choose again.');
           }
-          if (timeRangeSelectEl) {
-            timeRangeSelectEl.focus();
-          }
-          showToast('Scope editor highlighted. Adjust domain or period above.');
           return;
         }
 
-        // Mark this clarification message as resolved
-        if (msgId) {
-          const targetMsg = conv.messages.find((m) => m.id === msgId);
-          if (targetMsg) {
-            targetMsg.resolvedPayload = label;
-            targetMsg.resolvedChoice = label;
-            saveConversationsToStorage();
-          }
+        targetMsg.resolvedPayload = parsedPayload || rawPayload;
+        targetMsg.resolvedChoice = label;
+        targetMsg.resolvedAt = Date.now();
+        targetMsg.isLocked = true;
+        saveConversationsToStorage();
+
+        const originalQuestion = findUserQueryForAgentMsg(conv, targetMsg) || targetMsg.originalQuery || label;
+        renderActiveConversation();
+
+        if (targetMsg.subtype === 'interpretation_confirmation') {
+          processUserPrompt(originalQuestion, {
+            interpretationConfirmed: true,
+            skipUserMessage: true,
+            originalQuestion,
+            displayPromptText: originalQuestion
+          });
+          return;
         }
 
         if (parsedPayload && parsedPayload.type === 'scope_resolution') {
-          const clarificationMsg = msgId ? conv.messages.find((m) => m.id === msgId) : null;
-          const originalQuestion = clarificationMsg ? findUserQueryForAgentMsg(conv, clarificationMsg) : label;
           processUserPrompt(label, { scopeConfirmation: parsedPayload, originalQuestion });
           return;
         }
 
-        const clarificationMsg = msgId ? conv.messages.find((m) => m.id === msgId) : null;
-        const originalQuestion = clarificationMsg ? findUserQueryForAgentMsg(conv, clarificationMsg) : label;
         processUserPrompt(label, { clarificationPayload: rawPayload, originalQuestion });
       });
     });

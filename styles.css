@@ -3643,6 +3643,104 @@ details[open] .sql-chevron { transform: rotate(180deg); }
   color: var(--accent-primary);
 }
 
+.clarification-chips {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.inline-interpretation {
+  margin: 18px 0;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-control);
+  background: var(--bg-app);
+}
+
+.inline-interpretation-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.inline-interpretation-status {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.inline-interpretation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0;
+  margin: 0;
+}
+
+.inline-interpretation-grid > div {
+  min-width: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.inline-interpretation-grid dt {
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.inline-interpretation-grid dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .inline-interpretation-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .inline-interpretation-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.clarification-chip {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.clarification-chip:hover,
+.clarification-chip:focus-visible {
+  border-color: var(--accent-primary);
+  background: var(--bg-hover);
+}
+
+.clarification-chips > .btn-adjust-question {
+  justify-self: start;
+  margin-top: 2px;
+}
+
 .conflict-option-btn:disabled,
 .clarification-chip:disabled {
   opacity: 0.75;
@@ -5306,7 +5404,8 @@ body.panel-resizing .evidence-desk-drawer {
   right: 0;
   top: 0;
   bottom: 0;
-  z-index: 40;
+  /* Keep the drawer and its close control above the fixed conversation menu. */
+  z-index: 130;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -5314,6 +5413,12 @@ body.panel-resizing .evidence-desk-drawer {
 }
 .evidence-desk-drawer.open {
   transform: translateX(0);
+}
+
+.evidence-desk-drawer.open .inspector-close-btn {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
 }
 .drawer-header {
   padding: 16px;

@@ -148,33 +148,6 @@
               </div>
             </div>
 
-            <div class="scope-period-control" id="scopePeriodControl" style="display: flex; gap: 8px; align-items: center;">
-              <label for="timeRangeSelect" class="scope-helper-label" style="color: var(--text-muted);">Period:</label>
-              <select class="time-range-select" id="timeRangeSelect" aria-label="Select query calendar period" style="border: none; background: transparent; outline: none; cursor: pointer;">
-                <option value="auto" selected>Auto — infer from question</option>
-                <option value="current_quarter">This calendar quarter</option>
-                <option value="previous_quarter">Previous calendar quarter</option>
-                <option value="calendar_year">Calendar year</option>
-                <option value="all_time">All time</option>
-                <option value="custom">Custom date range...</option>
-              </select>
-            </div>
-            <span class="scope-auto-rule" title="Auto never adds a time or domain filter that is not present in the question.">Calendar basis · Fiscal year not configured · Auto adds no filters.</span>
-          </div>
-
-          <div class="custom-date-range-bar" id="customDateRangeBar" style="display: none; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; gap: 16px; margin-bottom: 16px;">
-            <div class="custom-date-inputs" style="display: flex; gap: 16px; align-items: center;">
-              <div class="date-field-group" style="display: flex; gap: 8px;">
-                <label for="customStartDate">Start:</label>
-                <input type="date" id="customStartDate" class="date-input" value="2026-07-01" style="border: 1px solid var(--border-color); background: var(--bg-app);" />
-              </div>
-              <div class="date-field-group" style="display: flex; gap: 8px;">
-                <label for="customEndDate">End:</label>
-                <input type="date" id="customEndDate" class="date-input" value="2026-09-30" style="border: 1px solid var(--border-color); background: var(--bg-app);" />
-              </div>
-              <button type="button" class="btn-apply-custom-date" id="applyCustomDateBtn" style="border: 1px solid var(--border-color); background: var(--bg-app); padding: 4px 8px; cursor: pointer;">Apply range</button>
-            </div>
-            <div class="custom-date-validation" id="customDateValidationMsg" style="display: none; color: var(--danger-color);" role="alert"></div>
           </div>
 
           <div class="input-box-wrapper" style="position: relative;">
@@ -426,41 +399,6 @@
       </div>
       <div class="modal-body" id="sourceTableModalBody">
         <!-- Dynamically populated -->
-      </div>
-    </div>
-  </div>
-
-  <!-- Clarification is a decision gate: no query runs until Confirm is pressed. -->
-  <div class="modal-backdrop" id="clarificationModalBackdrop">
-    <div class="app-modal clarification-modal" role="dialog" aria-modal="true" aria-labelledby="clarificationModalTitle" aria-describedby="clarificationModalReason">
-      <div class="modal-header clarification-modal-header">
-        <div class="clarification-heading">
-          <span class="clarification-assistant-mark" aria-hidden="true">A</span>
-          <div>
-            <div class="modal-eyebrow">Aria needs one detail</div>
-            <div class="modal-title" id="clarificationModalTitle">Before I continue</div>
-          </div>
-        </div>
-        <button type="button" class="header-icon-btn" id="closeClarificationModalBtn" aria-label="Cancel clarification">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
-      </div>
-      <div class="modal-body">
-        <p id="clarificationModalReason" class="clarification-reason">I need one quick choice to make sure I answer the right question.</p>
-        <div class="clarification-original-question" id="clarificationOriginalQuestion" role="note">
-          <span>Your question</span>
-          <blockquote id="clarificationOriginalQuestionText"></blockquote>
-        </div>
-        <div id="clarificationUnderstood" class="clarification-understood"></div>
-        <fieldset class="clarification-fieldset">
-          <legend id="clarificationQuestion"></legend>
-          <div id="clarificationOptions" class="clarification-modal-options"></div>
-        </fieldset>
-        <div class="clarification-modal-actions">
-          <button type="button" class="action-tool-btn" id="adjustClarificationQuestionBtn">Adjust question</button>
-          <button type="button" class="action-tool-btn" id="cancelClarificationBtn">Cancel</button>
-          <button type="button" class="action-tool-btn primary" id="confirmClarificationBtn" disabled>Confirm</button>
-        </div>
       </div>
     </div>
   </div>
