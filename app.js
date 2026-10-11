@@ -330,6 +330,12 @@
   function updateUserBadge() {
     if (!state.currentUser) return;
     headerUserLabelEl.innerHTML = `Demo persona: <strong>${escapeHtml(state.currentUser.name)}</strong>`;
+    const sidebarUserName = document.getElementById('sidebarUserName');
+    const sidebarUserRole = document.getElementById('sidebarUserRole');
+    const sidebarUserAvatar = document.getElementById('sidebarUserAvatar');
+    if (sidebarUserName) sidebarUserName.textContent = state.currentUser.name;
+    if (sidebarUserRole) sidebarUserRole.textContent = state.currentUser.roleTitle || state.currentUser.role || 'Demo persona';
+    if (sidebarUserAvatar) sidebarUserAvatar.textContent = (state.currentUser.name || 'A').trim().charAt(0).toUpperCase();
     const menuPersonaName = document.getElementById('userMenuPersonaName');
     const menuPersonaRole = document.getElementById('userMenuPersonaRole');
     if (menuPersonaName) menuPersonaName.textContent = state.currentUser.name;
@@ -504,13 +510,93 @@
     historySearchModalBackdrop.classList.remove('open');
   }
 
+  function closeConversationActionMenus(exceptMenu = null) {
+    document.querySelectorAll('.conv-action-menu.open').forEach((menu) => {
+      if (menu === exceptMenu) return;
+      menu.classList.remove('open');
+      const trigger = menu.closest('.conversation-item')?.querySelector('.conv-menu-trigger');
+      if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function positionConversationActionMenu(trigger, menu) {
+    const triggerRect = trigger.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const viewportGap = 8;
+    const preferredLeft = triggerRect.right + viewportGap;
+    const fallbackLeft = triggerRect.left - menuRect.width - viewportGap;
+    const left = preferredLeft + menuRect.width <= window.innerWidth - viewportGap
+      ? preferredLeft
+      : Math.max(viewportGap, fallbackLeft);
+    const top = Math.min(
+      Math.max(viewportGap, triggerRect.top),
+      Math.max(viewportGap, window.innerHeight - menuRect.height - viewportGap)
+    );
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
+  }
+
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.conv-actions')) closeConversationActionMenus();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const openMenu = document.querySelector('.conv-action-menu.open');
+    if (!openMenu) return;
+    const trigger = openMenu.closest('.conversation-item')?.querySelector('.conv-menu-trigger');
+    closeConversationActionMenus();
+    trigger?.focus();
+  });
+  window.addEventListener('resize', () => closeConversationActionMenus());
+  sidebarConversationsListEl?.addEventListener('scroll', () => closeConversationActionMenus(), { passive: true });
+
+  function exportConversationAsMarkdown(conv) {
+    let md = `# ${conv.title}\n\n> **Demo • Synthetic data** — This export comes from a prototype. Persona access and masking are simulated and do not demonstrate production security enforcement.\n\n*Exported from Aria on ${new Date().toLocaleString()}*\n\n---\n\n`;
+    conv.messages.forEach((m) => {
+      if (m.role === 'user') {
+        md += `### User Query (${m.time})\n> ${m.text}\n\n`;
+      } else {
+        const scope = m.appliedScope || (m.resultsData && m.resultsData.appliedScope);
+        if (scope) {
+          md += `#### How I interpreted your question\n`;
+          if (scope.metric) md += `- **Metric:** ${scope.metric.label || scope.metric} (${scope.metric.source || 'Standard'})\n`;
+          const grain = scope.grain || scope.breakdown;
+          if (grain) md += `- **Grain:** ${grain.label || grain} (${grain.source || 'Standard'})\n`;
+          if (scope.domain) md += `- **Business area:** ${scope.domain.label || scope.domain.value || scope.domain}\n`;
+          if (scope.projectScope) md += `- **Project scope:** ${scope.projectScope.label || scope.projectScope}\n`;
+          if (scope.time) md += `- **Period & dates:** ${scope.time.label || scope.periodLabel}${scope.time.dateRange ? ` (${scope.time.dateRange})` : ''}\n`;
+          else if (scope.periodLabel) md += `- **Period & dates:** ${scope.periodLabel}\n`;
+          const exportCurrency = scope.currencyObj ? scope.currencyObj.label : scope.currency;
+          if (exportCurrency) md += `- **Currency / Unit:** ${exportCurrency}\n`;
+          if (scope.assumptions && scope.assumptions.length > 0) {
+            md += `- **Assumptions:**\n`;
+            scope.assumptions.forEach(a => { md += `  - ${a}\n`; });
+          }
+          md += `\n`;
+        }
+        if (m.resultsData) {
+          md += `- **Data as of:** ${m.resultsData.dataAsOf || 'Not recorded'}\n`;
+          md += `- **Result label:** Demo — Synthetic data\n\n`;
+        }
+        md += `### Aria Answer (${m.time})\n${m.resultsData ? m.resultsData.answer : (m.message || '')}\n\n`;
+        if (m.resultsData && m.resultsData.sql) md += `\`\`\`sql\n${m.resultsData.sql}\n\`\`\`\n\n`;
+      }
+    });
+    downloadFile(`${conv.title.replace(/[^a-zA-Z0-9]/g, '_')}.md`, md, 'text/markdown');
+    showToast('Conversation saved as Markdown');
+  }
+
   // =========================================================================
-  // 3. SIDEBAR GROUPING & RENDERING (Pinned, Today, Yesterday, Earlier)
+  // 3. SIDEBAR CONVERSATION RENDERING
   // =========================================================================
   function renderSidebarConversations() {
     if (!sidebarConversationsListEl) return;
 
-    const convs = [...state.conversations];
+    const convs = [...state.conversations].sort((a, b) => {
+      const pinOrder = Number(Boolean(b.pinned)) - Number(Boolean(a.pinned));
+      if (pinOrder !== 0) return pinOrder;
+      return (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
+    });
 
     if (convs.length === 0) {
       sidebarConversationsListEl.innerHTML = `
@@ -522,42 +608,14 @@
       return;
     }
 
-    // Grouping
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const yesterdayStart = todayStart - 86400000;
-
-    const pinnedGroup = [];
-    const todayGroup = [];
-    const yesterdayGroup = [];
-    const earlierGroup = [];
-
-    convs.forEach((c) => {
-      if (c.pinned) {
-        pinnedGroup.push(c);
-      } else if (c.updatedAt >= todayStart) {
-        todayGroup.push(c);
-      } else if (c.updatedAt >= yesterdayStart) {
-        yesterdayGroup.push(c);
-      } else {
-        earlierGroup.push(c);
-      }
-    });
-
-    let html = '';
-    if (pinnedGroup.length > 0) html += renderGroupHtml('Pinned', pinnedGroup);
-    if (todayGroup.length > 0) html += renderGroupHtml('Today', todayGroup);
-    if (yesterdayGroup.length > 0) html += renderGroupHtml('Yesterday', yesterdayGroup);
-    if (earlierGroup.length > 0) html += renderGroupHtml('Earlier', earlierGroup);
-
-    sidebarConversationsListEl.innerHTML = html;
+    sidebarConversationsListEl.innerHTML = renderGroupHtml('', convs);
 
     // Attach Click Handlers
     sidebarConversationsListEl.querySelectorAll('.conversation-item').forEach((item) => {
       const convId = item.getAttribute('data-conv-id');
 
       item.addEventListener('click', (e) => {
-        if (e.target.closest('.conv-action-btn')) return;
+        if (e.target.closest('.conv-actions')) return;
         state.activeConversationId = convId;
         saveConversationsToStorage();
         renderSidebarConversations();
@@ -565,6 +623,38 @@
         if (typeof updateRailActiveState === 'function') showBusinessWorkspaceView('ask', { focusComposer: false });
         if (window.innerWidth <= 820) sidebarEl.classList.remove('open');
       });
+
+      const menuTrigger = item.querySelector('.conv-menu-trigger');
+      const actionMenu = item.querySelector('.conv-action-menu');
+      if (menuTrigger && actionMenu) {
+        menuTrigger.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const willOpen = !actionMenu.classList.contains('open');
+          closeConversationActionMenus(actionMenu);
+          actionMenu.classList.toggle('open', willOpen);
+          menuTrigger.setAttribute('aria-expanded', String(willOpen));
+          if (willOpen) positionConversationActionMenu(menuTrigger, actionMenu);
+        });
+        menuTrigger.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            actionMenu.classList.add('open');
+            menuTrigger.setAttribute('aria-expanded', 'true');
+            positionConversationActionMenu(menuTrigger, actionMenu);
+            actionMenu.querySelector('.conv-menu-item')?.focus();
+          }
+        });
+      }
+
+      const saveBtn = item.querySelector('.btn-save-conv');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const target = state.conversations.find((c) => c.id === convId);
+          if (target) exportConversationAsMarkdown(target);
+          closeConversationActionMenus();
+        });
+      }
 
       // Pin button
       const pinBtn = item.querySelector('.btn-pin-conv');
@@ -586,6 +676,7 @@
       if (renameBtn) {
         renameBtn.addEventListener('click', (e) => {
           e.stopPropagation();
+          closeConversationActionMenus();
           const target = state.conversations.find((c) => c.id === convId);
           if (target) {
             const renameBackdrop = document.getElementById('renameConvModalBackdrop');
@@ -616,6 +707,7 @@
       if (deleteBtn) {
         deleteBtn.addEventListener('click', (e) => {
           e.stopPropagation();
+          closeConversationActionMenus();
           const target = state.conversations.find((c) => c.id === convId);
           if (target) {
             const deleteBackdrop = document.getElementById('deleteConvModalBackdrop');
@@ -644,7 +736,7 @@
   function renderGroupHtml(groupTitle, groupItems) {
     return `
       <div>
-        <div class="history-group-title">${groupTitle}</div>
+        ${groupTitle ? `<div class="history-group-title">${groupTitle}</div>` : ''}
         <ul class="history-group-list">
           ${groupItems.map((c) => `
             <li class="conversation-item ${c.id === state.activeConversationId ? 'active' : ''}" data-conv-id="${c.id}" tabindex="0">
@@ -653,15 +745,16 @@
                 ${escapeHtml(c.title)}
               </span>
               <div class="conv-actions">
-                <button type="button" class="conv-action-btn btn-pin-conv" title="${c.pinned ? 'Unpin' : 'Pin'}">
-                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+                <button type="button" class="conv-action-btn conv-menu-trigger" aria-label="Actions for ${escapeHtml(c.title)}" aria-haspopup="menu" aria-expanded="false" title="Conversation actions">
+                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="12" cy="19" r="1.8"></circle></svg>
                 </button>
-                <button type="button" class="conv-action-btn btn-rename-conv" title="Rename">
-                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                </button>
-                <button type="button" class="conv-action-btn btn-delete-conv" title="Delete">
-                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                </button>
+                <div class="conv-action-menu" role="menu" aria-label="Conversation actions">
+                  <button type="button" class="conv-menu-item btn-save-conv" role="menuitem"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg><span>Save conversation</span></button>
+                  <button type="button" class="conv-menu-item btn-pin-conv" role="menuitem"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 17v5"></path><path d="m5 17 2-7V4h10v6l2 7z"></path></svg><span>${c.pinned ? 'Unpin' : 'Pin'}</span></button>
+                  <button type="button" class="conv-menu-item btn-rename-conv" role="menuitem"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg><span>Rename</span></button>
+                  <div class="conv-menu-separator" role="separator"></div>
+                  <button type="button" class="conv-menu-item danger btn-delete-conv" role="menuitem"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg><span>Delete</span></button>
+                </div>
               </div>
             </li>
           `).join('')}
@@ -3068,43 +3161,7 @@
     // 1. Export Conversation
     const exportBtn = document.getElementById('exportConvBtn');
     if (exportBtn) {
-      exportBtn.addEventListener('click', () => {
-        let md = `# ${conv.title}\n\n> **Demo • Synthetic data** — This export comes from a prototype. Persona access and masking are simulated and do not demonstrate production security enforcement.\n\n*Exported from Aria on ${new Date().toLocaleString()}*\n\n---\n\n`;
-        conv.messages.forEach((m) => {
-          if (m.role === 'user') {
-            md += `### User Query (${m.time})\n> ${m.text}\n\n`;
-          } else {
-            const scope = m.appliedScope || (m.resultsData && m.resultsData.appliedScope);
-            if (scope) {
-              md += `#### How I interpreted your question\n`;
-              if (scope.metric) md += `- **Metric:** ${scope.metric.label || scope.metric} (${scope.metric.source || 'Standard'})\n`;
-              const grain = scope.grain || scope.breakdown;
-              if (grain) md += `- **Grain:** ${grain.label || grain} (${grain.source || 'Standard'})\n`;
-              if (scope.domain) md += `- **Business area:** ${scope.domain.label || scope.domain.value || scope.domain}\n`;
-              if (scope.projectScope) md += `- **Project scope:** ${scope.projectScope.label || scope.projectScope}\n`;
-              if (scope.time) md += `- **Period & dates:** ${scope.time.label || scope.periodLabel}${scope.time.dateRange ? ` (${scope.time.dateRange})` : ''}\n`;
-              else if (scope.periodLabel) md += `- **Period & dates:** ${scope.periodLabel}\n`;
-              const exportCurrency = scope.currencyObj ? scope.currencyObj.label : scope.currency;
-              if (exportCurrency) md += `- **Currency / Unit:** ${exportCurrency}\n`;
-              if (scope.assumptions && scope.assumptions.length > 0) {
-                md += `- **Assumptions:**\n`;
-                scope.assumptions.forEach(a => { md += `  - ${a}\n`; });
-              }
-              md += `\n`;
-            }
-            if (m.resultsData) {
-              md += `- **Data as of:** ${m.resultsData.dataAsOf || 'Not recorded'}\n`;
-              md += `- **Result label:** Demo — Synthetic data\n\n`;
-            }
-            md += `### Aria Answer (${m.time})\n${m.resultsData ? m.resultsData.answer : (m.message || '')}\n\n`;
-            if (m.resultsData && m.resultsData.sql) {
-              md += `\`\`\`sql\n${m.resultsData.sql}\n\`\`\`\n\n`;
-            }
-          }
-        });
-        downloadFile(`${conv.title.replace(/[^a-zA-Z0-9]/g, '_')}.md`, md, 'text/markdown');
-        showToast('Exported conversation as Markdown');
-      });
+      exportBtn.addEventListener('click', () => exportConversationAsMarkdown(conv));
     }
 
     // 2. Print Conversation
@@ -5047,6 +5104,7 @@
     closeScopeInspector();
     showBusinessWorkspaceView('ask');
     userMenuDropdownEl.classList.remove('open');
+    sidebarEl.classList.remove('persona-menu-open');
     closeTypeahead();
   }
 
@@ -5308,7 +5366,7 @@
     bindHandle(evidenceHandle, 'evidence');
     window.addEventListener('resize', () => {
       if (window.innerWidth <= 820) return;
-      applyWidth('sidebar', sidebarEl.getBoundingClientRect().width, false);
+      if (!sidebarEl.classList.contains('collapsed')) applyWidth('sidebar', sidebarEl.getBoundingClientRect().width, false);
       applyWidth('evidence', scopeInspectorPanel.getBoundingClientRect().width, false);
     });
   }
@@ -5383,7 +5441,9 @@
       clearHistoryModalBackdrop.classList.add('open');
       requestAnimationFrame(() => cancelClearHistoryBtn.focus());
     };
-    clearAllHistoryBtnEl.addEventListener('click', () => openClearHistoryModal(clearAllHistoryBtnEl));
+    if (clearAllHistoryBtnEl) {
+      clearAllHistoryBtnEl.addEventListener('click', () => openClearHistoryModal(clearAllHistoryBtnEl));
+    }
     closeClearHistoryModalBtn.addEventListener('click', closeClearHistoryModal);
     cancelClearHistoryBtn.addEventListener('click', closeClearHistoryModal);
     confirmClearHistoryBtn.addEventListener('click', () => {
@@ -5444,6 +5504,7 @@
         mobileMenuBtnEl.setAttribute('aria-expanded', sidebarEl.classList.contains('open') ? 'true' : 'false');
       } else {
         sidebarEl.classList.toggle('collapsed');
+        mobileMenuBtnEl.setAttribute('aria-expanded', sidebarEl.classList.contains('collapsed') ? 'false' : 'true');
       }
     });
     if (sidebarMobileBackdropEl) {
@@ -5475,15 +5536,18 @@
     userMenuBtnEl.addEventListener('click', (e) => {
       e.stopPropagation();
       userMenuDropdownEl.classList.toggle('open');
+      sidebarEl.classList.toggle('persona-menu-open', userMenuDropdownEl.classList.contains('open'));
       userMenuBtnEl.setAttribute('aria-expanded', userMenuDropdownEl.classList.contains('open') ? 'true' : 'false');
     });
     document.addEventListener('click', () => {
       userMenuDropdownEl.classList.remove('open');
+      sidebarEl.classList.remove('persona-menu-open');
       userMenuBtnEl.setAttribute('aria-expanded', 'false');
     });
 
     switchUserMenuItemEl.addEventListener('click', () => {
       userMenuDropdownEl.classList.remove('open');
+      sidebarEl.classList.remove('persona-menu-open');
       showFirstAccessModal();
     });
 
