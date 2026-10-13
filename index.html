@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aria Workspace - Business Data Assistant Demo</title>
+  <title>Aria · Business data assistant</title>
   <meta name="description" content="Business data assistant prototype using synthetic sales, finance, procurement, construction, and project data.">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -113,65 +113,78 @@
       <button type="button" class="sidebar-mobile-backdrop" id="sidebarMobileBackdrop" aria-label="Close navigation menu" tabindex="-1"></button>
 
       <!-- Main Query / Chat Viewport -->
-      <main class="chat-viewport" id="chatViewport">
-        <!-- Scrollable Messages Container -->
+      <main class="chat-viewport is-idle" id="chatViewport">
+        <!-- Slim top bar: current conversation title; the conversation menu sits at its right edge. -->
+        <header class="chat-topbar">
+          <h1 class="chat-topbar-title" id="chatTopbarTitle">New chat</h1>
+          <span class="chat-topbar-badge" title="All people, records and figures in this prototype are synthetic">Synthetic demo data</span>
+        </header>
+
+        <!-- Scrollable thread -->
         <div class="chat-messages" id="chatMessages">
           <div class="chat-inner-container" id="chatContainer">
-            <!-- Populated by app.js: idle welcome or active conversation thread -->
+            <!-- Populated by app.js: greeting or the active conversation thread -->
           </div>
         </div>
 
-        <!-- Bottom Input Bar -->
-        <footer class="chat-input-bar" style="padding: 24px; border-top: 1px solid var(--border-color); background: var(--bg-surface);">
-          <div class="input-helpers-bar" id="scopeEditorBar" style="display: flex; gap: 16px; margin-bottom: 16px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">
-            <div class="scope-domain-control">
-              <span class="scope-helper-label" style="color: var(--text-muted);">Limit search to:</span>
-              <button type="button" class="scope-select-control domain-multiselect-trigger" id="domainScopeSelect" aria-haspopup="true" aria-expanded="false" aria-controls="domainScopeMenu">
-                <span id="domainScopeSelectLabel">Auto — infer from question</span>
-                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
-              </button>
-              <div class="domain-multiselect-menu" id="domainScopeMenu" hidden>
-                <div class="domain-multiselect-heading">Optional search boundaries</div>
-                <p>Selected domains limit where Aria searches. They do not grant or represent data access.</p>
-                <div class="domain-multiselect-options" role="group" aria-label="Business domains">
-                  <label><input type="checkbox" value="Sales"> <span>Sales</span></label>
-                  <label><input type="checkbox" value="Finance"> <span>Finance</span></label>
-                  <label><input type="checkbox" value="Projects"> <span>Projects</span></label>
-                  <label><input type="checkbox" value="Procurement"> <span>Procurement</span></label>
-                  <label><input type="checkbox" value="Construction"> <span>Construction</span></label>
-                  <label><input type="checkbox" value="Property Management"> <span>Property Management</span></label>
-                </div>
-                <div class="domain-multiselect-footer">
-                  <span id="domainScopeImpact">Auto searches domains inferred from the question.</span>
-                  <button type="button" id="resetDomainScopeBtn">Reset to Auto</button>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          <div class="input-box-wrapper" style="position: relative;">
-            <div class="typeahead-popup" id="typeaheadPopup" style="position: absolute; bottom: 100%; left: 0; background: var(--bg-surface); border: 1px solid var(--border-color); display: none;"></div>
+        <!-- Composer: centred under the greeting on a new chat, docked at the bottom of a thread. -->
+        <footer class="chat-input-bar">
+          <div class="input-box-wrapper">
+            <div class="typeahead-popup" id="typeaheadPopup"></div>
 
             <textarea
               class="chat-input-field"
               id="chatInput"
               rows="1"
               wrap="soft"
-              placeholder="Ask in plain English…"
+              placeholder="Ask anything about your business data…"
               aria-label="Natural-language business question input"
               autocomplete="off"
             ></textarea>
-            
-            <div class="composer-actions">
-              <button type="button" class="btn-mic" id="voiceInputBtn" title="Voice input" aria-label="Voice input" style="background: transparent; border: none; cursor: pointer; color: var(--text-secondary);">
-                <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-              </button>
-              <button type="button" class="btn-send" id="sendBtn" disabled style="background: transparent; border: none; cursor: pointer; color: var(--text-primary);">
-                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-              </button>
+
+            <div class="composer-toolbar">
+              <div class="input-helpers-bar" id="scopeEditorBar">
+                <div class="scope-domain-control">
+                  <span class="scope-helper-label sr-only">Search in</span>
+                  <button type="button" class="scope-select-control domain-multiselect-trigger" id="domainScopeSelect" aria-haspopup="true" aria-expanded="false" aria-controls="domainScopeMenu" title="Limit which business areas Aria searches">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                    <span id="domainScopeSelectLabel">All business areas</span>
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+                  </button>
+                  <div class="domain-multiselect-menu" id="domainScopeMenu" hidden>
+                    <div class="domain-multiselect-heading">Optional search boundaries</div>
+                    <p>Selected domains limit where Aria searches. They do not grant or represent data access.</p>
+                    <div class="domain-multiselect-options" role="group" aria-label="Business domains">
+                      <label><input type="checkbox" value="Sales"> <span>Sales</span></label>
+                      <label><input type="checkbox" value="Finance"> <span>Finance</span></label>
+                      <label><input type="checkbox" value="Projects"> <span>Projects</span></label>
+                      <label><input type="checkbox" value="Procurement"> <span>Procurement</span></label>
+                      <label><input type="checkbox" value="Construction"> <span>Construction</span></label>
+                      <label><input type="checkbox" value="Property Management"> <span>Property Management</span></label>
+                    </div>
+                    <div class="domain-multiselect-footer">
+                      <span id="domainScopeImpact">Auto searches domains inferred from the question.</span>
+                      <button type="button" id="resetDomainScopeBtn">Search all areas</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="composer-actions">
+                <button type="button" class="btn-mic" id="voiceInputBtn" title="Voice input" aria-label="Voice input">
+                  <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                </button>
+                <button type="button" class="btn-send" id="sendBtn" aria-label="Send question" title="Send (Enter)" disabled>
+                  <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 19V5"></path><path d="m5 12 7-7 7 7"></path></svg>
+                </button>
+              </div>
             </div>
           </div>
+
+          <!-- Starter questions for a new chat (rendered by app.js). -->
+          <div class="composer-suggestions" id="composerSuggestions"></div>
+
+          <p class="composer-disclaimer">Aria answers from synthetic demo data and can misread a question. Check the interpretation before relying on a figure.</p>
         </footer>
       </main>
 
@@ -195,20 +208,20 @@
       <!-- Contextual Side Panel: Evidence Desk -->
       <aside class="evidence-desk-drawer" id="scopeInspectorPanel" role="dialog" aria-modal="true" aria-label="Evidence Desk" aria-hidden="true" tabindex="-1" inert>
         <div class="panel-resize-handle evidence-resize-handle" id="evidenceResizeHandle" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize Evidence Desk"></div>
-        <div class="drawer-header" style="display: flex; justify-content: space-between; align-items: center; padding: 24px; border-bottom: 1px solid var(--border-color); font-family: var(--font-serif); font-size: 24px;">
+        <div class="drawer-header">
           <span>Evidence Desk</span>
-          <button type="button" class="header-icon-btn inspector-close-btn" id="closeScopeInspectorBtn" aria-label="Close Evidence Desk" style="border: none; font-size: 18px;">✕</button>
+          <button type="button" class="header-icon-btn inspector-close-btn" id="closeScopeInspectorBtn" aria-label="Close Evidence Desk">✕</button>
         </div>
         
-        <div class="drawer-tabs" style="display: flex; border-bottom: 1px solid var(--border-color);">
-          <button class="drawer-tab active" style="flex: 1; padding: 12px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; background: transparent; border: none; cursor: pointer;">Understanding</button>
-          <button class="drawer-tab" style="flex: 1; padding: 12px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; background: transparent; border: none; cursor: pointer;">Evidence</button>
-          <button class="drawer-tab" style="flex: 1; padding: 12px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; background: transparent; border: none; cursor: pointer;">Technical</button>
+        <div class="drawer-tabs" role="tablist" aria-label="Evidence Desk sections">
+          <button type="button" class="drawer-tab active" role="tab" aria-selected="true">Understanding</button>
+          <button type="button" class="drawer-tab" role="tab" aria-selected="false">Evidence</button>
+          <button type="button" class="drawer-tab" role="tab" aria-selected="false">Technical</button>
         </div>
 
-        <div class="inspector-body" id="scopeInspectorBody" style="padding: 24px; overflow-y: auto;">
+        <div class="inspector-body" id="scopeInspectorBody">
           <!-- Dynamically populated when opened from a result -->
-          <p style="color: var(--text-muted); font-size: 14px;">Select an answer to view supporting evidence, data coverage, validation details, and technical logs.</p>
+          <p class="inspector-empty-copy">Select an answer to view supporting evidence, data coverage, validation details, and technical logs.</p>
         </div>
       </aside>
     </div>
@@ -220,29 +233,29 @@
   <div class="modal-backdrop" id="userProfileModalBackdrop">
     <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
       <div class="modal-header">
-        <div class="modal-title" id="profileModalTitle">Welcome to Aria — Select Your Demo Persona</div>
+        <div class="modal-title" id="profileModalTitle">Choose a demo persona</div>
       </div>
       <div class="modal-body">
-        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
+        <p class="modal-intro">
           This prototype uses synthetic data. Persona-based access and masking are simulated UI behaviours,
           not evidence of production security enforcement. Choose a demo persona to begin.
         </p>
 
         <div>
-          <label for="profileNameInput" style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Display Name</label>
-          <input type="text" id="profileNameInput" class="table-search-input" style="width: 100%; padding: 8px 10px; font-size: 13px;" placeholder="e.g. Sarah Lin">
+          <label for="profileNameInput" class="form-field-label">Display name</label>
+          <input type="text" id="profileNameInput" class="table-search-input" style="width: 100%;" placeholder="e.g. Sarah Lin">
         </div>
 
         <div>
-          <div style="font-size: 12px; font-weight: 600; margin-bottom: 8px;">Select Role</div>
+          <div class="form-field-label">Role</div>
           <div class="role-cards-grid" id="roleCardsGrid">
             <!-- Populated dynamically from USER_ROLES in mock-data.js -->
           </div>
         </div>
 
         <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
-          <button type="button" class="btn-new-chat" id="saveProfileBtn" style="width: auto; padding: 8px 20px; background: var(--accent-primary); color: #fff; border: none;">
-            Start Querying
+          <button type="button" class="btn-new-chat" id="saveProfileBtn" style="width: auto; padding: 8px 20px;">
+            Continue
           </button>
         </div>
       </div>
@@ -356,7 +369,7 @@
   <div class="modal-backdrop" id="feedbackModalBackdrop">
     <div class="app-modal" style="max-width: 440px;" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
       <div class="modal-header">
-        <div class="modal-title" id="feedbackTitle">Feedback on Response</div>
+        <div class="modal-title" id="feedbackTitle">Report an issue</div>
         <button type="button" class="header-icon-btn" id="closeFeedbackModalBtn">✕</button>
       </div>
       <div class="modal-body">
@@ -373,7 +386,7 @@
         </div>
         <div style="display: flex; justify-content: flex-end; gap: 8px;">
           <button type="button" class="action-tool-btn" id="cancelFeedbackBtn">Cancel</button>
-          <button type="button" class="action-tool-btn" id="submitFeedbackBtn" style="background: var(--accent-primary); color: #fff;">Save feedback</button>
+          <button type="button" class="action-tool-btn primary" id="submitFeedbackBtn">Save feedback</button>
         </div>
       </div>
     </div>
@@ -510,7 +523,7 @@
   <div class="modal-backdrop" id="renameConvModalBackdrop">
     <div class="app-modal" style="max-width: 400px;" role="dialog" aria-modal="true" aria-labelledby="renameConvTitle">
       <div class="modal-header">
-        <div class="modal-title" id="renameConvTitle">Rename Conversation</div>
+        <div class="modal-title" id="renameConvTitle">Rename conversation</div>
         <button type="button" class="header-icon-btn" id="closeRenameConvModalBtn">✕</button>
       </div>
       <div class="modal-body">
@@ -520,7 +533,7 @@
         </div>
         <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
           <button type="button" class="action-tool-btn" id="cancelRenameConvBtn">Cancel</button>
-          <button type="button" class="action-tool-btn" id="submitRenameConvBtn" style="background: var(--accent-primary); color: #fff;">Save Name</button>
+          <button type="button" class="action-tool-btn primary" id="submitRenameConvBtn">Save name</button>
         </div>
       </div>
     </div>
@@ -532,7 +545,7 @@
   <div class="modal-backdrop" id="deleteConvModalBackdrop">
     <div class="app-modal" style="max-width: 400px;" role="dialog" aria-modal="true" aria-labelledby="deleteConvTitle">
       <div class="modal-header">
-        <div class="modal-title" id="deleteConvTitle" style="color: var(--danger-color);">Delete Conversation</div>
+        <div class="modal-title" id="deleteConvTitle">Delete conversation?</div>
         <button type="button" class="header-icon-btn" id="closeDeleteConvModalBtn">✕</button>
       </div>
       <div class="modal-body">
@@ -541,7 +554,7 @@
         </p>
         <div style="display: flex; justify-content: flex-end; gap: 8px;">
           <button type="button" class="action-tool-btn" id="cancelDeleteConvBtn">Cancel</button>
-          <button type="button" class="action-tool-btn" id="submitDeleteConvBtn" style="background: var(--danger-color); color: #fff;">Delete</button>
+          <button type="button" class="action-tool-btn danger" id="submitDeleteConvBtn">Delete</button>
         </div>
       </div>
     </div>
@@ -553,7 +566,7 @@
   <div class="modal-backdrop" id="editInterpretationModalBackdrop">
     <div class="app-modal" style="max-width: 540px;" role="dialog" aria-modal="true" aria-labelledby="editInterpretationTitle">
       <div class="modal-header">
-        <div class="modal-title" id="editInterpretationTitle">Edit Question Interpretation</div>
+        <div class="modal-title" id="editInterpretationTitle">Edit interpretation</div>
         <button type="button" class="header-icon-btn" id="closeEditInterpretationModalBtn" aria-label="Close modal">✕</button>
       </div>
       <div class="modal-body">

@@ -1243,7 +1243,7 @@ GROUP BY p.asset_sub_type;`,
       'Show total active contract value by project in calendar year 2026': {
         type: 'results', resultPattern: 'ranking', domain: 'Contracts',
         summary: 'Synthetic CK1 fixture · active 2026 sales contracts grouped through units to projects',
-        answer: 'The CK1 fixture contains **$35.20M** in active sales contracts signed in 2026. **Skyline Residences** contributes **$23.70M**, followed by **Grand Marina Bay Phase 2 ($8.40M)** and **Parkview Heights ($3.10M)**.',
+        answer: 'Active sales contracts signed in 2026 total **$35.20M**. **Skyline Residences** contributes **$23.70M**, followed by **Grand Marina Bay Phase 2 ($8.40M)** and **Parkview Heights ($3.10M)**.',
         dataAsOf: '2026-10-07 00:00 ICT', confidenceNote: 'Synthetic CK1 fixture; not a measured production result.',
         table: { title: 'Active Contract Value by Project — CK1 Fixture', headers: ['Project', 'Active contracts', 'Contract value ($M)'], columns: ['project','count','value'], types: ['string','number','number'], rows: [
           { project: 'Skyline Residences', count: 2, value: 23.70 }, { project: 'Grand Marina Bay Phase 2', count: 1, value: 8.40 }, { project: 'Parkview Heights', count: 1, value: 3.10 }
@@ -1273,7 +1273,7 @@ GROUP BY p.asset_sub_type;`,
       'Show monthly buyer payments collected from July to September 2026': {
         type: 'results', resultPattern: 'trend', domain: 'Finance',
         summary: 'Synthetic CK1 fixture · settled payment transactions grouped by calendar month',
-        answer: 'Collected buyer payments were **$2.00M in July 2026**, **$2.24M in August 2026**, and **$0 in September 2026** in the fixture.',
+        answer: 'Collected buyer payments were **$2.00M in July 2026**, **$2.24M in August 2026**, and **$0 in September 2026**.',
         dataAsOf: '2026-10-07 00:00 ICT', confidenceNote: 'Synthetic CK1 fixture; months without a recorded transaction are shown as zero.',
         table: { title: 'Monthly Buyer Payments Collected', headers: ['Calendar month', 'Collected amount ($M)'], columns: ['month','amount'], types: ['string','number'], rows: [
           { month: 'July 2026', amount: 2.00 }, { month: 'August 2026', amount: 2.24 }, { month: 'September 2026', amount: 0 }
@@ -1305,7 +1305,7 @@ GROUP BY p.asset_sub_type;`,
       'Which projects have the highest outstanding buyer installments in 2026?': {
         type: 'results', resultPattern: 'ranking', domain: 'Finance',
         summary: 'Synthetic CK1 fixture · installment amount due minus amount paid',
-        answer: '**Skyline Residences** has the highest outstanding buyer installments at **$6.595M**. **Grand Marina Bay Phase 2** has **$2.240M** scheduled and currently unpaid in the fixture.',
+        answer: '**Skyline Residences** has the highest outstanding buyer installments at **$6.595M**. **Grand Marina Bay Phase 2** has **$2.240M** scheduled and currently unpaid.',
         dataAsOf: '2026-10-07 00:00 ICT', confidenceNote: 'Synthetic CK1 fixture; outstanding balance equals amount_due minus amount_paid.',
         table: { title: 'Outstanding Buyer Installments by Project', headers: ['Project', 'Outstanding ($M)', 'Installments'], columns: ['project','outstanding','installments'], types: ['string','number','number'], rows: [
           { project: 'Skyline Residences', outstanding: 6.595, installments: 3 }, { project: 'Grand Marina Bay Phase 2', outstanding: 2.240, installments: 2 }
@@ -1330,7 +1330,7 @@ GROUP BY p.asset_sub_type;`,
       'Compare latest construction progress across active project phases': {
         type: 'results', resultPattern: 'ranking', domain: 'Construction',
         summary: 'Synthetic CK1 fixture · latest progress report per active project phase',
-        answer: '**Grand Marina Bay Phase 2** leads at **84.2%**, followed by **Skyline Residences at 71.8%**. **Parkview Heights is at 68.4%** and its fixture note records a 14.2% baseline delay.',
+        answer: '**Grand Marina Bay Phase 2** leads at **84.2%**, followed by **Skyline Residences at 71.8%**. **Parkview Heights is at 68.4%** and is recorded as 14.2% behind its baseline schedule.',
         dataAsOf: '2026-09-30 23:59 ICT', confidenceNote: 'Synthetic CK1 fixture based on the latest report_date per phase.',
         table: { title: 'Latest Construction Progress by Phase', headers: ['Project', 'Phase', 'Progress (%)', 'Milestone', 'Note'], columns: ['project','phase','progress','milestone','note'], types: ['string','string','number','string','string'], rows: [
           { project: 'Grand Marina Bay Phase 2', phase: 'Commercial Fit-out', progress: 84.2, milestone: 'Tenant fit-out', note: '2.0% ahead of baseline' },
@@ -1369,7 +1369,7 @@ GROUP BY p.asset_sub_type;`,
       'Summarise allow, mask, and deny decisions in recent query audit logs': {
         type: 'results', resultPattern: 'kpi', domain: 'Security & Governance',
         summary: 'Synthetic CK1 fixture · recent platform audit policy decisions',
-        answer: 'The CK1 audit fixture contains **2 recent query events**: **1 ALLOW** decision and **1 MASK** decision. No DENY event is present in the current sample.',
+        answer: 'The audit log shows **2 recent query events**: **1 ALLOW** decision and **1 MASK** decision. No DENY event is present in the current sample.',
         dataAsOf: '2026-09-30 23:59 ICT', confidenceNote: 'Synthetic governance fixture; counts describe only the included sample rows.',
         table: { title: 'Recent Policy Decisions', headers: ['Decision', 'Events'], columns: ['decision','events'], types: ['badge','number'], rows: [{ decision: 'ALLOW', events: 1 }, { decision: 'MASK', events: 1 }, { decision: 'DENY', events: 0 }] },
         sources: [{ name: 'platform.audit_logs' }, { name: 'platform.data_access_policies' }],
@@ -1379,7 +1379,7 @@ GROUP BY p.asset_sub_type;`,
       'List active property service vendors with their category and rating': {
         type: 'results', resultPattern: 'record_list', domain: 'Property Management',
         summary: 'Synthetic CK1 fixture · active vendors used by property service contracts',
-        answer: 'The CK1 fixture contains **3 active property service vendors**. SecureCore Systems has the highest rating at **4.7**, followed by Delta Crane and Heavy Lift at **4.6** and Elevate Facilities Services at **4.4**.',
+        answer: 'There are **3 active property service vendors**. SecureCore Systems has the highest rating at **4.7**, followed by Delta Crane and Heavy Lift at **4.6** and Elevate Facilities Services at **4.4**.',
         dataAsOf: '2026-10-07 00:00 ICT', confidenceNote: 'Synthetic CK1 fixture; ratings are illustrative and not measured supplier performance.',
         table: { title: 'Active Property Service Vendors', headers: ['Vendor', 'Category', 'Rating', 'Active'], columns: ['vendor','category','rating','active'], types: ['string','string','number','badge'], rows: [
           { vendor: 'SecureCore Systems', category: 'Building Security', rating: 4.7, active: 'Yes' },
@@ -1407,7 +1407,7 @@ GROUP BY p.asset_sub_type;`,
       'Show masked fields configured for the Sales Manager role': {
         type: 'results', resultPattern: 'record_list', domain: 'Security & Governance',
         summary: 'Synthetic CK1 fixture · active masking policy configuration',
-        answer: 'The CK1 fixture contains **one active masking rule** for the Sales Manager role: customer `national_id_masked` values use the **show_last_4** rule.',
+        answer: 'There is **one active masking rule** for the Sales Manager role: customer `national_id_masked` values use the **show_last_4** rule.',
         dataAsOf: '2026-10-07 00:00 ICT', confidenceNote: 'Synthetic governance fixture; this describes configured policy metadata, not a production authorization decision.',
         table: { title: 'Sales Manager Masking Rules', headers: ['Domain', 'Table', 'Column', 'Access', 'Masking rule'], columns: ['domain','table','column','access','rule'], types: ['string','string','string','badge','string'], rows: [
           { domain: 'Customer Identity', table: 'customers', column: 'national_id_masked', access: 'MASK', rule: 'show_last_4' }
@@ -1419,7 +1419,7 @@ GROUP BY p.asset_sub_type;`,
       'Show recent natural-language query audit events': {
         type: 'results', resultPattern: 'record_list', domain: 'Security & Governance',
         summary: 'Synthetic CK1 fixture · recent NL_QUERY audit events',
-        answer: 'The fixture contains **2 recent natural-language query events**: one `ALLOW` decision on sales contracts and one `MASK` decision on customer data.',
+        answer: 'The audit log shows **2 recent natural-language query events**: one `ALLOW` decision on sales contracts and one `MASK` decision on customer data.',
         dataAsOf: '2026-09-30 23:59 ICT', confidenceNote: 'Synthetic governance fixture; event contents are illustrative.',
         table: { title: 'Recent Natural-language Query Audit Events', headers: ['Occurred at', 'Question', 'Source', 'Decision'], columns: ['occurredAt','question','source','decision'], types: ['string','string','string','badge'], rows: [
           { occurredAt: '2026-09-30 12:15:37 UTC', question: 'Show total active contract value by project this year', source: 'sales_contracts', decision: 'ALLOW' },
@@ -1846,12 +1846,19 @@ GROUP BY p.asset_sub_type;`,
     return enrichLegacyAuditTrail([...INITIAL_AUDIT_TRAIL]);
   }
 
+  // Same "YYYY-MM-DD HH:mm:ss" shape as the seeded events, so recorded and
+  // seeded rows read and sort consistently in the admin activity table.
+  function formatEventTimestamp(date = new Date()) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  }
+
   function logAuditEvent(user, role, question, outcome, latencyMs, details, context) {
     try {
       const trail = getAuditTrail();
       const newEvent = {
         id: 'aud_' + Math.random().toString(36).substring(2, 8),
-        timestamp: new Date().toLocaleString(),
+        timestamp: formatEventTimestamp(),
         user: user || 'Anonymous',
         role: role || 'Unknown',
         question: question || '',
@@ -2110,7 +2117,7 @@ GROUP BY p.asset_sub_type;`,
       const store = getObservabilityStore();
       const newTrace = {
         requestId: 'req_' + Math.random().toString(36).substring(2, 8),
-        timestamp: new Date().toLocaleString(),
+        timestamp: formatEventTimestamp(),
         user: (currentUser && currentUser.name) ? currentUser.name : 'Unknown',
         role: (currentUser && currentUser.roleTitle) ? currentUser.roleTitle : 'Default',
         query: queryText,

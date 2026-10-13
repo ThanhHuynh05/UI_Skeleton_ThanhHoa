@@ -221,6 +221,9 @@
   const resetDomainScopeBtnEl = document.getElementById('resetDomainScopeBtn');
   const timeRangeSelectEl = document.getElementById('timeRangeSelect');
   const scopeEditorBarEl = document.getElementById('scopeEditorBar');
+  const chatViewportEl = document.getElementById('chatViewport');
+  const chatTopbarTitleEl = document.getElementById('chatTopbarTitle');
+  const composerSuggestionsEl = document.getElementById('composerSuggestions');
   const customDateRangeBarEl = document.getElementById('customDateRangeBar');
   const customStartDateEl = document.getElementById('customStartDate');
   const customEndDateEl = document.getElementById('customEndDate');
@@ -284,14 +287,15 @@
       const isSelected = key === selectedRoleKey;
       return `
         <button type="button" class="role-select-card ${isSelected ? 'selected' : ''}" data-role-key="${key}" aria-pressed="${isSelected ? 'true' : 'false'}">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div class="role-card-title">${escapeHtml(r.title)}</div>
-            <span class="brand-badge" style="font-size: 12px;">${escapeHtml(r.category)}</span>
-          </div>
-          <div class="role-card-desc">${escapeHtml(r.description)}</div>
-          <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
-            Allowed: ${r.allowedDomains.join(', ')}
-          </div>
+          <span class="role-card-head">
+            <span>
+              <span class="role-card-title">${escapeHtml(r.title)}</span>
+              <span class="role-card-category">${escapeHtml(r.category)}</span>
+            </span>
+            <span class="role-card-check" aria-hidden="true"><svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg></span>
+          </span>
+          <span class="role-card-desc">${escapeHtml(r.description)}</span>
+          <span class="role-card-scope">Can query: ${escapeHtml(r.allowedDomains.join(', '))}</span>
         </button>
       `;
     }).join('');
@@ -492,7 +496,7 @@
       <button type="button" class="history-search-result" data-conversation-id="${escapeHtml(conversation.id)}">
         <span class="history-search-result-title">${escapeHtml(conversation.title || 'Untitled conversation')}</span>
         <span class="history-search-result-snippet">${escapeHtml(conversationSearchSnippet(conversation, query))}</span>
-        <span class="history-search-result-meta">${new Date(conversation.updatedAt || conversation.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+        <span class="history-search-result-meta">${formatDisplayDateTime(conversation.updatedAt || conversation.createdAt)}</span>
       </button>
     `).join('');
 
@@ -557,7 +561,7 @@
   sidebarConversationsListEl?.addEventListener('scroll', () => closeConversationActionMenus(), { passive: true });
 
   function exportConversationAsMarkdown(conv) {
-    let md = `# ${conv.title}\n\n> **Demo • Synthetic data** — This export comes from a prototype. Persona access and masking are simulated and do not demonstrate production security enforcement.\n\n*Exported from Aria on ${new Date().toLocaleString()}*\n\n---\n\n`;
+    let md = `# ${conv.title}\n\n> **Demo • Synthetic data** — This export comes from a prototype. Persona access and masking are simulated and do not demonstrate production security enforcement.\n\n*Exported from Aria on ${formatDisplayDateTime(Date.now())}*\n\n---\n\n`;
     conv.messages.forEach((m) => {
       if (m.role === 'user') {
         md += `### User Query (${m.time})\n> ${m.text}\n\n`;
@@ -608,7 +612,22 @@
   // =========================================================================
   // 3. SIDEBAR CONVERSATION RENDERING
   // =========================================================================
+  // A new chat centres the greeting and composer; a thread docks the composer
+  // at the bottom. Starter questions only exist in the new-chat layout.
+  function setIdleLayout(isIdle) {
+    if (chatViewportEl) chatViewportEl.classList.toggle('is-idle', isIdle);
+    if (!isIdle && composerSuggestionsEl) composerSuggestionsEl.innerHTML = '';
+  }
+
+  function updateChatTopbarTitle() {
+    if (!chatTopbarTitleEl) return;
+    const conv = getActiveConversation();
+    const hasMessages = conv && conv.messages && conv.messages.length > 0;
+    chatTopbarTitleEl.textContent = hasMessages ? conv.title : 'New chat';
+  }
+
   function renderSidebarConversations() {
+    updateChatTopbarTitle();
     if (!sidebarConversationsListEl) return;
 
     const convs = [...state.conversations].sort((a, b) => {
@@ -796,6 +815,8 @@
       renderIdleState();
       return;
     }
+    setIdleLayout(false);
+    updateChatTopbarTitle();
 
     let html = `
       <div class="active-conversation-header">
@@ -841,14 +862,14 @@
     
     // Understanding tab uses the same complete Applied Scope component as the result card.
     let understandingHtml = '<div id="evidence-tab-understanding" class="evidence-tab-content">';
-    understandingHtml += '<h3 style="font-family: var(--font-serif); font-size: 20px; margin-bottom: 16px;">Applied Scope</h3>';
+    understandingHtml += '<h3 style="font-family: var(--font-sans); font-size: 20px; margin-bottom: 16px;">Applied Scope</h3>';
     understandingHtml += '<div style="margin-bottom: 24px; color: var(--text-secondary); font-size: 14px; line-height: 1.6;">';
     understandingHtml += generateAppliedScopeHtml(scope);
     understandingHtml += '</div></div>';
 
     // Evidence tab
     let evidenceHtml = '<div id="evidence-tab-evidence" class="evidence-tab-content" style="display: none;">';
-    evidenceHtml += '<h3 style="font-family: var(--font-serif); font-size: 20px; margin-bottom: 16px;">Sources &amp; Definitions</h3>';
+    evidenceHtml += '<h3 style="font-family: var(--font-sans); font-size: 20px; margin-bottom: 16px;">Sources &amp; Definitions</h3>';
     evidenceHtml += '<div style="margin-bottom: 24px; color: var(--text-secondary); font-size: 14px; line-height: 1.6;">';
     const sources = res.sources || [];
     const sourceHtml = sources.length > 0
@@ -874,7 +895,7 @@
 
     // Technical tab
     let technicalHtml = '<div id="evidence-tab-technical" class="evidence-tab-content" style="display: none;">';
-    technicalHtml += '<h3 style="font-family: var(--font-serif); font-size: 20px; margin-bottom: 16px;">Technical Trace</h3>';
+    technicalHtml += '<h3 style="font-family: var(--font-sans); font-size: 20px; margin-bottom: 16px;">Technical Trace</h3>';
     technicalHtml += '<div style="margin-bottom: 24px; color: var(--text-secondary); font-size: 14px; line-height: 1.6;">';
     const generatedSql = res.sql || res.queryGenerated || '';
     technicalHtml += '<p><strong>Execution details:</strong> ' + escapeHtml(res.summary || 'Completed successfully') + '</p>';
@@ -926,8 +947,7 @@
     const tabs = evidenceDesk.querySelectorAll('.drawer-tab');
     tabs.forEach((t, i) => {
       t.classList.toggle('active', i === 0);
-      t.style.borderBottom = i === 0 ? '2px solid var(--accent-primary)' : 'none';
-      t.style.color = i === 0 ? 'var(--accent-primary)' : 'inherit';
+      t.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
       
       // Remove old event listeners by replacing the node
       const newTab = t.cloneNode(true);
@@ -937,15 +957,13 @@
         // Deactivate all
         evidenceDesk.querySelectorAll('.drawer-tab').forEach(nt => {
           nt.classList.remove('active');
-          nt.style.borderBottom = 'none';
-          nt.style.color = 'inherit';
+          nt.setAttribute('aria-selected', 'false');
         });
         evidenceDesk.querySelectorAll('.evidence-tab-content').forEach(c => c.style.display = 'none');
         
         // Activate this
         newTab.classList.add('active');
-        newTab.style.borderBottom = '2px solid var(--accent-primary)';
-        newTab.style.color = 'var(--accent-primary)';
+        newTab.setAttribute('aria-selected', 'true');
         
         const contentId = ['evidence-tab-understanding', 'evidence-tab-evidence', 'evidence-tab-technical'][i];
         document.getElementById(contentId).style.display = 'block';
@@ -980,10 +998,12 @@
     const visibleQuestion = msg.isScopeRerun
       ? String(msg.text || '').replace(/\s*\(Applied scope:[\s\S]*\)\??\s*$/i, '').trim()
       : msg.text;
+    // A plain question needs no label; only revisions and re-runs are called out.
+    const showTurnLabel = isRevision || msg.isScopeRerun;
     return `
       <div class="chat-row user-row" id="msg_row_${msg.id}">
         <article class="user-bubble-container ${isSuperseded ? 'user-turn-superseded' : ''}" aria-label="${escapeHtml(turnLabel)}">
-          <div class="conversation-turn-label question-turn-label">${escapeHtml(turnLabel)}</div>
+          ${showTurnLabel ? `<div class="conversation-turn-label question-turn-label">${escapeHtml(turnLabel)}</div>` : ''}
           ${isSuperseded ? '<div class="question-version-note">Superseded by a revised question below</div>' : ''}
           ${isRevision ? '<div class="question-version-note">Linked to the original question above</div>' : ''}
           <div class="user-bubble">${escapeHtml(visibleQuestion)}</div>
@@ -994,7 +1014,7 @@
             </details>
           ` : ''}
           <div class="user-bubble-meta">
-            <span class="user-turn-version">${isRevision ? 'Revised prompt' : (msg.isScopeRerun ? 'Edited scope version' : 'Original prompt')}</span>
+            ${showTurnLabel ? `<span class="user-turn-version">${isRevision ? 'Revised prompt' : 'Edited scope version'}</span>` : ''}
             <span>${msg.time || ''}</span>
           </div>
         </article>
@@ -1312,17 +1332,33 @@
     return `<section class="result-evidence">${heading}${content}</section>`;
   }
 
-  function renderRunMetadata(msg, scope) {
-    const domain = scope && scope.domain ? (scope.domain.label || scope.domain.value || scope.domain) : 'Auto';
-    const period = scope && scope.time ? scope.time.label : (scope && scope.periodLabel ? scope.periodLabel : 'No added time filter');
-    const project = scope && scope.projectScope ? (scope.projectScope.label || scope.projectScope.value || scope.projectScope) : 'All applicable projects';
-    const runAt = new Date(msg.timestamp || Date.now()).toLocaleString();
+  // One unambiguous display format (13 Oct 2026, 14:24) instead of the
+  // browser locale, which mixed US and day-first dates on the same screen.
+  const DISPLAY_DATE_TIME = new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
+  });
+
+  const DISPLAY_TIME = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+  function formatDisplayTime(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : DISPLAY_TIME.format(date);
+  }
+
+  function formatDisplayDateTime(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : DISPLAY_DATE_TIME.format(date);
+  }
+
+  // Scope is shown with the answer and in the Evidence Desk, so run metadata
+  // only records which run this is and when it executed.
+  function renderRunMetadata(msg) {
+    const runAt = formatDisplayDateTime(msg.timestamp || Date.now());
     const runNumber = Number(msg.runNumber) || 1;
     return `
       <div class="answer-run-metadata" aria-label="Answer run metadata">
-        <span><strong>Run:</strong> ${runNumber}</span>
-        <span><strong>Last run:</strong> ${escapeHtml(runAt)}</span>
-        <span><strong>Scope:</strong> ${escapeHtml(`${domain} · ${period} · ${project}`)}</span>
+        <span>Run ${runNumber}</span>
+        <span>${escapeHtml(runAt)}</span>
       </div>
     `;
   }
@@ -1342,7 +1378,7 @@
           <div class="result-state-label">${escapeHtml(config.label)}</div>
           <h3>${escapeHtml(config.title)}</h3>
           <p>${escapeHtml(config.body)}</p>
-          ${renderRunMetadata(msg, scope)}
+          ${renderRunMetadata(msg)}
           ${res.answer ? `<div class="result-state-detail">${formatMarkdownBold(res.answer.replace(/^Combination Not Supported in Mock Ledger:\s*/i, ''))}</div>` : ''}
           ${renderCompactScope(scope, msg)}
           ${renderBusinessProvenance(res)}
@@ -1405,16 +1441,37 @@
     };
   }
 
+  // Short caption under the key figure: what was measured, for when and where.
+  function describeAnswerScope(scope) {
+    if (!scope) return '';
+    const metric = scope.metric && scope.metric.label;
+    const period = scope.time ? scope.time.label : scope.periodLabel;
+    const project = scope.projectScope && scope.projectScope.label;
+    return [metric, period, project].filter(Boolean).join(' · ');
+  }
+
   function renderBusinessProvenance(res) {
     const sources = Array.isArray(res.sources) ? res.sources : [];
     const sourceLabels = sources.map(source => getBusinessSourceDefinition(source.name).label);
     return `
       <section class="result-provenance" aria-label="Data freshness and business sources">
-        <div><span>Data freshness</span><strong>${escapeHtml(res.dataAsOf || 'Not provided')}</strong></div>
-        <div><span>Business sources</span><strong>${escapeHtml(sourceLabels.length ? sourceLabels.join(', ') : 'Enterprise business records')}</strong></div>
+        <div><span>Data as of</span><strong>${escapeHtml(res.dataAsOf || 'Not provided')}</strong></div>
+        <div><span>Sources</span><strong>${escapeHtml(sourceLabels.length ? sourceLabels.join(', ') : 'Enterprise business records')}</strong></div>
       </section>
     `;
   }
+
+  // Stroke icons for the answer toolbar (one visual language with the rest of the UI).
+  const ANSWER_ICONS = {
+    copy: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg>',
+    up: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11"></path><path d="M15 5.9 14 10h5.8a2 2 0 0 1 2 2.3l-1.4 7A2 2 0 0 1 18.5 21H7V10l4-8a2.6 2.6 0 0 1 4 3.9Z"></path></svg>',
+    down: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 14V3"></path><path d="M9 18.1 10 14H4.2a2 2 0 0 1-2-2.3l1.4-7A2 2 0 0 1 5.5 3H17v11l-4 8a2.6 2.6 0 0 1-4-3.9Z"></path></svg>',
+    bookmark: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>',
+    refresh: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"></path><path d="M21 3v5h-5"></path></svg>',
+    more: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg>',
+    sources: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>',
+    arrow: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>'
+  };
 
   function renderAgentMessageHtml(msg, msgIdx) {
     if (msg.type === 'blocked') {
@@ -1454,56 +1511,63 @@
     const canDownload = hasTable;
     const followUps = Array.isArray(res.followUps) ? res.followUps : [];
 
+    const conversation = getActiveConversation();
+    const lastMessage = conversation && conversation.messages[conversation.messages.length - 1];
+    const isLatestAnswer = Boolean(lastMessage && lastMessage.id === msg.id);
+    const feedbackType = msg.feedback ? msg.feedback.type : null;
+    const contextNote = msg.runAgainOfMessageId
+      ? 'Run again with the same scope'
+      : (msg.sourceMessageId ? 'Re-run with the edited interpretation' : '');
+
+    // Chat-style answer: prose first, then one result block for the figure,
+    // visual and provenance, then a compact icon toolbar.
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
-        <div class="agent-response-card ${msg.isSuperseded ? 'answer-superseded' : ''}" data-msg-id="${msg.id}">
+        <article class="agent-response-card answer-message ${msg.isSuperseded ? 'answer-superseded' : ''}" data-msg-id="${msg.id}" aria-label="Aria answer">
           ${msg.isSuperseded ? '<div class="superseded-callout">Superseded by a revised question. This answer is retained for comparison.</div>' : ''}
-          <div class="conversation-turn-label answer-turn-label">
-            <span class="answer-turn-mark" aria-hidden="true">A</span>
-            <span>${msg.runAgainOfMessageId ? 'Aria answer · Run again' : (msg.sourceMessageId ? 'Aria answer · Reinterpreted scope' : 'Aria answer')}</span>
-          </div>
-          ${renderRunMetadata(msg, scope)}
+          ${contextNote ? `<div class="answer-context-note">${escapeHtml(contextNote)}</div>` : ''}
           <div class="message-content">
-            <div class="brief-container">
-              <div class="brief-headline">
-                ${formatMarkdownBold(headline)}
-              </div>
+            <div class="brief-headline answer-prose">${formatMarkdownBold(headline)}</div>
+            <section class="result-block" aria-label="Result and evidence">
               ${primaryNumber ? `
-                <div class="brief-number">
-                  ${escapeHtml(primaryNumber)}
+                <div class="brief-kpi">
+                  <div class="brief-number">${escapeHtml(primaryNumber)}</div>
+                  <div class="brief-kpi-label">${escapeHtml(describeAnswerScope(scope))}</div>
                 </div>
               ` : ''}
-              <div class="brief-evidence">
-                ${evidenceHtml}
-              </div>
+              ${evidenceHtml ? `<div class="brief-evidence">${evidenceHtml}</div>` : ''}
               ${renderBusinessProvenance(res)}
-            </div>
+            </section>
           </div>
-          
+
           <div class="agent-footer answer-footer">
-            <div class="answer-primary-actions">
-              <button type="button" class="action-tool-btn btn-open-evidence" data-msg-id="${msg.id}">Evidence Desk</button>
-            </div>
-            <details class="answer-actions-menu">
-              <summary class="action-tool-btn">More actions</summary>
-              <div class="answer-actions-popover">
-                <button type="button" class="action-tool-btn btn-copy-answer" data-answer="${escapeHtml(headline)}">Copy answer</button>
-                ${hasTable ? `<button type="button" class="action-tool-btn btn-copy-table" data-msg-id="${msg.id}">Copy records</button>` : ''}
-                ${canDownload ? `<button type="button" class="action-tool-btn btn-export-csv" data-msg-id="${msg.id}">Export CSV…</button>` : ''}
-                <button type="button" class="action-tool-btn btn-pin-answer ${isSaved ? 'pinned' : ''}" data-msg-id="${msg.id}">${isSaved ? 'Remove from saved' : 'Save insight'}</button>
-                <button type="button" class="action-tool-btn btn-run-again" data-msg-id="${msg.id}">Run again with this scope</button>
-                <button type="button" class="action-tool-btn btn-feedback-up ${msg.feedback && msg.feedback.type === 'up' ? 'feedback-submitted' : ''}" data-msg-id="${msg.id}">${msg.feedback && msg.feedback.type === 'up' ? 'Helpful · Submitted' : 'Helpful'}</button>
-                <button type="button" class="action-tool-btn btn-feedback-down ${msg.feedback && msg.feedback.type === 'down' ? 'feedback-submitted' : ''}" data-msg-id="${msg.id}">${msg.feedback && msg.feedback.type === 'down' ? 'Edit issue feedback' : 'Report an issue'}</button>
-                ${followUps.length > 0 ? `
-                  <div class="answer-followups">
-                    <span>Continue with the same scope</span>
-                    ${followUps.map((query) => `<button type="button" class="followup-chip" data-query="${escapeHtml(query)}" data-source-msg-id="${msg.id}">${escapeHtml(query)}</button>`).join('')}
+            <div class="answer-icon-actions" role="toolbar" aria-label="Answer actions">
+              <button type="button" class="icon-action btn-copy-answer" data-answer="${escapeHtml(headline)}" aria-label="Copy answer" title="Copy answer">${ANSWER_ICONS.copy}</button>
+              <button type="button" class="icon-action btn-feedback-up ${feedbackType === 'up' ? 'is-active' : ''}" data-msg-id="${msg.id}" aria-pressed="${feedbackType === 'up'}" aria-label="Helpful" title="${feedbackType === 'up' ? 'Marked as helpful' : 'Helpful'}">${ANSWER_ICONS.up}</button>
+              <button type="button" class="icon-action btn-feedback-down ${feedbackType === 'down' ? 'is-active' : ''}" data-msg-id="${msg.id}" aria-pressed="${feedbackType === 'down'}" aria-label="${feedbackType === 'down' ? 'Edit issue feedback' : 'Report an issue'}" title="${feedbackType === 'down' ? 'Edit issue feedback' : 'Report an issue'}">${ANSWER_ICONS.down}</button>
+              <button type="button" class="icon-action btn-pin-answer ${isSaved ? 'is-active' : ''}" data-msg-id="${msg.id}" aria-pressed="${isSaved}" aria-label="${isSaved ? 'Remove from saved insights' : 'Save insight'}" title="${isSaved ? 'Remove from saved insights' : 'Save insight'}">${ANSWER_ICONS.bookmark}</button>
+              <button type="button" class="icon-action btn-run-again" data-msg-id="${msg.id}" aria-label="Run again with this scope" title="Run again with this scope">${ANSWER_ICONS.refresh}</button>
+              ${canDownload ? `
+                <details class="answer-actions-menu">
+                  <summary class="icon-action" aria-label="More actions" title="More actions">${ANSWER_ICONS.more}</summary>
+                  <div class="answer-actions-popover" role="menu">
+                    ${hasTable ? `<button type="button" class="menu-action btn-copy-table" data-msg-id="${msg.id}" role="menuitem">Copy records</button>` : ''}
+                    <button type="button" class="menu-action btn-export-csv" data-msg-id="${msg.id}" role="menuitem">Export CSV…</button>
                   </div>
-                ` : ''}
-              </div>
-            </details>
+                </details>
+              ` : ''}
+            </div>
+            <button type="button" class="evidence-pill btn-open-evidence" data-msg-id="${msg.id}">${ANSWER_ICONS.sources}<span>Evidence &amp; sources</span></button>
+            ${renderRunMetadata(msg)}
           </div>
-        </div>
+
+          ${isLatestAnswer && followUps.length > 0 ? `
+            <div class="answer-followups">
+              <span>Follow-up questions</span>
+              ${followUps.map((query) => `<button type="button" class="followup-chip" data-query="${escapeHtml(query)}" data-source-msg-id="${msg.id}"><span>${escapeHtml(query)}</span>${ANSWER_ICONS.arrow}</button>`).join('')}
+            </div>
+          ` : ''}
+        </article>
       </div>
     `;
   }
@@ -1576,12 +1640,12 @@
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
         <div class="agent-response-card clarification-status-card ${resolved ? 'is-resolved' : ''} ${superseded ? 'answer-superseded' : ''}">
           ${superseded ? '<div class="superseded-callout">Superseded by the revised question below. No run can be started from this clarification.</div>' : ''}
-          <div class="result-state-label">${superseded ? 'Superseded clarification' : (resolved ? 'Clarification confirmed' : 'Clarification needed')}</div>
-          <h3>${escapeHtml(superseded ? 'This clarification is no longer active' : (resolved ? (msg.resolvedChoice || 'Scope confirmed') : 'One choice is needed before I run this question'))}</h3>
+          <div class="result-state-label">${superseded ? 'Superseded' : (resolved ? 'Confirmed' : 'Review before running')}</div>
+          <h3>${escapeHtml(superseded ? 'This clarification is no longer active' : (resolved ? (msg.resolvedChoice || 'Scope confirmed') : 'Check how I read your question'))}</h3>
           ${interpretationItems.length ? `<section class="inline-interpretation" aria-label="How Aria interpreted your question">
             <div class="inline-interpretation-heading">
-              <span>How I interpreted your question</span>
-              <span class="inline-interpretation-status">${resolved ? 'Applied to this run' : 'Review before running'}</span>
+              <span>My interpretation</span>
+              ${resolved ? '<span class="inline-interpretation-status">Applied to this run</span>' : ''}
             </div>
             <dl class="inline-interpretation-grid">
               ${interpretationItems.map((item) => `<div>
@@ -1613,96 +1677,6 @@
                   <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
                 </button>` : ''}
               </div>`)}
-        </div>
-      </div>
-    `;
-
-    if (msg.subtype === 'scope_conflict') {
-      return `
-        <div class="chat-row agent-row" id="msg_row_${msg.id}">
-          <div class="agent-response-card scope-conflict-card" style="border: 2px solid var(--warning-color); padding: 22px;">
-            <div class="conflict-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-              <div class="conflict-badge" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background-color: var(--warning-bg); border: 1px solid var(--warning-border); color: var(--warning-color); border-radius: var(--radius-full); font-size: 12px; font-weight: 700;">
-                <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-                <span>Scope Conflict Resolution Required</span>
-              </div>
-              <span style="font-size: 12px; color: var(--text-muted); font-weight: 500;">Clarification required before query execution</span>
-            </div>
-
-            <p class="conflict-explanation" style="font-size: 14px; margin-bottom: 16px; line-height: 1.5; color: var(--text-primary);">${formatMarkdownBold(msg.question || '')}</p>
-
-            ${msg.resolvedPayload ? `
-              <div class="conflict-resolved-banner" style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--success-bg); border: 1px solid var(--success-color); border-radius: var(--radius-sm); color: var(--success-color); font-size: 12px; font-weight: 600; margin-bottom: 12px;">
-                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                <span>Scope conflict resolved: Applied <strong>${escapeHtml(msg.resolvedChoice || msg.resolvedPayload)}</strong></span>
-              </div>
-            ` : ''}
-
-            <div class="conflict-options-list" style="display: flex; flex-direction: column; gap: 8px;">
-              ${opts.map((opt) => {
-                const payloadStr = typeof opt.payload === 'object' ? JSON.stringify(opt.payload) : opt.payload;
-                const isSelected = msg.resolvedChoice === opt.label || msg.resolvedPayload === opt.label;
-                return `
-                  <button type="button" class="clarification-chip conflict-option-btn ${opt.isEditScope ? 'btn-edit-scope-action' : ''} ${isSelected ? 'selected-resolution' : ''}" data-msg-id="${msg.id}" data-payload='${escapeHtml(payloadStr)}' data-label="${escapeHtml(opt.label)}" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; font-size: 13.5px; border-radius: var(--radius-md); border: 1px solid ${isSelected ? 'var(--success-color)' : 'var(--border-color)'}; background: ${isSelected ? 'var(--success-bg)' : 'var(--bg-surface)'}; text-align: left; cursor: ${msg.resolvedPayload ? 'default' : 'pointer'};" ${msg.resolvedPayload ? 'disabled' : ''}>
-                    <span style="font-weight: 600;">${isSelected ? '✓ ' : ''}${escapeHtml(opt.label)}</span>
-                    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                  </button>
-                `;
-              }).join('')}
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
-    return `
-      <div class="chat-row agent-row" id="msg_row_${msg.id}">
-        <div class="agent-response-card" style="border: 2px solid var(--accent-primary); box-shadow: 0 10px 25px rgba(0,0,0,0.1); padding: 24px; position: relative; z-index: 10;">
-          <div class="clarification-box" style="border: none; background: transparent; padding: 0;">
-            <div class="clarification-title" style="font-size: 16px; margin-bottom: 12px; color: var(--text-primary);">
-              <svg width="24" height="24" fill="none" stroke="var(--accent-primary)" stroke-width="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-              </svg>
-              <span style="font-weight: 700;">Agent Clarification Required</span>
-            </div>
-            ${msg.understoodFields ? `
-              <div class="clarification-understood-box" style="margin-bottom: 16px; padding: 12px 14px; background: var(--bg-hover); border-left: 3px solid var(--accent-primary); border-radius: 6px; font-size: 12px;">
-                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                  <span>What I understood so far:</span>
-                </div>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px 14px; color: var(--text-secondary);">
-                  ${msg.understoodFields.domain ? `<div><span style="color: var(--text-muted); font-size: 12px; text-transform: uppercase; font-weight: 600; display: block;">Business area</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.domain)}</strong></div>` : ''}
-                  ${msg.understoodFields.metric ? `<div><span style="color: var(--text-muted); font-size: 12px; text-transform: uppercase; font-weight: 600; display: block;">Metric</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.metric)}</strong></div>` : ''}
-                  ${msg.understoodFields.period ? `<div><span style="color: var(--text-muted); font-size: 12px; text-transform: uppercase; font-weight: 600; display: block;">Period</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.period)}</strong></div>` : ''}
-                  ${msg.understoodFields.projectScope ? `<div><span style="color: var(--text-muted); font-size: 12px; text-transform: uppercase; font-weight: 600; display: block;">Project scope</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.projectScope)}</strong></div>` : ''}
-                </div>
-                ${msg.understoodFields.fieldToClarify ? `
-                  <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border-color); color: var(--warning-color); font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
-                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                    <span>${escapeHtml(msg.understoodFields.fieldToClarify)}</span>
-                  </div>
-                ` : ''}
-              </div>
-            ` : ''}
-            <p class="clarification-question" style="font-size: 15px; margin-bottom: 20px; line-height: 1.5;">${escapeHtml(msg.question || '')}</p>
-            ${msg.resolvedPayload ? `
-              <div class="conflict-resolved-banner" style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--success-bg); border: 1px solid var(--success-color); border-radius: var(--radius-sm); color: var(--success-color); font-size: 12px; font-weight: 600; margin-bottom: 12px;">
-                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                <span>Clarification resolved: Selected <strong>${escapeHtml(msg.resolvedChoice || msg.resolvedPayload)}</strong></span>
-              </div>
-            ` : ''}
-            <div class="clarification-chips" style="display: flex; flex-direction: column; gap: 10px;">
-              ${opts.map((opt) => `
-                <button type="button" class="clarification-chip ${msg.resolvedChoice === opt.label ? 'selected-resolution' : ''}" data-msg-id="${msg.id}" data-payload="${escapeHtml(typeof opt.payload === 'object' ? JSON.stringify(opt.payload) : opt.payload)}" data-label="${escapeHtml(opt.label)}" style="width: 100%; justify-content: space-between; padding: 12px 16px; font-size: 14px; border: 1px solid var(--border-color); background: var(--bg-surface); text-align: left;" ${msg.resolvedPayload ? 'disabled' : ''}>
-                  <span style="font-weight: 500;">${msg.resolvedChoice === opt.label ? '✓ ' : ''}${escapeHtml(opt.label)}</span>
-                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                </button>
-              `).join('')}
-            </div>
-          </div>
         </div>
       </div>
     `;
@@ -2015,85 +1989,74 @@
       }
     ];
 
+    const firstName = state.currentUser && state.currentUser.name ? state.currentUser.name.split(' ')[0] : '';
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : (hour < 18 ? 'Good afternoon' : 'Good evening');
+    const groupIcons = {
+      Sales: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"></path><path d="M14 7h7v7"></path></svg>',
+      Finance: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.5"></circle><path d="M6 12h.01M18 12h.01"></path></svg>',
+      Projects: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"></path><path d="M5 21V7l7-4 7 4v14"></path><path d="M9 21v-6h6v6"></path></svg>'
+    };
+    const auditPrompts = window.AriaMock.AUDIT_TEST_PROMPTS || [];
+
+    setIdleLayout(true);
+    updateChatTopbarTitle();
     chatContainerEl.innerHTML = `
       <section class="welcome-hero" id="welcomeHero">
-        <h1 class="hero-title task-home-title">What does your business need to understand?</h1>
-        <p class="hero-subtitle task-home-subtitle">
-          Aria analyses your enterprise operations, finance, and project intelligence.
-        </p>
-
-        <div class="example-section task-groups-section">
-          <div class="example-section-label task-groups-label">
-            <span>Choose a starting point for ${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Sales Manager')}</span>
-            <small>Select a question to place it in the composer, review scope, then press Ask.</small>
-          </div>
-          <div class="example-grid task-groups-grid">
-            ${taskGroups.map((group) => `
-              <section class="task-group-card" aria-labelledby="task_group_${group.key}">
-                <div class="task-group-heading">
-                  <div>
-                    <h2 id="task_group_${group.key}">${escapeHtml(group.key)}</h2>
-                    <p>${escapeHtml(group.description)}</p>
-                  </div>
-                  <span class="task-output-badge">${escapeHtml(group.output)}</span>
-                </div>
-                <button type="button" class="example-card" data-query="${escapeHtml(group.question.text)}">
-                  <span class="example-card-meta">${escapeHtml(group.question.domain || group.key)} · ${escapeHtml(group.output)}</span>
-                  <span class="example-card-text">${escapeHtml(group.question.text)}</span>
-                  <span class="example-card-action">Use this question</span>
-                </button>
-              </section>
-            `).join('')}
-          </div>
-        </div>
-
-        <details class="audit-prompt-suite">
-          <summary>
-            <span>Audit test prompts</span>
-            <small>${(window.AriaMock.AUDIT_TEST_PROMPTS || []).length} deterministic checks</small>
-          </summary>
-          <div class="audit-prompt-help">
-            Select a prompt to place it in the composer, then press Enter to run it. Use a non-admin persona for the access-denied check.
-          </div>
-          ${['Visual examples', 'Result patterns', 'Decision states', 'Access states'].map((group) => `
-            <section class="audit-prompt-group">
-              <h2>${escapeHtml(group)}</h2>
-              <div class="audit-prompt-grid">
-                ${(window.AriaMock.AUDIT_TEST_PROMPTS || []).filter((item) => item.group === group).map((item) => `
-                  <button type="button" class="audit-prompt-card" data-query="${escapeHtml(item.text)}">
-                    <span>${escapeHtml(item.expected)}</span>
-                    <strong>${escapeHtml(item.text)}</strong>
-                  </button>
-                `).join('')}
-              </div>
-            </section>
-          `).join('')}
-          <div class="audit-manual-checks">
-            <strong>Two interaction checks</strong>
-            <ol>
-              <li>Select Q3 in Period, then ask a question containing Q2 to verify the scope-conflict clarification.</li>
-              <li>Run any result prompt and press Stop while it is processing to verify the Cancelled state.</li>
-            </ol>
-          </div>
-        </details>
+        <h1 class="hero-title task-home-title">${escapeHtml(firstName ? `${greeting}, ${firstName}` : greeting)}</h1>
+        <p class="hero-subtitle task-home-subtitle">What would you like to know about the business today?</p>
       </section>
     `;
 
-    chatContainerEl.querySelectorAll('.example-card').forEach((card) => {
-      card.addEventListener('click', () => {
-        const q = card.getAttribute('data-query');
-        chatInputEl.value = q;
-        chatInputEl.focus();
-        updateSendButtonState();
-      });
-    });
+    if (!composerSuggestionsEl) return;
+    composerSuggestionsEl.innerHTML = `
+      <div class="starter-list" aria-label="Suggested questions for ${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Sales Manager')}">
+        ${taskGroups.map((group) => `
+          <button type="button" class="example-card starter-row" data-query="${escapeHtml(group.question.text)}" title="Place this question in the composer">
+            <span class="starter-row-icon">${groupIcons[group.key] || ''}</span>
+            <span class="starter-row-text">${escapeHtml(group.question.text)}</span>
+            <span class="starter-row-tag">${escapeHtml(group.key)} · ${escapeHtml(group.output)}</span>
+          </button>
+        `).join('')}
+      </div>
 
-    chatContainerEl.querySelectorAll('.audit-prompt-card').forEach((card) => {
+      <details class="audit-prompt-suite">
+        <summary>
+          <span>Reviewer test prompts</span>
+          <small>${auditPrompts.length} deterministic checks</small>
+        </summary>
+        <div class="audit-prompt-help">
+          Select a prompt to place it in the composer, then press Enter to run it. Use a non-admin persona for the access-denied check.
+        </div>
+        ${['Visual examples', 'Result patterns', 'Decision states', 'Access states'].map((group) => `
+          <section class="audit-prompt-group">
+            <h2>${escapeHtml(group)}</h2>
+            <div class="audit-prompt-grid">
+              ${auditPrompts.filter((item) => item.group === group).map((item) => `
+                <button type="button" class="audit-prompt-card" data-query="${escapeHtml(item.text)}">
+                  <span>${escapeHtml(item.expected)}</span>
+                  <strong>${escapeHtml(item.text)}</strong>
+                </button>
+              `).join('')}
+            </div>
+          </section>
+        `).join('')}
+        <div class="audit-manual-checks">
+          <strong>Two interaction checks</strong>
+          <ol>
+            <li>Select Q3 in Period, then ask a question containing Q2 to verify the scope-conflict clarification.</li>
+            <li>Run any result prompt and press Stop while it is processing to verify the Cancelled state.</li>
+          </ol>
+        </div>
+      </details>
+    `;
+
+    composerSuggestionsEl.querySelectorAll('.example-card, .audit-prompt-card').forEach((card) => {
       card.addEventListener('click', () => {
         chatInputEl.value = card.getAttribute('data-query');
         chatInputEl.focus();
         updateSendButtonState();
-        chatInputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        resizeChatInput();
       });
     });
   }
@@ -2137,7 +2100,7 @@
         // Keep the executable query unchanged, but show the scope-adjusted wording
         // for interpretation re-runs so the new turn never contradicts its answer.
         text: options.displayPromptText || promptText,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        time: formatDisplayTime(new Date()),
         timestamp: Date.now(),
         isScopeRerun: Boolean(options.sourceMessageId),
         scopeEditSummary: options.scopeEditSummary || null,
@@ -2201,7 +2164,7 @@
             { id: 'confirm_interpretation', label: 'Use this interpretation', payload: { type: 'interpretation_confirmation', confirmed: true } },
             { id: 'edit_scope', label: 'Edit scope before running', payload: { resolution: 'edit_scope' }, isEditScope: true }
           ],
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: formatDisplayTime(new Date()),
           timestamp: Date.now()
         };
         state.isThinking = true;
@@ -2301,7 +2264,7 @@
         type: result.type,
         subtype: result.subtype || null,
         blockedType: result.blockedType || null,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        time: formatDisplayTime(new Date()),
         timestamp: Date.now(),
         resultsData: result.type === 'results' ? result : null,
         appliedScope: result.appliedScope || null,
@@ -2361,7 +2324,7 @@
           type: 'cancelled',
           originalQuery: options.originalQuestion || promptText,
           requestedScope: JSON.parse(JSON.stringify(options.selectedScope || state.selectedScope)),
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: formatDisplayTime(new Date()),
           timestamp: Date.now(),
           errorData: {
             kind: 'cancelled',
@@ -2378,7 +2341,7 @@
           type: 'error',
           originalQuery: options.originalQuestion || promptText,
           requestedScope: JSON.parse(JSON.stringify(options.selectedScope || state.selectedScope)),
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: formatDisplayTime(new Date()),
           timestamp: Date.now(),
           errorData: {
             kind: 'service_error',
@@ -2642,6 +2605,15 @@
     `;
   }
 
+  // "$M" + 23.7 reads as $23.7M; other units follow the number.
+  function formatChartValue(value, unit) {
+    const u = String(unit || '').trim();
+    if (!u) return String(value);
+    if (u.startsWith('$')) return `$${value}${u.slice(1)}`;
+    if (u === '%') return `${value}%`;
+    return `${value} ${u}`;
+  }
+
   function renderSvgBarChart(chartData) {
     const items = chartData.items;
     const maxVal = Math.max(...items.map((i) => Math.max(i.value || 0, i.targetValue || 0))) || 1;
@@ -2656,18 +2628,18 @@
           const y = idx * (barHeight + gap) + 10;
           const numericValue = Number(item.value) || 0;
           const barWidth = numericValue === 0 ? 0 : Math.max(2, Math.round((numericValue / maxVal) * 360));
-          const color = item.color || '#2563eb';
+          const color = item.color || 'var(--chart-1)';
           return `
             <g>
               <text x="110" y="${y + 16}" font-size="11.5" text-anchor="end" fill="var(--text-secondary)" font-family="var(--font-sans)">
                 ${escapeHtml(item.label)}
               </text>
-              <rect x="120" y="${y}" width="380" height="${barHeight}" rx="4" fill="var(--bg-hover)"/>
+              <rect x="120" y="${y}" width="380" height="${barHeight}" rx="4" fill="var(--chart-track)"/>
               <rect x="120" y="${y}" width="${barWidth}" height="${barHeight}" rx="4" fill="${color}">
-                <title>${escapeHtml(item.label)}: ${item.value}${chartData.unit || ''}</title>
+                <title>${escapeHtml(item.label)}: ${escapeHtml(formatChartValue(item.value, chartData.unit))}</title>
               </rect>
-              <text x="${barWidth === 0 ? 124 : Math.min(540, 130 + barWidth)}" y="${y + 16}" font-size="11" font-weight="600" fill="var(--text-primary)" font-family="var(--font-mono)">
-                ${item.value}${chartData.unit || ''}
+              <text x="${barWidth === 0 ? 124 : Math.min(540, 130 + barWidth)}" y="${y + 16}" font-size="12" font-weight="600" fill="var(--text-primary)" font-family="var(--font-sans)">
+                ${escapeHtml(formatChartValue(item.value, chartData.unit))}
               </text>
             </g>
           `;
@@ -2702,15 +2674,15 @@
         <line x1="${padX}" y1="${padY + plotHeight / 2}" x2="${width - padX}" y2="${padY + plotHeight / 2}" stroke="var(--border-color)" stroke-dasharray="3"/>
 
         <!-- Connecting Line -->
-        <polyline fill="none" stroke="var(--accent-primary)" stroke-width="2.5" points="${polylinePts}"/>
+        <polyline fill="none" stroke="var(--chart-1)" stroke-width="2.5" points="${polylinePts}"/>
 
         <!-- Data Points & Labels -->
         ${points.map((p) => `
           <g>
-            <circle cx="${p.x}" cy="${p.y}" r="4.5" fill="var(--accent-primary)" stroke="#fff" stroke-width="2">
-              <title>${escapeHtml(p.label)}: ${p.val}${chartData.unit || ''}</title>
+            <circle cx="${p.x}" cy="${p.y}" r="4.5" fill="var(--chart-1)" stroke="var(--bg-surface)" stroke-width="2">
+              <title>${escapeHtml(p.label)}: ${escapeHtml(formatChartValue(p.val, chartData.unit))}</title>
             </circle>
-            <text x="${p.x}" y="${p.y - 8}" font-size="10" text-anchor="middle" font-weight="600" fill="var(--text-primary)" font-family="var(--font-mono)">${p.val}</text>
+            <text x="${p.x}" y="${p.y - 8}" font-size="10" text-anchor="middle" font-weight="600" fill="var(--text-primary)" font-family="var(--font-sans)">${escapeHtml(formatChartValue(p.val, chartData.unit))}</text>
             <text x="${p.x}" y="${height - 10}" font-size="10.5" text-anchor="middle" fill="var(--text-muted)">${escapeHtml(p.label)}</text>
           </g>
         `).join('')}
@@ -2728,7 +2700,7 @@
     const r = 65;
 
     let cumulativeAngle = 0;
-    const colors = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'];
+    const colors = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
 
     const slices = items.map((item, idx) => {
       const sliceAngle = ((item.value || 0) / total) * 2 * Math.PI;
@@ -2754,7 +2726,7 @@
         <g>
           ${slices.map((s) => `
             <path d="${s.pathData}" fill="${s.color}">
-              <title>${escapeHtml(s.label)}: ${s.value}${chartData.unit || ''} (${s.pct}%)</title>
+              <title>${escapeHtml(s.label)}: ${escapeHtml(formatChartValue(s.value, chartData.unit))} (${s.pct}%)</title>
             </path>
           `).join('')}
         </g>
@@ -2765,7 +2737,7 @@
             <g transform="translate(0, ${idx * 26})">
               <rect x="0" y="0" width="12" height="12" rx="2" fill="${s.color}"/>
               <text x="20" y="10" font-size="11.5" fill="var(--text-secondary)">
-                ${escapeHtml(s.label)}: <tspan font-weight="600" font-family="var(--font-mono)">${s.pct}%</tspan> (${s.value}${chartData.unit || ''})
+                ${escapeHtml(s.label)}: <tspan font-weight="600">${s.pct}%</tspan> (${escapeHtml(formatChartValue(s.value, chartData.unit))})
               </text>
             </g>
           `).join('')}
@@ -4364,7 +4336,10 @@
 
     listContainer.innerHTML = librarySummary + list.map((item) => {
       const isSnapshot = item.type === 'snapshot';
-      const badgeColor = isSnapshot ? 'var(--info-color, #0ea5e9)' : 'var(--accent-primary)';
+      // Snapshots are frozen records (neutral); saved queries are live (accent).
+      const badgeStyle = isSnapshot
+        ? 'background: var(--bg-subtle); color: var(--text-secondary); border: 1px solid var(--border-color);'
+        : 'background: var(--accent-subtle); color: var(--accent-text); border: 1px solid var(--accent-border);';
 
       let scopeText = 'Auto';
       if (item.scope) {
@@ -4403,7 +4378,7 @@
         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
           <div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 280px;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="background: ${badgeColor}; color: white; font-size: 12px; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">
+              <span style="${badgeStyle} font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px;">
                 ${isSnapshot ? 'Snapshot' : 'Query'}
               </span>
               <div style="font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 6px;" class="insight-title-container">
@@ -4428,11 +4403,11 @@
               <small>Scope controls query reuse; data access is evaluated separately.</small>
             </div>
             <div class="saved-item-metadata">
-              <span><strong>${isSnapshot ? 'Captured at' : 'Saved at'}:</strong> ${new Date(isSnapshot ? (item.capturedAt || item.savedAt) : item.savedAt).toLocaleString()}</span>
-              ${!isSnapshot ? `<span><strong>Last refreshed:</strong> ${item.refreshCount > 0 && item.lastRefreshedAt ? new Date(item.lastRefreshedAt).toLocaleString() : 'Never'}</span>` : ''}
+              <span><strong>${isSnapshot ? 'Captured at' : 'Saved at'}:</strong> ${formatDisplayDateTime(isSnapshot ? (item.capturedAt || item.savedAt) : item.savedAt)}</span>
+              ${!isSnapshot ? `<span><strong>Last refreshed:</strong> ${item.refreshCount > 0 && item.lastRefreshedAt ? formatDisplayDateTime(item.lastRefreshedAt) : 'Never'}</span>` : ''}
               ${!isSnapshot && resultData && resultData.refreshMetadata ? `<span><strong>Refresh status:</strong> Updated · fixture revision ${escapeHtml(String(resultData.refreshMetadata.fixtureRevision))}</span>` : ''}
               ${isSnapshot ? '<span><strong>State:</strong> Immutable result</span>' : ''}
-              <span><strong>Data as of:</strong> ${typeof item.dataAsOf === 'number' ? new Date(item.dataAsOf).toLocaleString() : escapeHtml(String(item.dataAsOf))}</span>
+              <span><strong>Data as of:</strong> ${typeof item.dataAsOf === 'number' ? formatDisplayDateTime(item.dataAsOf) : escapeHtml(String(item.dataAsOf))}</span>
             </div>
           </div>
 
@@ -4524,7 +4499,7 @@
             id: 'msg_' + Date.now() + '_u',
             role: 'user',
             text: item.question,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            time: formatDisplayTime(new Date()),
             timestamp: Date.now()
           });
 
@@ -4534,7 +4509,7 @@
                 id: 'msg_' + Date.now() + '_a',
                 role: 'agent',
                 type: 'results',
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                time: formatDisplayTime(new Date()),
                 timestamp: Date.now(),
                 resultsData: resultData,
                 resultPattern: item.resultPattern || 'default',
@@ -4808,7 +4783,7 @@
           values: selectedDomains
         };
         domainScopeSelectLabelEl.textContent = isAuto
-          ? 'Auto — infer from question'
+          ? 'All business areas'
           : selectedDomains.join(' + ');
         domainScopeImpactEl.textContent = isAuto
           ? 'Auto searches domains inferred from the question.'
@@ -5067,7 +5042,7 @@
     state.activeDomainScope = values.length ? values : 'Auto';
     if (domainScopeSelectLabelEl) domainScopeSelectLabelEl.textContent = values.length
       ? values.join(' + ')
-      : 'Auto — infer from question';
+      : 'All business areas';
     if (domainScopeImpactEl) domainScopeImpactEl.textContent = values.length
       ? `Search is limited to ${values.join(' and ')}. Access policies still apply separately.`
       : 'Auto searches domains inferred from the question.';
