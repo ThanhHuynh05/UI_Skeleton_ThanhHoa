@@ -412,13 +412,42 @@
     return newConv;
   }
 
+  function isUntouchedConversation(conversation) {
+    return Boolean(conversation) && (!Array.isArray(conversation.messages) || conversation.messages.length === 0);
+  }
+
   function startNewChat() {
-    createNewConversation('New Conversation');
+    const activeConversation = getActiveConversation();
+    let newConversation = isUntouchedConversation(activeConversation)
+      ? activeConversation
+      : state.conversations.find((conversation) => (
+          isUntouchedConversation(conversation)
+          && conversation.title === 'New Conversation'
+          && !conversation.pinned
+        ));
+
+    if (!newConversation) {
+      newConversation = createNewConversation('New Conversation');
+    } else {
+      // Reuse the current draft and remove empty default drafts left behind by
+      // repeated New Chat clicks in older versions of the UI.
+      state.conversations = state.conversations.filter((conversation) => (
+        conversation.id === newConversation.id
+        || !(
+          isUntouchedConversation(conversation)
+          && conversation.title === 'New Conversation'
+          && !conversation.pinned
+        )
+      ));
+      state.activeConversationId = newConversation.id;
+      saveConversationsToStorage();
+      renderSidebarConversations();
+      renderActiveConversation();
+    }
     closeConversationSearch();
-    showToast('Started new conversation');
     if (typeof updateRailActiveState === 'function') showBusinessWorkspaceView('ask');
     if (window.innerWidth <= 820) sidebarEl.classList.remove('open');
-    announceAppStatus('Started a new conversation.');
+    announceAppStatus('New conversation is ready.');
   }
 
   function conversationSearchText(conversation) {
@@ -5305,17 +5334,10 @@
     themeToggleBtnEl.innerHTML = `${themeIcon}<span>Use ${isDark ? 'light' : 'dark'} appearance</span>`;
   }
 
-  function showToast(message, type = 'info') {
-    if (!toastContainerEl) return;
-    const toast = document.createElement('div');
-    toast.className = 'toast-message';
-    toast.textContent = message;
-    toastContainerEl.appendChild(toast);
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transition = 'opacity 0.3s ease';
-      setTimeout(() => toast.remove(), 300);
-    }, 2800);
+  function showToast() {
+    // Toast notifications are intentionally disabled across the application.
+    // Clear any toast that may still be visible from an earlier action.
+    if (toastContainerEl) toastContainerEl.replaceChildren();
   }
 
   function announceAppStatus(message, priority = 'polite') {
