@@ -4923,36 +4923,6 @@ details[open] .sql-chevron { transform: rotate(180deg); }
   margin-top: 24px;
 }
 
-.adjust-question-modal { width: min(640px, calc(100vw - 32px)); }
-.adjust-question-help { margin: 0 0 18px; color: var(--text-secondary); font-size: 14px; line-height: 1.55; }
-.adjust-question-field { display: grid; gap: 8px; color: var(--text-primary); font-size: 13px; font-weight: 700; }
-.adjust-question-field textarea {
-  width: 100%;
-  min-height: 128px;
-  resize: vertical;
-  padding: 12px 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-control);
-  background: var(--control-bg);
-  color: var(--text-primary);
-  font: inherit;
-  font-weight: 400;
-  line-height: 1.55;
-}
-.adjust-question-field textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-.adjust-question-scope {
-  display: grid;
-  gap: 6px;
-  margin-top: 16px;
-  padding: 14px 16px;
-  border: 1px solid var(--border-color);
-  border-left: 3px solid var(--accent-primary);
-  border-radius: var(--radius-control);
-  background: var(--bg-app);
-}
-.adjust-question-scope > span { color: var(--text-muted); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-.adjust-question-scope > strong { color: var(--text-primary); font-size: 14px; line-height: 1.5; }
-.adjust-question-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .clarification-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .question-version-note {
   width: fit-content;
@@ -6542,8 +6512,6 @@ button > svg,a[class] > svg,.header-icon-btn svg {
   .task-group-card { padding:12px; }
   .answer-actions-popover,.result-state-actions,.clear-history-actions { grid-template-columns:1fr; flex-direction:column; }
   .answer-actions-popover .action-tool-btn,.result-state-actions .action-tool-btn,.clear-history-actions .action-tool-btn { width:100%; }
-  .adjust-question-actions { flex-direction: column-reverse; }
-  .adjust-question-actions .action-tool-btn,
   .clarification-card-actions .action-tool-btn { width: 100%; }
 }
 
@@ -6713,6 +6681,47 @@ html body :where(.action-tool-btn.danger, .user-menu-item.danger):hover:not(:dis
   text-underline-offset: 3px;
 }
 .user-edit-btn:hover { color: var(--text-primary); }
+
+.user-bubble-container.is-editing {
+  width: min(100%, 720px);
+  max-width: 100%;
+}
+.inline-question-editor {
+  display: grid;
+  width: min(100%, 68ch);
+  gap: 10px;
+}
+.inline-question-editor > label {
+  color: var(--user-turn-fg);
+  font-size: 12px;
+  font-weight: 700;
+}
+.inline-question-input {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, .45);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: 500 16px/1.5 var(--font-sans);
+}
+.inline-question-input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.inline-question-scope {
+  color: var(--user-turn-fg);
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: .84;
+}
+.inline-question-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
 
 @media (max-width: 640px) {
   .user-row { margin-top: 16px; }

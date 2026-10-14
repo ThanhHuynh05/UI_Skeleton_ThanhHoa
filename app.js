@@ -185,12 +185,6 @@
   const clarificationOptionsEl = document.getElementById('clarificationOptions');
   const clarificationUnderstoodEl = document.getElementById('clarificationUnderstood');
   const adjustClarificationQuestionBtn = document.getElementById('adjustClarificationQuestionBtn');
-  const adjustQuestionModalBackdrop = document.getElementById('adjustQuestionModalBackdrop');
-  const closeAdjustQuestionModalBtn = document.getElementById('closeAdjustQuestionModalBtn');
-  const cancelAdjustQuestionBtn = document.getElementById('cancelAdjustQuestionBtn');
-  const confirmAdjustQuestionBtn = document.getElementById('confirmAdjustQuestionBtn');
-  const adjustQuestionInput = document.getElementById('adjustQuestionInput');
-  const adjustQuestionScopeSummary = document.getElementById('adjustQuestionScopeSummary');
   const clearHistoryModalBackdrop = document.getElementById('clearHistoryModalBackdrop');
   const closeClearHistoryModalBtn = document.getElementById('closeClearHistoryModalBtn');
   const cancelClearHistoryBtn = document.getElementById('cancelClearHistoryBtn');
@@ -211,7 +205,6 @@
   let activeClarificationMessageId = null;
   let activeClarificationTrigger = null;
   let activeAdjustmentUserMessageId = null;
-  let activeAdjustmentTrigger = null;
   let activeAdjustmentScope = null;
 
   const domainScopeSelectEl = document.getElementById('domainScopeSelect');
@@ -844,10 +837,13 @@
       </div>
     `;
 
+    let hideResponsesForEditedQuestion = false;
     conv.messages.forEach((msg, idx) => {
       if (msg.role === 'user') {
+        hideResponsesForEditedQuestion = msg.id === activeAdjustmentUserMessageId;
         html += renderUserMessageHtml(msg, idx === conv.messages.length - 2 || idx === conv.messages.length - 1);
       } else if (msg.role === 'agent') {
+        if (hideResponsesForEditedQuestion) return;
         html += renderAgentMessageHtml(msg, idx);
       }
     });
@@ -1009,13 +1005,24 @@
     const visibleQuestion = msg.isScopeRerun
       ? String(msg.text || '').replace(/\s*\(Applied scope:[\s\S]*\)\??\s*$/i, '').trim()
       : msg.text;
+    const isEditing = activeAdjustmentUserMessageId === msg.id;
     return `
       <div class="chat-row user-row" id="msg_row_${msg.id}">
-        <article class="user-bubble-container ${isSuperseded ? 'user-turn-superseded' : ''}" aria-label="${escapeHtml(turnLabel)}">
+        <article class="user-bubble-container ${isSuperseded ? 'user-turn-superseded' : ''} ${isEditing ? 'is-editing' : ''}" aria-label="${escapeHtml(turnLabel)}">
           <div class="conversation-turn-label question-turn-label">${escapeHtml(turnLabel)}</div>
           ${isSuperseded ? '<div class="question-version-note">Superseded by a revised question below</div>' : ''}
           ${isRevision ? '<div class="question-version-note">Linked to the original question above</div>' : ''}
-          <div class="user-bubble">${escapeHtml(visibleQuestion)}</div>
+          ${isEditing ? `
+            <form class="inline-question-editor" data-msg-id="${msg.id}">
+              <label for="inlineQuestionInput_${msg.id}">Edit question</label>
+              <textarea id="inlineQuestionInput_${msg.id}" class="inline-question-input" rows="3">${escapeHtml(visibleQuestion)}</textarea>
+              <div class="inline-question-scope">The revised question will use ${escapeHtml(formatAdjustmentScope(activeAdjustmentScope))}.</div>
+              <div class="inline-question-actions">
+                <button type="button" class="action-tool-btn inline-adjust-cancel">Cancel</button>
+                <button type="submit" class="action-tool-btn primary inline-adjust-confirm" ${state.isThinking ? 'disabled' : ''}>Run revised question</button>
+              </div>
+            </form>
+          ` : `<div class="user-bubble">${escapeHtml(visibleQuestion)}</div>`}
           ${rerunScope ? `
             <details class="user-scope-rerun-summary">
               <summary>Updated applied scope</summary>
@@ -1025,6 +1032,7 @@
           <div class="user-bubble-meta">
             <span class="user-turn-version">${isRevision ? 'Revised prompt' : (msg.isScopeRerun ? 'Edited scope version' : 'Original prompt')}</span>
             <span>${msg.time || ''}</span>
+            ${isEditing ? '' : `<button type="button" class="user-edit-btn" data-msg-id="${msg.id}">Adjust question</button>`}
           </div>
         </article>
       </div>
@@ -1786,45 +1794,57 @@
     return `Business area: ${domain} · Period: ${time}`;
   }
 
-  function openAdjustQuestionModal(messageId, trigger) {
+  function openAdjustQuestionEditor(messageId) {
     const conv = getActiveConversation();
     const userMessage = findUserMessageForTurn(conv, messageId);
-    if (!conv || !userMessage || !adjustQuestionModalBackdrop) return;
+    if (!conv || !userMessage) return;
     activeAdjustmentUserMessageId = userMessage.id;
-    activeAdjustmentTrigger = trigger || null;
     activeAdjustmentScope = getAdjustmentScope(conv, userMessage);
-    adjustQuestionInput.value = userMessage.text || '';
-    adjustQuestionScopeSummary.textContent = formatAdjustmentScope(activeAdjustmentScope);
-    adjustQuestionModalBackdrop.classList.add('open');
+
+    // If this question is still being processed, editing it replaces that
+    // pending request. Stop the old run so the editor never sits above a
+    // misleading "Aria is thinking" state for wording the user is changing.
+    const latestUserMessage = [...conv.messages].reverse().find((message) => message.role === 'user');
+    if (state.isThinking && latestUserMessage && latestUserMessage.id === userMessage.id && state.activeAbortController) {
+      state.activeAbortController.abort();
+    }
+
+    renderActiveConversation();
+    chatContainerEl.querySelectorAll('[id^="thinking_row_"]').forEach((row) => row.remove());
     requestAnimationFrame(() => {
-      adjustQuestionInput.focus();
-      adjustQuestionInput.setSelectionRange(adjustQuestionInput.value.length, adjustQuestionInput.value.length);
+      const input = document.getElementById(`inlineQuestionInput_${userMessage.id}`);
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
     });
   }
 
-  function closeAdjustQuestionModal() {
-    if (!adjustQuestionModalBackdrop) return;
-    adjustQuestionModalBackdrop.classList.remove('open');
-    if (activeAdjustmentTrigger && document.contains(activeAdjustmentTrigger)) activeAdjustmentTrigger.focus();
+  function closeAdjustQuestionEditor() {
+    const messageId = activeAdjustmentUserMessageId;
     activeAdjustmentUserMessageId = null;
-    activeAdjustmentTrigger = null;
     activeAdjustmentScope = null;
+    renderActiveConversation();
+    requestAnimationFrame(() => {
+      chatContainerEl.querySelector(`.user-edit-btn[data-msg-id="${messageId}"]`)?.focus();
+    });
   }
 
-  function confirmAdjustedQuestion() {
-    const revisedQuestion = adjustQuestionInput.value.trim();
+  function confirmAdjustedQuestion(input) {
+    const revisedQuestion = input.value.trim();
     if (!revisedQuestion || state.isThinking) return;
     const conv = getActiveConversation();
     const original = conv && conv.messages.find((item) => item.id === activeAdjustmentUserMessageId && item.role === 'user');
     if (!original) return;
     if (revisedQuestion === String(original.text || '').trim()) {
-      showToast('Add or change some information before running the revision.');
-      adjustQuestionInput.focus();
+      input.setCustomValidity('Change the question before running the revision.');
+      input.reportValidity();
+      input.focus();
       return;
     }
     const originalId = original.id;
     const executionScope = JSON.parse(JSON.stringify(activeAdjustmentScope || state.selectedScope));
-    closeAdjustQuestionModal();
+    activeAdjustmentUserMessageId = null;
+    activeAdjustmentScope = null;
     processUserPrompt(revisedQuestion, {
       interpretationConfirmed: true,
       originalQuestion: revisedQuestion,
@@ -1832,7 +1852,6 @@
       selectedScope: executionScope,
       revisionOfUserMessageId: originalId
     });
-    showToast('Running the revised question. The previous turn is retained as superseded.');
   }
 
   function cancelClarificationModal() {
@@ -2431,6 +2450,10 @@
   // 7. THINKING PIPELINE ANIMATION & STOP BUTTON (Group A)
   // =========================================================================
   function renderThinkingBubble(msgId, options = {}) {
+    // An inline revision replaces the pending wording. Do not let a delayed
+    // loading render put the old request's status back underneath the editor.
+    if (activeAdjustmentUserMessageId) return;
+
     const thinkingRow = document.createElement('div');
     thinkingRow.className = 'chat-row agent-row';
     thinkingRow.id = `thinking_row_${msgId}`;
@@ -3318,12 +3341,28 @@
     // User Edit Button
     chatContainerEl.querySelectorAll('.user-edit-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
-        openAdjustQuestionModal(btn.getAttribute('data-msg-id'), btn);
+        openAdjustQuestionEditor(btn.getAttribute('data-msg-id'));
       });
     });
 
     chatContainerEl.querySelectorAll('.btn-adjust-question').forEach((btn) => {
-      btn.addEventListener('click', () => openAdjustQuestionModal(btn.getAttribute('data-msg-id'), btn));
+      btn.addEventListener('click', () => openAdjustQuestionEditor(btn.getAttribute('data-msg-id')));
+    });
+
+    chatContainerEl.querySelectorAll('.inline-question-editor').forEach((form) => {
+      const input = form.querySelector('.inline-question-input');
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        confirmAdjustedQuestion(input);
+      });
+      input.addEventListener('input', () => input.setCustomValidity(''));
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeAdjustQuestionEditor();
+        }
+      });
+      form.querySelector('.inline-adjust-cancel').addEventListener('click', closeAdjustQuestionEditor);
     });
 
     const clarificationGroups = Array.from(chatContainerEl.querySelectorAll('.clarification-chips'));
@@ -5923,7 +5962,7 @@
           saveConversationsToStorage();
         }
         closeClarificationModal();
-        openAdjustQuestionModal(messageId, null);
+        openAdjustQuestionEditor(messageId);
       });
     }
     if (clarificationOptionsEl) {
@@ -5959,33 +5998,6 @@
         if (event.key !== 'Tab') return;
         const focusable = Array.from(clarificationModalBackdrop.querySelectorAll('button:not([disabled]), input:not([disabled])'));
         if (!focusable.length) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-        if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-      });
-    }
-
-    if (closeAdjustQuestionModalBtn) closeAdjustQuestionModalBtn.addEventListener('click', closeAdjustQuestionModal);
-    if (cancelAdjustQuestionBtn) cancelAdjustQuestionBtn.addEventListener('click', closeAdjustQuestionModal);
-    if (confirmAdjustQuestionBtn) confirmAdjustQuestionBtn.addEventListener('click', confirmAdjustedQuestion);
-    if (adjustQuestionInput) {
-      adjustQuestionInput.addEventListener('input', () => {
-        confirmAdjustQuestionBtn.disabled = !adjustQuestionInput.value.trim();
-      });
-    }
-    if (adjustQuestionModalBackdrop) {
-      adjustQuestionModalBackdrop.addEventListener('click', (event) => {
-        if (event.target === adjustQuestionModalBackdrop) closeAdjustQuestionModal();
-      });
-      adjustQuestionModalBackdrop.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          closeAdjustQuestionModal();
-          return;
-        }
-        if (event.key !== 'Tab') return;
-        const focusable = Array.from(adjustQuestionModalBackdrop.querySelectorAll('button:not([disabled]), textarea:not([disabled])'));
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
