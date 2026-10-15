@@ -5216,9 +5216,10 @@
       });
     });
 
-    // Checkboxes
+    // Preference switches
     const showSqlChk = document.getElementById('settingShowSqlDefault');
     if (showSqlChk) {
+      showSqlChk.checked = Boolean(state.settings.showSqlDefault);
       showSqlChk.addEventListener('change', () => {
         state.settings.showSqlDefault = showSqlChk.checked;
         renderActiveConversation();
@@ -5238,6 +5239,7 @@
 
     const compactChk = document.getElementById('settingCompactMode');
     if (compactChk) {
+      compactChk.checked = Boolean(state.settings.compactMode);
       compactChk.addEventListener('change', () => {
         state.settings.compactMode = compactChk.checked;
         document.body.classList.toggle('compact-mode', compactChk.checked);
@@ -5389,6 +5391,11 @@
       document.documentElement.setAttribute('data-theme', t);
     }
     localStorage.setItem('aria_theme', t);
+    document.querySelectorAll('.theme-choice-btn').forEach((button) => {
+      const isSelected = button.getAttribute('data-theme-choice') === t;
+      button.classList.toggle('active', isSelected);
+      button.setAttribute('aria-pressed', String(isSelected));
+    });
     updateThemeIcon();
   }
 

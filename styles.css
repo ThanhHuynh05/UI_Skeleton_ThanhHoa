@@ -2645,7 +2645,7 @@ a:hover {
 }
 
 .settings-page-backdrop .schema-table-card > div:first-child,
-.settings-page-backdrop .schema-table-card label span {
+.settings-page-backdrop .schema-table-card label > span:first-child {
   color: var(--text-primary);
   font-size: 16px !important;
   font-weight: 700 !important;
@@ -7126,6 +7126,85 @@ html body .settings-page-backdrop #closeSettingsBtn:active:not(:disabled) {
   border-color: var(--button-primary-active-bg) !important;
   background: var(--button-primary-active-bg) !important;
   color: var(--button-primary-active-fg) !important;
+}
+
+html body .settings-page-backdrop .theme-choice-btn.active {
+  border-color: var(--button-primary-bg) !important;
+  background: var(--button-primary-bg) !important;
+  color: var(--button-primary-fg) !important;
+}
+html body .settings-page-backdrop .theme-choice-btn.active:hover:not(:disabled) {
+  border-color: var(--button-primary-hover-bg) !important;
+  background: var(--button-primary-hover-bg) !important;
+  color: var(--button-primary-hover-fg) !important;
+}
+
+.settings-page-backdrop .settings-switch-card {
+  padding: 0 !important;
+}
+.settings-switch-row {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 20px;
+  cursor: pointer;
+}
+.settings-switch-label {
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 700;
+}
+.settings-switch-control {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+.settings-switch-control input {
+  position: absolute;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.settings-switch-track {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-width: 124px;
+  min-height: 40px;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--control-bg);
+  transition: background .16s ease, border-color .16s ease;
+}
+.settings-switch-track .switch-option {
+  display: inline-flex;
+  min-width: 54px;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 750;
+  transition: background .16s ease, color .16s ease;
+}
+.settings-switch-control input:not(:checked) + .settings-switch-track .switch-option-off,
+.settings-switch-control input:checked + .settings-switch-track .switch-option-on {
+  background: var(--button-primary-bg);
+  color: var(--button-primary-fg);
+}
+.settings-switch-control input:checked + .settings-switch-track {
+  border-color: var(--accent-primary);
+}
+.settings-switch-control input:focus-visible + .settings-switch-track {
+  outline: 3px solid var(--accent-border);
+  outline-offset: 2px;
 }
 html body .app-logo-mark {
   width: 36px;

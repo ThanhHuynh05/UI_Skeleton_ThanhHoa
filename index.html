@@ -333,24 +333,33 @@
         </div>
       </div>
 
-      <div class="schema-table-card">
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-          <input type="checkbox" id="settingShowSqlDefault">
-          <span style="font-size: 13px; font-weight: 500;">Always expand SQL query by default</span>
+      <div class="schema-table-card settings-switch-card">
+        <label class="settings-switch-row" for="settingShowSqlDefault">
+          <span class="settings-switch-label">Expand SQL query</span>
+          <span class="settings-switch-control">
+            <input type="checkbox" id="settingShowSqlDefault">
+            <span class="settings-switch-track" aria-hidden="true"><span class="switch-option switch-option-off">No</span><span class="switch-option switch-option-on">Yes</span></span>
+          </span>
         </label>
       </div>
 
-      <div class="schema-table-card">
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-          <input type="checkbox" id="settingShowPipelineDefault">
-          <span style="font-size: 13px; font-weight: 500;">Show animated pipeline stages trail</span>
+      <div class="schema-table-card settings-switch-card">
+        <label class="settings-switch-row" for="settingShowPipelineDefault">
+          <span class="settings-switch-label">Animated pipeline stages</span>
+          <span class="settings-switch-control">
+            <input type="checkbox" id="settingShowPipelineDefault">
+            <span class="settings-switch-track" aria-hidden="true"><span class="switch-option switch-option-off">Off</span><span class="switch-option switch-option-on">Show</span></span>
+          </span>
         </label>
       </div>
 
-      <div class="schema-table-card">
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-          <input type="checkbox" id="settingCompactMode">
-          <span style="font-size: 13px; font-weight: 500;">Compact message spacing mode</span>
+      <div class="schema-table-card settings-switch-card">
+        <label class="settings-switch-row" for="settingCompactMode">
+          <span class="settings-switch-label">Compact messages</span>
+          <span class="settings-switch-control">
+            <input type="checkbox" id="settingCompactMode">
+            <span class="settings-switch-track" aria-hidden="true"><span class="switch-option switch-option-off">No</span><span class="switch-option switch-option-on">Yes</span></span>
+          </span>
         </label>
       </div>
     </div>
