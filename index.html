@@ -90,6 +90,22 @@
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
               <span>Switch demo persona</span>
             </button>
+            <button type="button" class="user-menu-item" id="settingsBtn" role="menuitem">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.14.37.36.7.65.96.3.26.67.4 1.06.4H21v4h-.09a1.7 1.7 0 0 0-1.51.64z"></path></svg>
+              <span>Settings</span>
+            </button>
+            <div class="user-help-menu-group">
+              <button type="button" class="user-menu-item" id="helpModalBtn" role="menuitem" aria-haspopup="menu" aria-expanded="false">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.1 9a3 3 0 1 1 5.8 1c0 2-3 2-3 4"></path><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                <span>Help</span>
+                <svg class="user-menu-item-chevron" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+              <div class="user-help-submenu" id="userHelpSubmenu" role="menu" aria-label="Help topics">
+                <button type="button" class="user-menu-item help-topic-item" data-help-tab="shortcuts" role="menuitem">Keyboard shortcuts</button>
+                <button type="button" class="user-menu-item help-topic-item" data-help-tab="domains" role="menuitem">Supported domains</button>
+                <button type="button" class="user-menu-item help-topic-item" data-help-tab="scope" role="menuitem">Scope &amp; limitations</button>
+              </div>
+            </div>
             <div id="adminWorkspaceNav" class="user-menu-admin-links">
               <div class="user-menu-separator" role="separator"></div>
               <a href="admin.html" class="user-menu-item" id="adminNavLink" role="menuitem">Evaluation &amp; observability</a>
@@ -101,9 +117,6 @@
             </button>
           </div>
         </div>
-          <button type="button" class="sidebar-settings-shortcut" id="settingsBtn" aria-label="Preferences" title="Preferences">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.14.37.36.7.65.96.3.26.67.4 1.06.4H21v4h-.09a1.7 1.7 0 0 0-1.51.64z"></path></svg>
-          </button>
         </div>
         <div class="panel-resize-handle sidebar-resize-handle" id="sidebarResizeHandle" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize history panel"></div>
       </aside>
@@ -285,16 +298,19 @@
   <!-- =========================================================================
        SETTINGS DRAWER (Group H)
        ========================================================================= -->
-  <div class="app-drawer" id="settingsDrawer" role="dialog" aria-label="Preferences and Settings">
-    <div class="drawer-header">
-      <div style="font-weight: 700; font-size: 15px;">User Preferences &amp; Settings</div>
+  <div class="modal-backdrop settings-page-backdrop" id="settingsModalBackdrop">
+  <div class="app-modal settings-modal" id="settingsDrawer" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+    <div class="modal-header">
+      <div class="modal-title" id="settingsModalTitle">Aria settings</div>
       <button type="button" class="header-icon-btn" id="closeSettingsBtn">✕</button>
     </div>
     <div class="settings-primary-tabs" role="tablist" aria-label="Settings sections">
-      <button type="button" class="settings-primary-tab active" id="settingsPreferencesTabBtn" role="tab" aria-selected="true" aria-controls="settingsPreferencesPanel">Preferences</button>
-      <button type="button" class="settings-primary-tab" id="settingsHelpTabBtn" role="tab" aria-selected="false" aria-controls="settingsHelpPanel">Help &amp; Shortcuts</button>
+      <button type="button" class="settings-primary-tab active" id="settingsPreferencesTabBtn" role="tab" aria-selected="true" aria-controls="settingsPreferencesPanel">Appearance</button>
+      <button type="button" class="settings-primary-tab" id="settingsHelpTabBtn" role="tab" aria-selected="false" aria-controls="settingsHelpPanel">Preferences</button>
     </div>
-    <div class="drawer-body" id="settingsPreferencesPanel" role="tabpanel" aria-labelledby="settingsPreferencesTabBtn">
+    <div class="modal-body settings-panel" id="settingsPreferencesPanel" role="tabpanel" aria-labelledby="settingsPreferencesTabBtn">
+      <h1>Appearance</h1>
+      <p class="settings-panel-intro">Choose how Aria looks across your workspace.</p>
       <div class="schema-table-card">
         <div style="font-weight: 600; font-size: 13px;">Appearance Theme</div>
         <div style="display: flex; gap: 8px; margin-top: 6px;">
@@ -303,6 +319,11 @@
           <button type="button" class="view-btn theme-choice-btn" data-theme-choice="system">System</button>
         </div>
       </div>
+    </div>
+
+    <div class="modal-body settings-panel" id="settingsHelpPanel" role="tabpanel" aria-labelledby="settingsHelpTabBtn" hidden>
+      <h1>Preferences</h1>
+      <p class="settings-panel-intro">Control how answers and processing details are displayed.</p>
 
       <div class="schema-table-card">
         <div style="font-weight: 600; font-size: 13px;">Answer Detail Level</div>
@@ -333,21 +354,31 @@
         </label>
       </div>
     </div>
-    <div class="drawer-body settings-help-panel" id="settingsHelpPanel" role="tabpanel" aria-labelledby="settingsHelpTabBtn" hidden>
+  </div>
+  </div>
+
+  <div class="modal-backdrop focused-modal-backdrop" id="helpModalBackdrop">
+    <div class="app-modal help-modal" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="helpModalTitle">Help</div>
+        <button type="button" class="header-icon-btn" id="closeHelpModalBtn" aria-label="Close help">&times;</button>
+      </div>
+      <div class="modal-body settings-help-panel">
       <div class="schema-table-card settings-help-intro">
         <strong>Aria Enterprise Assistant Guide</strong>
         <span>Review supported data, prototype limitations, and keyboard shortcuts.</span>
       </div>
         <div class="explorer-tabs">
-          <button type="button" class="explorer-tab-btn active" id="helpTabDomainsBtn">Supported Domains</button>
+          <button type="button" class="explorer-tab-btn active" id="helpTabShortcutsBtn">Shortcuts</button>
+          <button type="button" class="explorer-tab-btn" id="helpTabDomainsBtn">Supported Domains</button>
           <button type="button" class="explorer-tab-btn" id="helpTabScopeBtn">Scope &amp; Limitations</button>
-          <button type="button" class="explorer-tab-btn" id="helpTabShortcutsBtn">Shortcuts</button>
         </div>
 
         <div id="helpTabContent">
           <!-- Populated by JavaScript -->
         </div>
     </div>
+  </div>
   </div>
 
   <!-- =========================================================================

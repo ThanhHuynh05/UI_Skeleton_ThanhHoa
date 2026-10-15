@@ -147,6 +147,7 @@
     const savedAnswersBtn = document.getElementById('savedAnswersBtn');
 
   const settingsDrawer = document.getElementById('settingsDrawer');
+  const settingsModalBackdrop = document.getElementById('settingsModalBackdrop');
   const settingsBtn = document.getElementById('settingsBtn');
   const closeSettingsBtn = document.getElementById('closeSettingsBtn');
   const settingsPreferencesTabBtn = document.getElementById('settingsPreferencesTabBtn');
@@ -156,6 +157,7 @@
 
   const helpModalBackdrop = document.getElementById('helpModalBackdrop');
   const helpModalBtn = document.getElementById('helpModalBtn');
+  const userHelpSubmenu = document.getElementById('userHelpSubmenu');
   const closeHelpModalBtn = document.getElementById('closeHelpModalBtn');
   const helpTabContent = document.getElementById('helpTabContent');
   const helpTabDomainsBtn = document.getElementById('helpTabDomainsBtn');
@@ -840,7 +842,12 @@
     let hideResponsesForEditedQuestion = false;
     conv.messages.forEach((msg, idx) => {
       if (msg.role === 'user') {
-        hideResponsesForEditedQuestion = msg.id === activeAdjustmentUserMessageId;
+        // Legacy revisions stored the old and revised turns side by side. Hide
+        // the superseded turn so existing conversations follow the replacement
+        // behavior used by the current adjustment flow.
+        const hideSupersededTurn = Boolean(msg.supersededByUserMessageId);
+        hideResponsesForEditedQuestion = hideSupersededTurn || msg.id === activeAdjustmentUserMessageId;
+        if (hideSupersededTurn) return;
         html += renderUserMessageHtml(msg, idx === conv.messages.length - 2 || idx === conv.messages.length - 1);
       } else if (msg.role === 'agent') {
         if (hideResponsesForEditedQuestion) return;
@@ -1000,8 +1007,9 @@
   function renderUserMessageHtml(msg, isLastUserTurn) {
     const rerunScope = msg.scopeEditSummary;
     const isRevision = Boolean(msg.revisionOfUserMessageId);
+    const isAdjusted = Boolean(msg.adjustedAt);
     const isSuperseded = Boolean(msg.supersededByUserMessageId);
-    const turnLabel = isRevision ? 'Revised question' : (msg.isScopeRerun ? 'Re-run with edited scope' : 'Your question');
+    const turnLabel = isRevision ? 'Revised question' : (isAdjusted ? 'Adjusted question' : (msg.isScopeRerun ? 'Re-run with edited scope' : 'Your question'));
     const visibleQuestion = msg.isScopeRerun
       ? String(msg.text || '').replace(/\s*\(Applied scope:[\s\S]*\)\??\s*$/i, '').trim()
       : msg.text;
@@ -1019,7 +1027,7 @@
               <div class="inline-question-scope">The revised question will use ${escapeHtml(formatAdjustmentScope(activeAdjustmentScope))}.</div>
               <div class="inline-question-actions">
                 <button type="button" class="action-tool-btn inline-adjust-cancel">Cancel</button>
-                <button type="submit" class="action-tool-btn primary inline-adjust-confirm" ${state.isThinking ? 'disabled' : ''}>Run revised question</button>
+                <button type="submit" class="action-tool-btn primary inline-adjust-confirm" ${state.isThinking ? 'disabled' : ''}>Save adjusted question</button>
               </div>
             </form>
           ` : `<div class="user-bubble">${escapeHtml(visibleQuestion)}</div>`}
@@ -1030,7 +1038,7 @@
             </details>
           ` : ''}
           <div class="user-bubble-meta">
-            <span class="user-turn-version">${isRevision ? 'Revised prompt' : (msg.isScopeRerun ? 'Edited scope version' : 'Original prompt')}</span>
+            <span class="user-turn-version">${isRevision ? 'Revised prompt' : (isAdjusted ? 'Adjusted prompt' : (msg.isScopeRerun ? 'Edited scope version' : 'Original prompt'))}</span>
             <span>${msg.time || ''}</span>
             ${isEditing ? '' : `<button type="button" class="user-edit-btn" data-msg-id="${msg.id}">Adjust question</button>`}
           </div>
@@ -1841,16 +1849,34 @@
       input.focus();
       return;
     }
-    const originalId = original.id;
     const executionScope = JSON.parse(JSON.stringify(activeAdjustmentScope || state.selectedScope));
+    const originalIndex = conv.messages.findIndex((item) => item.id === original.id);
+
+    // An adjusted question replaces this turn. Remove the old response because
+    // it no longer answers the wording displayed to the user.
+    let turnEndIndex = originalIndex + 1;
+    while (turnEndIndex < conv.messages.length && conv.messages[turnEndIndex].role !== 'user') {
+      turnEndIndex += 1;
+    }
+    conv.messages.splice(originalIndex + 1, turnEndIndex - originalIndex - 1);
+    original.text = revisedQuestion;
+    original.adjustedAt = Date.now();
+    original.time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    delete original.supersededByUserMessageId;
+    delete original.supersededAt;
+    conv.updatedAt = Date.now();
+    saveConversationsToStorage();
+
     activeAdjustmentUserMessageId = null;
     activeAdjustmentScope = null;
+    // This flow updates the existing user message instead of appending another
+    // one, so render it now to close the inline editor before review begins.
+    renderActiveConversation();
     processUserPrompt(revisedQuestion, {
-      interpretationConfirmed: true,
+      skipUserMessage: true,
       originalQuestion: revisedQuestion,
       displayPromptText: revisedQuestion,
-      selectedScope: executionScope,
-      revisionOfUserMessageId: originalId
+      selectedScope: executionScope
     });
   }
 
@@ -2217,13 +2243,14 @@
     if (!options.interpretationConfirmed && !options.clarificationPayload && !options.scopeConfirmation && !options.interpretationOverride && !options.retryAttempt) {
       const directFixture = window.AriaMock.QUERY_RESPONSES[promptText];
       const questionScope = window.AriaScope.parseQuestionScope(promptText);
-      const scopeConflict = window.AriaScope.detectScopeConflicts(state.selectedScope, questionScope);
+      const promptScope = options.selectedScope || state.selectedScope;
+      const scopeConflict = window.AriaScope.detectScopeConflicts(promptScope, questionScope);
       const securityDecision = window.AriaMock.checkSecurityGateways(promptText, state.currentUser);
       const requiresClarification = Boolean((directFixture && directFixture.type === 'clarification') || scopeConflict);
 
       if (!requiresClarification && !securityDecision.blocked) {
         const intent = window.AriaScope.parseQuestionIntent(promptText, window.DEMO_CONTEXT);
-        const resolved = window.AriaScope.resolveSelectedScope(state.selectedScope, questionScope, window.DEMO_CONTEXT);
+        const resolved = window.AriaScope.resolveSelectedScope(promptScope, questionScope, window.DEMO_CONTEXT);
         const previewResult = { domain: resolved.domain || 'All Domains', originalQuery: promptText };
         const previewAppliedScope = window.AriaScope.buildAppliedInterpretation(previewResult, resolved, intent);
         const confirmationMsg = {
@@ -5166,6 +5193,7 @@
   // 15. SETTINGS, HELP MODAL & GLOBAL SHORTCUTS (Group H)
   // =========================================================================
   function initSettingsAndHelp() {
+    closeSettingsBtn.innerHTML = '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg><span>Back to app</span>';
     settingsPreferencesTabBtn.addEventListener('click', () => setSettingsSection('preferences'));
     settingsHelpTabBtn.addEventListener('click', () => setSettingsSection('help'));
 
@@ -5217,7 +5245,7 @@
     }
 
     // Help Modal Content Rendering
-    renderHelpTabContent('domains');
+    renderHelpTabContent('shortcuts');
 
     helpTabDomainsBtn.addEventListener('click', () => {
       setActiveHelpTab(helpTabDomainsBtn);
@@ -5262,8 +5290,7 @@
   }
 
   function openSettingsHelp(tab = 'domains') {
-    settingsDrawer.classList.add('open');
-    setSettingsSection('help');
+    helpModalBackdrop.classList.add('open');
     const tabButton = tab === 'scope' ? helpTabScopeBtn : (tab === 'shortcuts' ? helpTabShortcutsBtn : helpTabDomainsBtn);
     setActiveHelpTab(tabButton);
     renderHelpTabContent(tab);
@@ -5321,6 +5348,7 @@
   function closeAllModalsAndDrawers() {
     dataExplorerDrawer.classList.remove('open');
     settingsDrawer.classList.remove('open');
+    if (settingsModalBackdrop) settingsModalBackdrop.classList.remove('open');
     if (helpModalBackdrop) helpModalBackdrop.classList.remove('open');
     feedbackModalBackdrop.classList.remove('open');
     sourceTableModalBackdrop.classList.remove('open');
@@ -5778,9 +5806,15 @@
       userMenuDropdownEl.classList.toggle('open');
       sidebarEl.classList.toggle('persona-menu-open', userMenuDropdownEl.classList.contains('open'));
       userMenuBtnEl.setAttribute('aria-expanded', userMenuDropdownEl.classList.contains('open') ? 'true' : 'false');
+      if (!userMenuDropdownEl.classList.contains('open') && userHelpSubmenu) {
+        userHelpSubmenu.classList.remove('open');
+        helpModalBtn.setAttribute('aria-expanded', 'false');
+      }
     });
     document.addEventListener('click', () => {
       userMenuDropdownEl.classList.remove('open');
+      if (userHelpSubmenu) userHelpSubmenu.classList.remove('open');
+      if (helpModalBtn) helpModalBtn.setAttribute('aria-expanded', 'false');
       sidebarEl.classList.remove('persona-menu-open');
       userMenuBtnEl.setAttribute('aria-expanded', 'false');
     });
@@ -5906,12 +5940,39 @@
 
     settingsBtn.addEventListener('click', () => {
       setSettingsSection('preferences');
-      settingsDrawer.classList.add('open');
+      userMenuDropdownEl.classList.remove('open');
+      sidebarEl.classList.remove('persona-menu-open');
+      userMenuBtnEl.setAttribute('aria-expanded', 'false');
+      settingsModalBackdrop.classList.add('open');
     });
-    closeSettingsBtn.addEventListener('click', () => settingsDrawer.classList.remove('open'));
+    closeSettingsBtn.addEventListener('click', () => settingsModalBackdrop.classList.remove('open'));
+    settingsModalBackdrop.addEventListener('click', (event) => {
+      if (event.target === settingsModalBackdrop) settingsModalBackdrop.classList.remove('open');
+    });
 
-    if (helpModalBtn && helpModalBackdrop) helpModalBtn.addEventListener('click', () => openSettingsHelp('domains'));
+    if (helpModalBtn && userHelpSubmenu) helpModalBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const isOpen = userHelpSubmenu.classList.toggle('open');
+      helpModalBtn.setAttribute('aria-expanded', String(isOpen));
+    });
+    if (userHelpSubmenu) {
+      userHelpSubmenu.addEventListener('click', (event) => event.stopPropagation());
+      userHelpSubmenu.querySelectorAll('.help-topic-item').forEach((item) => {
+        item.addEventListener('click', () => {
+          const tab = item.getAttribute('data-help-tab') || 'shortcuts';
+          userHelpSubmenu.classList.remove('open');
+          helpModalBtn.setAttribute('aria-expanded', 'false');
+          userMenuDropdownEl.classList.remove('open');
+          sidebarEl.classList.remove('persona-menu-open');
+          userMenuBtnEl.setAttribute('aria-expanded', 'false');
+          openSettingsHelp(tab);
+        });
+      });
+    }
     if (closeHelpModalBtn && helpModalBackdrop) closeHelpModalBtn.addEventListener('click', () => helpModalBackdrop.classList.remove('open'));
+    if (helpModalBackdrop) helpModalBackdrop.addEventListener('click', (event) => {
+      if (event.target === helpModalBackdrop) helpModalBackdrop.classList.remove('open');
+    });
 
     // Feedback Modal Submission
     closeFeedbackModalBtn.addEventListener('click', () => feedbackModalBackdrop.classList.remove('open'));
