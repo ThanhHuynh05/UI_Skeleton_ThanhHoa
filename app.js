@@ -42,6 +42,15 @@
     voiceRecognition: null,
     isRecordingVoice: false
   };
+  try {
+    Object.assign(state.settings, JSON.parse(localStorage.getItem('aria_workspace_preferences')) || {});
+  } catch (e) {
+    // Keep the defaults when stored preferences are unavailable or malformed.
+  }
+  const persistWorkspacePreferences = () => {
+    const { detailLevel, showSqlDefault, showPipelineDefault, compactMode } = state.settings;
+    localStorage.setItem('aria_workspace_preferences', JSON.stringify({ detailLevel, showSqlDefault, showPipelineDefault, compactMode }));
+  };
   let activeClarificationKeyHandler = null;
 
   // DOM Elements
@@ -155,14 +164,13 @@
   const settingsPreferencesPanel = document.getElementById('settingsPreferencesPanel');
   const settingsHelpPanel = document.getElementById('settingsHelpPanel');
 
-  const helpModalBackdrop = document.getElementById('helpModalBackdrop');
   const helpModalBtn = document.getElementById('helpModalBtn');
   const userHelpSubmenu = document.getElementById('userHelpSubmenu');
-  const closeHelpModalBtn = document.getElementById('closeHelpModalBtn');
-  const helpTabContent = document.getElementById('helpTabContent');
-  const helpTabDomainsBtn = document.getElementById('helpTabDomainsBtn');
-  const helpTabScopeBtn = document.getElementById('helpTabScopeBtn');
-  const helpTabShortcutsBtn = document.getElementById('helpTabShortcutsBtn');
+  const helpModalBackdrops = {
+    shortcuts: document.getElementById('shortcutsHelpModalBackdrop'),
+    domains: document.getElementById('domainsHelpModalBackdrop'),
+    scope: document.getElementById('scopeHelpModalBackdrop')
+  };
 
   const feedbackModalBackdrop = document.getElementById('feedbackModalBackdrop');
   const closeFeedbackModalBtn = document.getElementById('closeFeedbackModalBtn');
@@ -5194,6 +5202,10 @@
   // =========================================================================
   function initSettingsAndHelp() {
     closeSettingsBtn.innerHTML = '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg><span>Back to app</span>';
+    settingsDrawer.querySelectorAll('.detail-choice-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.getAttribute('data-detail') === state.settings.detailLevel);
+    });
+    document.body.classList.toggle('compact-mode', Boolean(state.settings.compactMode));
     settingsPreferencesTabBtn.addEventListener('click', () => setSettingsSection('preferences'));
     settingsHelpTabBtn.addEventListener('click', () => setSettingsSection('help'));
 
@@ -5209,6 +5221,7 @@
     settingsDrawer.querySelectorAll('.detail-choice-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         state.settings.detailLevel = btn.getAttribute('data-detail');
+        persistWorkspacePreferences();
         settingsDrawer.querySelectorAll('.detail-choice-btn').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         showToast(`Answer format set to: ${state.settings.detailLevel}`);
@@ -5222,6 +5235,7 @@
       showSqlChk.checked = Boolean(state.settings.showSqlDefault);
       showSqlChk.addEventListener('change', () => {
         state.settings.showSqlDefault = showSqlChk.checked;
+        persistWorkspacePreferences();
         renderActiveConversation();
       });
     }
@@ -5231,6 +5245,7 @@
       showPipelineChk.checked = Boolean(state.settings.showPipelineDefault);
       showPipelineChk.addEventListener('change', () => {
         state.settings.showPipelineDefault = showPipelineChk.checked;
+        persistWorkspacePreferences();
         showToast(showPipelineChk.checked
           ? 'Technical processing details will be shown for new requests.'
           : 'New requests will show a concise business-friendly loading state.');
@@ -5242,25 +5257,10 @@
       compactChk.checked = Boolean(state.settings.compactMode);
       compactChk.addEventListener('change', () => {
         state.settings.compactMode = compactChk.checked;
+        persistWorkspacePreferences();
         document.body.classList.toggle('compact-mode', compactChk.checked);
       });
     }
-
-    // Help Modal Content Rendering
-    renderHelpTabContent('shortcuts');
-
-    helpTabDomainsBtn.addEventListener('click', () => {
-      setActiveHelpTab(helpTabDomainsBtn);
-      renderHelpTabContent('domains');
-    });
-    helpTabScopeBtn.addEventListener('click', () => {
-      setActiveHelpTab(helpTabScopeBtn);
-      renderHelpTabContent('scope');
-    });
-    helpTabShortcutsBtn.addEventListener('click', () => {
-      setActiveHelpTab(helpTabShortcutsBtn);
-      renderHelpTabContent('shortcuts');
-    });
 
     // Keyboard Shortcuts Global Listener
     document.addEventListener('keydown', (e) => {
@@ -5292,10 +5292,8 @@
   }
 
   function openSettingsHelp(tab = 'domains') {
-    helpModalBackdrop.classList.add('open');
-    const tabButton = tab === 'scope' ? helpTabScopeBtn : (tab === 'shortcuts' ? helpTabShortcutsBtn : helpTabDomainsBtn);
-    setActiveHelpTab(tabButton);
-    renderHelpTabContent(tab);
+    const modal = helpModalBackdrops[tab] || helpModalBackdrops.domains;
+    if (modal) modal.classList.add('open');
   }
 
   function setActiveHelpTab(activeBtn) {
@@ -5351,7 +5349,7 @@
     dataExplorerDrawer.classList.remove('open');
     settingsDrawer.classList.remove('open');
     if (settingsModalBackdrop) settingsModalBackdrop.classList.remove('open');
-    if (helpModalBackdrop) helpModalBackdrop.classList.remove('open');
+    Object.values(helpModalBackdrops).forEach((modal) => modal && modal.classList.remove('open'));
     feedbackModalBackdrop.classList.remove('open');
     sourceTableModalBackdrop.classList.remove('open');
     if (clearHistoryModalBackdrop) clearHistoryModalBackdrop.classList.remove('open');
@@ -5553,38 +5551,31 @@
   }
 
   function initResizablePanels() {
-    const sidebarHandle = document.getElementById('sidebarResizeHandle');
     const evidenceHandle = document.getElementById('evidenceResizeHandle');
     const root = document.documentElement;
-    const storageKeys = { sidebar: 'aria_sidebar_width_v1', evidence: 'aria_evidence_width_v1' };
+    const evidenceStorageKey = 'aria_evidence_width_v1';
 
-    const limits = (kind) => kind === 'sidebar'
-      ? { min: 180, max: Math.max(220, Math.min(440, window.innerWidth - 520)) }
-      : { min: 320, max: Math.max(360, Math.min(760, window.innerWidth - 360)) };
+    const limits = () => ({ min: 320, max: Math.max(360, Math.min(760, window.innerWidth - 360)) });
 
-    const applyWidth = (kind, value, persist = true) => {
-      const range = limits(kind);
+    const applyWidth = (value, persist = true) => {
+      const range = limits();
       const width = Math.min(range.max, Math.max(range.min, Math.round(value)));
-      root.style.setProperty(kind === 'sidebar' ? '--sidebar-width' : '--drawer-width', `${width}px`);
+      root.style.setProperty('--drawer-width', `${width}px`);
       if (persist) {
-        try { localStorage.setItem(storageKeys[kind], String(width)); } catch (e) { /* Storage is optional. */ }
+        try { localStorage.setItem(evidenceStorageKey, String(width)); } catch (e) { /* Storage is optional. */ }
       }
       return width;
     };
 
-    Object.keys(storageKeys).forEach((kind) => {
-      try {
-        const savedWidth = Number(localStorage.getItem(storageKeys[kind]));
-        if (Number.isFinite(savedWidth) && savedWidth > 0) applyWidth(kind, savedWidth, false);
-      } catch (e) { /* Keep the CSS default. */ }
-    });
+    try {
+      const savedWidth = Number(localStorage.getItem(evidenceStorageKey));
+      if (Number.isFinite(savedWidth) && savedWidth > 0) applyWidth(savedWidth, false);
+    } catch (e) { /* Keep the CSS default. */ }
 
-    const bindHandle = (handle, kind) => {
+    const bindHandle = (handle) => {
       if (!handle) return;
       let activePointerId = null;
-      const pointerWidth = (clientX) => kind === 'sidebar'
-        ? clientX - sidebarEl.getBoundingClientRect().left
-        : window.innerWidth - clientX;
+      const pointerWidth = (clientX) => window.innerWidth - clientX;
 
       handle.addEventListener('pointerdown', (event) => {
         if (window.innerWidth <= 820 || event.button !== 0) return;
@@ -5595,12 +5586,12 @@
       });
       handle.addEventListener('pointermove', (event) => {
         if (activePointerId !== event.pointerId) return;
-        applyWidth(kind, pointerWidth(event.clientX), false);
+        applyWidth(pointerWidth(event.clientX), false);
       });
 
       const finishResize = (event) => {
         if (activePointerId === null || event.pointerId !== activePointerId) return;
-        applyWidth(kind, pointerWidth(event.clientX));
+        applyWidth(pointerWidth(event.clientX));
         if (handle.hasPointerCapture(activePointerId)) handle.releasePointerCapture(activePointerId);
         activePointerId = null;
         document.body.classList.remove('panel-resizing');
@@ -5610,21 +5601,18 @@
 
       handle.addEventListener('keydown', (event) => {
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        const panel = kind === 'sidebar' ? sidebarEl : scopeInspectorPanel;
-        const currentWidth = panel.getBoundingClientRect().width;
+        const currentWidth = scopeInspectorPanel.getBoundingClientRect().width;
         const visualDirection = event.key === 'ArrowRight' ? 1 : -1;
-        const delta = kind === 'sidebar' ? visualDirection * 16 : visualDirection * -16;
-        applyWidth(kind, currentWidth + delta);
+        const delta = visualDirection * -16;
+        applyWidth(currentWidth + delta);
         event.preventDefault();
       });
     };
 
-    bindHandle(sidebarHandle, 'sidebar');
-    bindHandle(evidenceHandle, 'evidence');
+    bindHandle(evidenceHandle);
     window.addEventListener('resize', () => {
       if (window.innerWidth <= 820) return;
-      if (!sidebarEl.classList.contains('collapsed')) applyWidth('sidebar', sidebarEl.getBoundingClientRect().width, false);
-      applyWidth('evidence', scopeInspectorPanel.getBoundingClientRect().width, false);
+      applyWidth(scopeInspectorPanel.getBoundingClientRect().width, false);
     });
   }
 
@@ -5846,7 +5834,7 @@
       railAskBtn.addEventListener('click', () => {
         dataExplorerDrawer.classList.remove('open');
                 settingsDrawer.classList.remove('open');
-        if (helpModalBackdrop) helpModalBackdrop.classList.remove('open');
+        Object.values(helpModalBackdrops).forEach((modal) => modal && modal.classList.remove('open'));
         showBusinessWorkspaceView('ask');
         if (window.innerWidth <= 820 && sidebarEl) {
           sidebarEl.classList.remove('open');
@@ -5976,9 +5964,13 @@
         });
       });
     }
-    if (closeHelpModalBtn && helpModalBackdrop) closeHelpModalBtn.addEventListener('click', () => helpModalBackdrop.classList.remove('open'));
-    if (helpModalBackdrop) helpModalBackdrop.addEventListener('click', (event) => {
-      if (event.target === helpModalBackdrop) helpModalBackdrop.classList.remove('open');
+    Object.values(helpModalBackdrops).forEach((modal) => {
+      if (!modal) return;
+      const closeButton = modal.querySelector('.close-help-modal-btn');
+      if (closeButton) closeButton.addEventListener('click', () => modal.classList.remove('open'));
+      modal.addEventListener('click', (event) => {
+        if (event.target === modal) modal.classList.remove('open');
+      });
     });
 
     // Feedback Modal Submission

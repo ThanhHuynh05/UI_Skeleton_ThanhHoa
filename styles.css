@@ -103,7 +103,7 @@
   --font-serif: "Sitka Text", Cambria, "Times New Roman", Times, serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  --sidebar-width: 200px; /* Slimmer navigation rail */
+  --sidebar-width: 280px;
   --header-height: 48px; /* Slim header */
   --drawer-width: 440px;
   --font-scale: 14px;
@@ -664,7 +664,8 @@ a:hover {
   border-bottom-color: var(--accent-primary);
   color: var(--accent-primary);
 }
-#settingsDrawer [hidden] { display: none !important; }
+#settingsDrawer [hidden],
+.settings-modal [hidden] { display: none !important; }
 .settings-help-panel {
   min-width: 0;
   overflow-x: hidden;
@@ -2513,6 +2514,7 @@ a:hover {
 .settings-page-backdrop {
   padding: 0;
   background: var(--bg-app);
+  z-index: 200;
 }
 
 .settings-page-backdrop .settings-modal {
@@ -2548,7 +2550,8 @@ a:hover {
   font-weight: 800;
 }
 
-.settings-page-backdrop #closeSettingsBtn {
+.settings-page-backdrop #closeSettingsBtn,
+.settings-page-backdrop #closeAdminSettingsBtn {
   display: flex;
   width: 100%;
   min-height: 50px;
@@ -2565,7 +2568,8 @@ a:hover {
   font-weight: 700;
 }
 
-.settings-page-backdrop #closeSettingsBtn:hover {
+.settings-page-backdrop #closeSettingsBtn:hover,
+.settings-page-backdrop #closeAdminSettingsBtn:hover {
   background: var(--button-primary-hover-bg);
   color: var(--button-primary-hover-fg);
 }
@@ -2696,7 +2700,8 @@ a:hover {
     font-size: 17px;
   }
   .settings-page-backdrop .settings-primary-tab,
-  .settings-page-backdrop #closeSettingsBtn {
+  .settings-page-backdrop #closeSettingsBtn,
+  .settings-page-backdrop #closeAdminSettingsBtn {
     font-size: 14px;
   }
 }
@@ -3587,8 +3592,7 @@ body.dashboard-page .app-header {
   .sidebar.collapsed .sidebar-rail-separator,
   .sidebar.collapsed .sidebar-conv-section,
   .sidebar.collapsed .sidebar-user-copy,
-  .sidebar.collapsed .user-menu-chevron,
-  .sidebar.collapsed .sidebar-resize-handle {
+  .sidebar.collapsed .user-menu-chevron {
     display: none !important;
   }
   .sidebar.collapsed .workspace-rail-item svg { width: 22px; height: 22px; }
@@ -5775,14 +5779,6 @@ body.panel-resizing .panel-resize-handle::after {
   background: var(--accent-primary);
 }
 
-.sidebar-resize-handle {
-  right: -5px;
-}
-
-.sidebar-resize-handle::after {
-  right: 4px;
-}
-
 .evidence-resize-handle {
   left: -5px;
 }
@@ -6062,8 +6058,7 @@ body.dashboard-page {
 }
 
 .admin-sidebar-toggle,
-.admin-mobile-nav-toggle,
-.admin-settings-link {
+.admin-mobile-nav-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -6102,8 +6097,7 @@ body.dashboard-page {
   cursor: pointer;
 }
 
-.admin-nav-item svg,
-.admin-settings-link svg {
+.admin-nav-item svg {
   width: 22px;
   height: 22px;
   flex: 0 0 22px;
@@ -6127,22 +6121,12 @@ body.dashboard-page {
 .admin-sidebar-footer {
   display: flex;
   align-items: center;
-  gap: 8px;
   margin-top: auto;
   padding: 12px;
   border-top: 1px solid var(--border-color);
 }
 
-.admin-settings-link {
-  order: 2;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-control);
-  text-decoration: none;
-}
-
-.admin-settings-link span { display: none; }
-.admin-user-menu { position: relative; min-width: 0; flex: 1; order: 1; }
+.admin-user-menu { position: relative; min-width: 0; flex: 1; }
 
 .admin-persona-button {
   display: flex;
@@ -6186,9 +6170,8 @@ body.dashboard-page {
 .admin-sidebar.collapsed .admin-sidebar-nav { padding-inline: 10px; }
 .admin-sidebar.collapsed .admin-nav-item { justify-content: center; padding-inline: 0; }
 .admin-sidebar.collapsed .admin-persona-button { justify-content: center; padding-inline: 0; }
-.admin-sidebar.collapsed .admin-sidebar-footer { flex-direction: column; }
-.admin-sidebar.collapsed .admin-settings-link { margin-inline: auto; order: 1; }
-.admin-sidebar.collapsed .admin-user-menu { flex: 0 0 auto; order: 2; }
+.admin-sidebar.collapsed .admin-sidebar-footer { justify-content: center; }
+.admin-sidebar.collapsed .admin-user-menu { flex: 0 0 auto; }
 .admin-sidebar.collapsed .admin-user-menu .user-menu-dropdown { left: calc(100% + 12px); bottom: 0; }
 
 .admin-main-shell { position: relative; min-width: 0; min-height: 100dvh; background: var(--bg-app); }
@@ -6266,7 +6249,6 @@ body.dashboard-page > .app-container > .app-header { display: none !important; }
   .admin-sidebar.collapsed .admin-persona-button { justify-content: flex-start; padding-inline: 10px; }
   .admin-sidebar.collapsed .admin-sidebar-footer { flex-direction: row; }
   .admin-sidebar.collapsed .admin-user-menu { flex: 1; order: 1; }
-  .admin-sidebar.collapsed .admin-settings-link { margin-inline: 0; order: 2; }
   .admin-mobile-nav-toggle {
     display: inline-flex;
     position: sticky;
