@@ -18,7 +18,7 @@ Four directions were assessed against the same Home and Result tasks:
 - Type scale: 12 / 14 / 16 / 18 / 24 / 32px; supporting labels never below 12px. Labels use sentence case, not uppercase tracking.
 - Colour: `--button-primary-*` (black in light, white in dark) for primary actions; `--accent-*` for links, selection and focus only; `--success-*`, `--warning-*` and `--danger-*` for meaning only; `--chart-1…5` for data series.
 - Spacing: 8px base grid; common values 8 / 16 / 24 / 32 / 48px.
-- Radius: 10px controls, 16px containers, 22px question bubble, 26px composer.
+- Radius: 10px controls, 12px form fields, 16px containers, 22px question bubble, 24px dialogs, 26px composer; actions in dialogs, pages and admin are full pills.
 - Thread: 768px reading column (`--thread-width`); answer prose 16px / 1.75.
 - Interactive target: minimum 44px height.
 - Icons: stroke-based SVG using `.ui-icon`; emoji are not action icons.
@@ -28,11 +28,16 @@ Four directions were assessed against the same Home and Result tasks:
 
 - Button: primary, secondary, quiet/action, danger, submitted status.
 - Input: text, search, textarea, select, date; default/error/disabled/focus.
-- Card: question, answer, task suggestion, source definition, saved query/snapshot, state card.
-- Drawer: History, Evidence Desk, Data Guide, Settings.
+- Card: question, answer, task suggestion, Data Guide entry, saved question/snapshot.
+- Pages: onboarding (full-screen persona choice), Data Guide (search, pill filters, two-column cards), Saved insights (library grid).
+- Panels: Evidence & sources (push panel with a segmented control and definition rows), admin event details (slide-over sheet).
+- Settings: centred dialog with a left section list, label/control rows, segmented choices and switches.
+- Search chats: command palette with recency groups and keyboard hints.
+- Lists: facts are definition rows separated by hairlines, not grids of boxed tiles (restricted answers, sources, interpretation).
 - Table: business result, technical schema, responsive horizontal region.
 - Status: success, warning, restricted, partial, cancelled, service error.
-- Modal: clarification, interpretation confirmation, feedback, export, destructive confirmation.
+- Modal: flat header, no eyebrow, footer of pill buttons. Variants: feedback, export, edit question, edit interpretation, source details, rename, destructive confirmation.
+- Clarification: inline in the thread, with the interpretation as chips and the choices as one grouped list.
 
 ## Responsive contract
 
@@ -40,4 +45,4 @@ Four directions were assessed against the same Home and Result tasks:
 - 768: navigation drawer, one-column task cards, Evidence as overlay sheet.
 - 390: full-width modal/sheet, stacked actions, local table scrolling, no page-level horizontal scroll.
 
-Tokens live at the top of `styles.css`. Section 20, "Workspace design layer", at the end of the file owns the final look of shared surfaces and ends with the interaction-state guard. Change components there rather than appending another override pass.
+Tokens live at the top of `styles.css`. Section 20, "Workspace design layer", owns the shell, thread and composer. Section 21, "Secondary surfaces", owns dialogs, onboarding, settings, Data Guide, the library, the Evidence panel and the admin console. The interaction-state guard comes last. Change components there rather than appending another override pass.

@@ -14,19 +14,12 @@
     .collapsible-body { padding: 16px; border-top: 1px solid var(--border-color); }
     
     .story-line { margin-bottom: 12px; }
-    .story-label { font-weight: 700; font-size: 12px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+    .story-label { font-weight: 600; font-size: 13px; color: var(--text-muted); margin-bottom: 4px; }
     .story-content { font-size: 14px; color: var(--text-primary); }
     .action-panel { display: flex; gap: 12px; background: var(--bg-surface); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 24px; align-items: center; justify-content: space-between; }
     .action-title { font-weight: 600; font-size: 15px; }
     .action-desc { font-size: 12px; color: var(--text-secondary); }
-    .admin-settings-modal { width: min(560px, calc(100vw - 32px)); }
-    .admin-settings-group h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
-    .admin-setting-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-    .admin-setting-option { min-height: 48px; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-control); background: var(--bg-surface); color: var(--text-primary); font: inherit; cursor: pointer; }
-    .admin-setting-option:hover,
-    .admin-setting-option:focus-visible { border-color: var(--accent-primary); }
-    .admin-setting-option.active { border-color: var(--accent-primary); background: var(--accent-subtle); color: var(--accent-primary); font-weight: 700; }
-    @media (max-width: 480px) { .admin-setting-options { grid-template-columns: 1fr; } }
+    .admin-settings-modal { width: min(520px, calc(100vw - 32px)); }
   </style>
 </head>
 <body class="dashboard-page">
@@ -80,16 +73,16 @@
         <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
       </button>
 
-    <div id="restrictedView" class="hidden" style="padding: 24px;">
+    <div id="restrictedView" class="hidden restricted-page">
       <div class="admin-restricted-box">
         <div class="restricted-view-icon" aria-hidden="true"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg></div>
-        <h2 style="font-size: 18px; font-weight: 700;">Dashboard Restricted to Admin Role</h2>
-        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;" id="restrictedExplanation">
-          You are currently signed in with a non-admin role. The AI Performance & Risk Dashboard is restricted to the <strong>Data / Admin team</strong>.
+        <h1>Admin access required</h1>
+        <p id="restrictedExplanation">
+          Observability and evaluation are available to the <strong>Data / Admin team</strong> persona. You are signed in with a different role.
         </p>
-        <div style="display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: 14px;">
-          <a href="index.html" class="btn-secondary" style="display: inline-flex; align-items: center; text-decoration: none;">Return to workspace</a>
-          <button type="button" class="btn-new-chat" id="switchToAdminBtn" style="width: auto; padding: 8px 20px;">Switch to Data / Admin persona</button>
+        <div class="restricted-actions">
+          <a href="index.html" class="btn-secondary">Back to workspace</a>
+          <button type="button" class="btn-new-chat" id="switchToAdminBtn">Switch to Data / Admin</button>
         </div>
       </div>
     </div>
@@ -201,17 +194,22 @@
       </section>
 
       <section class="journey-step observability-section admin-dashboard-view" id="observabilityView" aria-labelledby="observabilityTitle">
-        <div class="admin-page-heading"><span>Operations</span><h1 id="observabilityTitle">Observability</h1></div>
-        <p class="section-intro">Operational telemetry for the demo workspace. This section reports recorded request outcomes and keeps production observations separate from the simulated evaluation below.</p>
+        <header class="console-header">
+          <div>
+            <h1 id="observabilityTitle">Observability</h1>
+            <p class="section-intro">Requests, latency and feedback recorded in this browser's demo workspace.</p>
+          </div>
+          <span class="console-live-pill"><span class="console-live-dot" aria-hidden="true"></span>Demo telemetry</span>
+        </header>
 
-        <div class="observability-context" role="note">
+        <div class="observability-context console-meta" role="note">
           <div><span>Dataset</span><strong>Demo telemetry</strong></div>
           <div><span>Observation window</span><strong>Current stored session</strong></div>
           <div><span>Last event</span><strong id="observabilityLastEvent">Loading…</strong></div>
           <div><span>Schema coverage</span><strong id="observabilitySchemaCoverage">Loading…</strong></div>
         </div>
 
-        <div class="observability-kpi-grid">
+        <div class="observability-kpi-grid stat-strip">
           <article><span>Total requests</span><strong id="kpiQueries">—</strong><small>All recorded requests in the current demo store</small></article>
           <article><span>Successful outcomes</span><strong id="kpiQuality">—</strong><small>SUCCESS or AMBIGUOUS_RESOLVED ÷ traced requests</small></article>
           <article><span>Average latency</span><strong id="kpiLatency">—</strong><small>Mean end-to-end latency across traces</small></article>
@@ -256,10 +254,15 @@
       </section>
 
       <section class="journey-step benchmark-research-section admin-dashboard-view hidden" id="evaluationView" aria-labelledby="benchmarkTitle">
-        <div class="admin-page-heading"><span>Research</span><h1 id="benchmarkTitle">Model evaluation benchmark</h1></div>
+        <header class="console-header">
+          <div>
+            <h1 id="benchmarkTitle">Evaluation</h1>
+            <p class="section-intro">Run the fixture benchmark against a prompting strategy and review each test case.</p>
+          </div>
+        </header>
         <div class="simulated-benchmark-notice" role="note">
-          <strong>Simulated benchmark</strong>
-          <span>These fixture results illustrate the evaluation workflow. They are not measured model performance and do not establish a preferred strategy.</span>
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>
+          <span><strong>Simulated benchmark.</strong> Results come from predefined fixtures. They are not measured model performance and do not rank strategies.</span>
         </div>
 
         <div class="benchmark-toolbar">
@@ -295,7 +298,7 @@
           </dl>
         </div>
 
-        <div class="benchmark-summary-grid">
+        <div class="benchmark-summary-grid stat-strip">
           <article><span>Simulated pass rate</span><strong id="benchmarkPassRate">Not run</strong><small id="benchmarkPassCount">Binary fixture checks</small></article>
           <article><span>Simulated latency</span><strong id="benchmarkLatency">Not run</strong><small>Configured estimate per query</small></article>
           <article><span>Context size</span><strong id="benchmarkTokens">Not run</strong><small>Configured tokens per query</small></article>
@@ -329,11 +332,11 @@
   </div>
 
   <!-- Unified Inspection Modal -->
-  <div class="modal-backdrop" id="inspectionModalBackdrop" aria-hidden="true">
-    <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="inspectionModalTitle" tabindex="-1" style="max-width: 600px;">
+  <div class="modal-backdrop sheet-backdrop" id="inspectionModalBackdrop" aria-hidden="true">
+    <div class="app-modal sheet-modal" role="dialog" aria-modal="true" aria-labelledby="inspectionModalTitle" tabindex="-1">
       <div class="modal-header">
-        <div class="modal-title" id="inspectionModalTitle">Event Details</div>
-        <button type="button" class="header-icon-btn" id="closeInspectionModalBtn">✕</button>
+        <div class="modal-title" id="inspectionModalTitle">Event details</div>
+        <button type="button" class="header-icon-btn modal-close" id="closeInspectionModalBtn" aria-label="Close event details"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
       </div>
       <div class="modal-body" id="inspectionModalBody"></div>
     </div>
@@ -342,13 +345,13 @@
   <div class="modal-backdrop" id="adminSettingsBackdrop" aria-hidden="true">
     <div class="app-modal admin-settings-modal" role="dialog" aria-modal="true" aria-labelledby="adminSettingsTitle" tabindex="-1">
       <div class="modal-header">
-        <div class="modal-title" id="adminSettingsTitle">User Preferences &amp; Settings</div>
-        <button type="button" class="header-icon-btn" id="closeAdminSettingsBtn" aria-label="Close settings">✕</button>
+        <div class="modal-title" id="adminSettingsTitle">Settings</div>
+        <button type="button" class="header-icon-btn modal-close" id="closeAdminSettingsBtn" aria-label="Close settings"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
       </div>
       <div class="modal-body">
-        <section class="admin-settings-group" aria-labelledby="appearanceSettingLabel">
-          <h3 id="appearanceSettingLabel">Appearance</h3>
-          <div class="admin-setting-options" data-setting-group="theme">
+        <section class="settings-row admin-settings-group" aria-labelledby="appearanceSettingLabel">
+          <div class="settings-row-copy"><strong id="appearanceSettingLabel">Theme</strong><span>Light, dark, or follow your system.</span></div>
+          <div class="admin-setting-options segmented-control" data-setting-group="theme">
             <button type="button" class="admin-setting-option" data-theme-choice="light">Light</button>
             <button type="button" class="admin-setting-option" data-theme-choice="dark">Dark</button>
             <button type="button" class="admin-setting-option" data-theme-choice="system">System</button>
@@ -362,6 +365,7 @@
   <script>
     (function () {
       'use strict';
+      const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
       let currentUser = null;
       try { const stored = localStorage.getItem('aria_user_profile'); if (stored) currentUser = JSON.parse(stored); } catch (e) {}
 
@@ -370,7 +374,7 @@
       const isAdmin = Boolean(currentUser && currentUser.role === 'data_admin');
       
       if (currentUser) {
-         document.getElementById('adminUserLabel').innerHTML = `<strong>${currentUser.name}</strong><small>${currentUser.roleTitle || 'Data / Admin team'}</small>`;
+         document.getElementById('adminUserLabel').innerHTML = `<strong>${esc(currentUser.name)}</strong><small>${esc(currentUser.roleTitle || 'Data / Admin team')}</small>`;
       }
 
       if (!isAdmin) {
@@ -391,6 +395,11 @@
         ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
         : savedTheme;
       document.documentElement.setAttribute('data-theme', resolvedTheme);
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (event) => {
+        if ((localStorage.getItem('aria_theme') || 'light') === 'system') {
+          document.documentElement.setAttribute('data-theme', event.matches ? 'dark' : 'light');
+        }
+      });
 
       const adminSettingsBtn = document.getElementById('adminSettingsBtn');
       const adminSettingsBackdrop = document.getElementById('adminSettingsBackdrop');
@@ -464,7 +473,7 @@
         const open = adminSidebar.classList.toggle('mobile-open');
         adminMobileNavToggle.setAttribute('aria-expanded', String(open));
       });
-      setAdminView(location.hash === '#evaluation' ? 'evaluation' : 'observability');
+      setAdminView(location.hash === '#evaluation' || location.hash === '#benchmarkTitle' ? 'evaluation' : 'observability');
 
       const adminUserMenuBtn = document.getElementById('adminUserMenuBtn');
       const adminUserMenuDropdown = document.getElementById('adminUserMenuDropdown');
@@ -507,6 +516,8 @@
         const btn = document.getElementById('runBenchmarkBtn');
         btn.disabled = true;
         btn.textContent = 'Running...';
+        const strategySelect = document.getElementById('strategySelect');
+        if (strategySelect) strategySelect.disabled = true;
         const pb = document.getElementById('benchmarkProgressBar');
         pb.style.display = 'block';
         let fill = document.getElementById('progressBarFill');
@@ -522,6 +533,7 @@
               isRunning = false;
               btn.disabled = false;
               btn.textContent = 'Run simulated benchmark';
+              if (strategySelect) strategySelect.disabled = false;
               benchmarkHasRun = true;
               const strat = window.AriaMock.EVALUATION_STRATEGIES[currentStrategyKey];
               const executedAt = new Date();
@@ -587,9 +599,9 @@
 
       function renderFeedbackChart(feedback) {
          const w = document.getElementById('feedbackChartWrapper');
-         const tot = (feedback.thumbsUp||0) + (feedback.thumbsDown||0) || 1;
-         const pct = Math.round(((feedback.thumbsUp||0)/tot)*100);
-         document.getElementById('feedbackStatsLabel').textContent = `${pct}% positive · ${tot} ratings`;
+         const tot = (feedback.thumbsUp||0) + (feedback.thumbsDown||0);
+         const pct = tot ? Math.round(((feedback.thumbsUp||0)/tot)*100) : 0;
+         document.getElementById('feedbackStatsLabel').textContent = tot ? `${pct}% positive · ${tot} ${tot === 1 ? 'rating' : 'ratings'}` : 'No ratings yet';
          let html = `<div class="feedback-summary-bar" title="${feedback.thumbsUp || 0} positive, ${feedback.thumbsDown || 0} negative"><span style="width:${pct}%"></span></div><div class="feedback-reasons">`;
          Object.keys(feedback.reasons||{}).forEach(k => {
            html += `<div class="feedback-reason"><span>${k}</span><strong>${feedback.reasons[k]}</strong></div>`;
@@ -646,14 +658,14 @@
          const tbody = document.getElementById('activityTableBody');
          tbody.innerHTML = pageItems.length ? pageItems.map(c => `
            <tr>
-             <td style="font-size:12px;"><strong>${c.user}</strong><br><span style="color:var(--text-muted);">${c.time}</span></td>
+             <td style="font-size:12px;"><strong>${esc(c.user)}</strong><br><span style="color:var(--text-muted);">${esc(c.time)}</span></td>
              <td style="font-size:13px; max-width:200px;">
-               <span class="brand-badge" style="font-size: 12px; margin-bottom:4px; display:inline-block;">${c.type}</span><br>
-               ${c.q}
+               <span class="brand-badge" style="font-size: 12px; margin-bottom:4px; display:inline-block;">${esc(c.type)}</span><br>
+               ${esc(c.q)}
              </td>
-             <td><span class="badge-status ${c.out.includes('ERROR')||c.out.includes('BLOCKED')||c.out.includes('DENIED')?'error':'success'}">${c.out.replaceAll('_', ' ')}</span></td>
+             <td><span class="badge-status ${c.out.includes('ERROR')||c.out.includes('BLOCKED')||c.out.includes('DENIED')?'error':'success'}">${c.out.replaceAll('_', ' ').toLowerCase().replace(/^./, ch => ch.toUpperCase())}</span></td>
              <td>${(c.lat/1000).toFixed(2)}s</td>
-             <td><button class="btn-table-action inspect-btn" data-id="${c.id}" data-type="${c.type}">Inspect</button></td>
+             <td><button class="btn-table-action inspect-btn" data-id="${esc(c.id)}" data-type="${esc(c.type)}" aria-label="View details">View</button></td>
            </tr>
          `).join('') : '<tr><td colspan="5" class="benchmark-not-run">No activities match the current filters.</td></tr>';
 
@@ -678,7 +690,7 @@
              <td style="font-size:13px; max-width:200px;">${q.question}</td>
              <td style="font-size:12px; color:var(--text-secondary); max-width:200px;">${q.expectedOutcome}</td>
              <td><span class="${pass?'badge-pass':'badge-fail'}">${pass?'PASS':'FAIL'}</span></td>
-             <td><button class="btn-table-action inspect-bm" data-id="${q.id}">Inspect</button></td>
+             <td><button class="btn-table-action inspect-bm" data-id="${q.id}" aria-label="View details">View</button></td>
            </tr>`;
          }).join('');
 
@@ -695,7 +707,8 @@
           if (typeof value === 'object') return value.label || value.value || value.name || value.key || JSON.stringify(value);
           return String(value);
         };
-        const renderAnswerText = value => String(value || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        const readableHtml = value => esc(readable(value));
+        const renderAnswerText = value => esc(value || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
         if(type==='Audit') {
            document.getElementById('inspectionModalTitle').textContent = 'Audit event details';
            item = window.AriaMock.getAuditTrail().find(x=>x.id===id);
@@ -703,9 +716,9 @@
            const scope = context.appliedScope || {};
            const fullQuestion = context.originalQuestion || item.question;
            const isLegacySelection = !item.context && /^(next|last|current|all time|q[1-4]|fy\d{2,4})\b/i.test(item.question || '');
-           whatAsked = `<div><strong>Original question:</strong> ${fullQuestion || 'Not recorded'}</div>`;
-           if (context.selectedClarification) whatAsked += `<div class="audit-detail-row"><strong>Clarification selected:</strong> ${context.selectedClarification}</div>`;
-           if (context.displayedQuestion && context.displayedQuestion !== fullQuestion && context.displayedQuestion !== context.selectedClarification) whatAsked += `<div class="audit-detail-row"><strong>Displayed rerun question:</strong> ${context.displayedQuestion}</div>`;
+           whatAsked = `<div><strong>Original question:</strong> ${esc(fullQuestion || 'Not recorded')}</div>`;
+           if (context.selectedClarification) whatAsked += `<div class="audit-detail-row"><strong>Clarification selected:</strong> ${esc(context.selectedClarification)}</div>`;
+           if (context.displayedQuestion && context.displayedQuestion !== fullQuestion && context.displayedQuestion !== context.selectedClarification) whatAsked += `<div class="audit-detail-row"><strong>Displayed rerun question:</strong> ${esc(context.displayedQuestion)}</div>`;
            if (isLegacySelection) whatAsked += `<div class="audit-legacy-note">This legacy event stored only the clarification selection. The original question was not recorded in the older audit format.</div>`;
            if (context.reconstructedFromLegacyAudit) whatAsked += `<div class="audit-legacy-note">The original question was linked from the preceding clarification audit event. Detailed scope fields unavailable in the legacy record are marked as not recorded.</div>`;
            const outcomeText = item.outcome === 'ANSWERED'
@@ -715,8 +728,8 @@
                : `The request finished with outcome ${item.outcome.replaceAll('_', ' ')}.`);
            if (context.answer) {
              whatAnswered = `<div class="audit-answer-text">${renderAnswerText(context.answer)}</div>`;
-             if (context.answerSummary) whatAnswered += `<div class="audit-answer-meta"><strong>Summary:</strong> ${context.answerSummary}</div>`;
-             if (context.answerDataAsOf) whatAnswered += `<div class="audit-answer-meta"><strong>Data as of:</strong> ${context.answerDataAsOf}</div>`;
+             if (context.answerSummary) whatAnswered += `<div class="audit-answer-meta"><strong>Summary:</strong> ${esc(context.answerSummary)}</div>`;
+             if (context.answerDataAsOf) whatAnswered += `<div class="audit-answer-meta"><strong>Data as of:</strong> ${esc(context.answerDataAsOf)}</div>`;
              if (Number.isFinite(context.answerRowCount)) whatAnswered += `<div class="audit-answer-meta"><strong>Rows returned:</strong> ${context.answerRowCount}</div>`;
              whatAnswered += `<div class="audit-answer-meta"><strong>Recorded outcome:</strong> ${item.outcome.replaceAll('_', ' ')}</div>`;
              if (context.answerSource === 'demo_fixture_reconstruction') whatAnswered += `<div class="audit-legacy-note">This answer was reconstructed from the matching demo fixture because the older audit event did not store its answer payload.</div>`;
@@ -724,23 +737,23 @@
              whatAnswered = `${outcomeText}<br><strong>Recorded outcome:</strong> ${item.outcome.replaceAll('_', ' ')}<div class="audit-legacy-note">The answer payload was not recorded for this event, so the audit view cannot reproduce the response text.</div>`;
            }
            const hasScope = Object.keys(scope).length > 0 || context.domain || context.period;
-           whatHappened = `Request was processed in ${(item.latencyMs/1000).toFixed(2)}s. ${item.details}`;
+           whatHappened = `Request was processed in ${(item.latencyMs/1000).toFixed(2)}s. ${esc(item.details)}`;
            if (hasScope) whatHappened += `<div class="audit-context-grid">
-             <div><span>Metric</span><strong>${readable(context.metric || scope.metric)}</strong></div>
-             <div><span>Grain</span><strong>${readable(context.grain || scope.grain || scope.breakdown)}</strong></div>
-             <div><span>Period</span><strong>${readable(context.period || scope.period || scope.time)}</strong></div>
-             <div><span>Domain / project</span><strong>${readable(context.project || scope.project || scope.projectScope || context.domain || scope.domain)}</strong></div>
-             <div><span>Currency</span><strong>${readable(context.currency || scope.currency)}</strong></div>
-             <div><span>Assumptions</span><strong>${readable(context.assumptions || scope.assumptions)}</strong></div>
+             <div><span>Metric</span><strong>${readableHtml(context.metric || scope.metric)}</strong></div>
+             <div><span>Grain</span><strong>${readableHtml(context.grain || scope.grain || scope.breakdown)}</strong></div>
+             <div><span>Period</span><strong>${readableHtml(context.period || scope.period || scope.time)}</strong></div>
+             <div><span>Domain / project</span><strong>${readableHtml(context.project || scope.project || scope.projectScope || context.domain || scope.domain)}</strong></div>
+             <div><span>Currency</span><strong>${readableHtml(context.currency || scope.currency)}</strong></div>
+             <div><span>Assumptions</span><strong>${readableHtml(context.assumptions || scope.assumptions)}</strong></div>
            </div>`;
            const restrictedOutcome = item.outcome.includes('BLOCKED') || item.outcome.includes('DENIED');
            whyMatters = restrictedOutcome ? 'Security guardrails prevented access to restricted data or an unsafe operation.' : 'The event preserves the business question, applied scope, outcome, and execution context for verification.';
            action = restrictedOutcome ? 'Use the documented access workflow or contact the data owner if this request is legitimate.' : 'No action needed.';
-           advDetails = `ID: ${item.id}<br>Time: ${item.timestamp}<br>Actor: ${item.user}<br>Role: ${item.role}<br>Interaction type: ${context.interactionType || 'Legacy audit event'}<br>Executed question: ${context.executedQuestion || item.question}<br>Latency: ${item.latencyMs}ms`;
+           advDetails = `ID: ${esc(item.id)}<br>Time: ${esc(item.timestamp)}<br>Actor: ${esc(item.user)}<br>Role: ${esc(item.role)}<br>Interaction type: ${esc(context.interactionType || 'Legacy audit event')}<br>Executed question: ${esc(context.executedQuestion || item.question)}<br>Latency: ${esc(item.latencyMs)}ms`;
         } else if (type==='Trace') {
            document.getElementById('inspectionModalTitle').textContent = 'Request trace details';
            item = window.AriaMock.getObservabilityStore().traces.find(x=>x.requestId===id);
-           whatAsked = `User (${item.role}) asked: "${item.query}"`;
+           whatAsked = `User (${esc(item.role)}) asked: "${esc(item.query)}"`;
            const traceOutcome = item.status === 'SUCCESS'
              ? 'The request completed and returned an answer.'
              : (item.status === 'AMBIGUOUS_RESOLVED'
@@ -752,7 +765,7 @@
              ? 'The incomplete pipeline can explain a missing or partial answer and should be reviewed before using the result.'
              : 'This trace connects the user request, final outcome, execution time, and source usage for operational verification.';
            action = item.status.includes('ERROR') ? 'Inspect the failed stage and retry history before rerunning the request.' : 'No operational intervention is required; retain the trace for comparison.';
-           advDetails = `Request ID: ${item.requestId}<br>Time: ${item.timestamp}<br>Status: ${item.status}<br>Stages: ${item.stages}/5<br>Latency: ${item.latencyMs}ms<br>SQL length: ${item.sqlLength || 0} characters<br>Physical tables: ${(item.tablesUsed||[]).join(', ') || 'None'}`;
+           advDetails = `Request ID: ${esc(item.requestId)}<br>Time: ${esc(item.timestamp)}<br>Status: ${item.status}<br>Stages: ${item.stages}/5<br>Latency: ${item.latencyMs}ms<br>SQL length: ${item.sqlLength || 0} characters<br>Physical tables: ${(item.tablesUsed||[]).join(', ') || 'None'}`;
         } else if (type==='Benchmark') {
            document.getElementById('inspectionModalTitle').textContent = 'Simulated fixture details';
            item = window.AriaMock.BENCHMARK_QUESTIONS.find(x=>x.id===id);

@@ -1976,7 +1976,8 @@ GROUP BY p.asset_sub_type;`,
   }
 
   function updateSavedQuery(userId, queryData) {
-    return saveQuery(userId, queryData);
+    const exists = getSavedInsights(userId).some(x => x.id === queryData.id);
+    return exists ? saveQuery(userId, queryData) : null;
   }
 
   function saveSnapshot(userId, snapshotData) {
@@ -2133,11 +2134,24 @@ GROUP BY p.asset_sub_type;`,
       if (status === 'ERROR_RECOVERY_FAILED') store.metrics.retryCount += 2;
       if (status.includes('BLOCKED') || status === 'ACCESS_DENIED') store.metrics.blockedCount += 1;
 
-      // Recompute averages
-      const totalLatency = store.traces.reduce((acc, t) => acc + (t.latencyMs || 0), 0);
-      store.metrics.avgLatencyMs = Math.round(totalLatency / store.traces.length);
-      const successes = store.traces.filter(t => t.status === 'SUCCESS' || t.status === 'AMBIGUOUS_RESOLVED').length;
-      store.metrics.successRatePct = Math.round((successes / store.traces.length) * 1000) / 10;
+      // Update the running aggregates. Recomputing them from the few stored
+      // traces made the seeded KPIs jump after the first new request.
+      const n = store.metrics.totalQueries;
+      store.metrics.avgLatencyMs = Math.round(((store.metrics.avgLatencyMs || 0) * (n - 1) + (latencyMs || 0)) / n);
+      // A clarification or scope question is a pause, not an outcome.
+      const isIntermediate = status === 'AMBIGUOUS' || status === 'SCOPE_CONFLICT';
+      if (!isIntermediate) {
+        const previousOutcomes = store.metrics.outcomeCount ?? (n - 1);
+        const previousSuccesses = (store.metrics.successRatePct / 100) * previousOutcomes;
+        const isSuccess = status === 'SUCCESS' || status === 'AMBIGUOUS_RESOLVED';
+        store.metrics.outcomeCount = previousOutcomes + 1;
+        store.metrics.successRatePct = Math.round(((previousSuccesses + (isSuccess ? 1 : 0)) / store.metrics.outcomeCount) * 1000) / 10;
+      }
+      // Feed the latency chart with real requests, keeping the latest points.
+      store.latencyHistory = (store.latencyHistory || []).concat({
+        time: newTrace.timestamp.slice(11, 16),
+        latency: Math.round((latencyMs || 0) / 10) / 100
+      }).slice(-8);
 
       localStorage.setItem('aria_observability_v2', JSON.stringify(store));
     } catch (e) {
@@ -2201,6 +2215,25 @@ GROUP BY p.asset_sub_type;`,
       );
     } catch (e) {
       console.warn('Failed to record feedback', e);
+    }
+  }
+
+  // Withdraws a rating so the admin counts match what the thread shows.
+  function clearFeedback(context = {}) {
+    try {
+      const store = getObservabilityStore();
+      const resultKey = context.conversationId && context.messageId ? `${context.conversationId}:${context.messageId}` : null;
+      const previous = resultKey && store.feedback.byResult ? store.feedback.byResult[resultKey] : null;
+      if (!previous) return;
+      if (previous.type === 'up') store.feedback.thumbsUp = Math.max(0, store.feedback.thumbsUp - 1);
+      if (previous.type === 'down') {
+        store.feedback.thumbsDown = Math.max(0, store.feedback.thumbsDown - 1);
+        if (previous.reason) store.feedback.reasons[previous.reason] = Math.max(0, Number(store.feedback.reasons[previous.reason] || 0) - 1);
+      }
+      delete store.feedback.byResult[resultKey];
+      localStorage.setItem('aria_observability_v2', JSON.stringify(store));
+    } catch (e) {
+      console.warn('Failed to clear feedback', e);
     }
   }
 
@@ -5431,7 +5464,11 @@ GROUP BY p.asset_sub_type;`,
       }
 
       // Apply Scope to Results via Unified Scope Resolver
-      const finalResult = applyScopeToMockResult(matchedData, resolvedScope, queryToExecute, options.interpretationOverride);
+      // A clarification choice arrives as its button label ("By Geographic Zone…").
+      // Read the metric from the question that was asked, not from that label.
+      const answersClarification = Boolean(options.clarificationPayload && QUERY_RESPONSES[options.clarificationPayload]);
+      const intentText = answersClarification && baseAuditContext.originalQuestion ? baseAuditContext.originalQuestion : queryToExecute;
+      const finalResult = applyScopeToMockResult(matchedData, resolvedScope, intentText, options.interpretationOverride);
 
       // Standard pipeline execution (5 stages)
       let stageIdx = 0;
@@ -5531,6 +5568,7 @@ GROUP BY p.asset_sub_type;`,
     getObservabilityStore,
     logQueryToObservability,
     recordFeedback,
+    clearFeedback,
     getAuditTrail,
     logAuditEvent,
     getSavedInsights,
