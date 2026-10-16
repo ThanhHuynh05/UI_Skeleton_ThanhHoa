@@ -388,6 +388,23 @@
       state.activeConversationId = storedActive || (state.conversations.length > 0 ? state.conversations[0].id : null);
       // Blank chats left by earlier sessions are not history.
       pruneEmptyConversations();
+      // Earlier versions shortened generated titles to 40 characters. Recover
+      // the complete title from the first user question when it is an exact
+      // continuation of that automatically generated prefix.
+      let recoveredTitle = false;
+      state.conversations.forEach((conversation) => {
+        const firstQuestion = (conversation.messages || []).find((message) => message.role === 'user' && message.text);
+        const fullQuestion = firstQuestion ? String(firstQuestion.text).trim() : '';
+        if (
+          fullQuestion.length > 40
+          && String(conversation.title || '').length === 40
+          && fullQuestion.startsWith(conversation.title)
+        ) {
+          conversation.title = fullQuestion;
+          recoveredTitle = true;
+        }
+      });
+      if (recoveredTitle) saveConversationsToStorage();
     } catch (e) {
       console.warn('Failed to load conversations', e);
       state.conversations = [];
@@ -2244,9 +2261,9 @@
     // 1. Ensure Active Conversation exists
     let conv = getActiveConversation();
     if (!conv) {
-      conv = createNewConversation(promptText.substring(0, 40));
+      conv = createNewConversation(promptText.trim());
     } else if (conv.messages.length === 0 && conv.title === 'New Conversation') {
-      conv.title = promptText.substring(0, 40);
+      conv.title = promptText.trim();
       saveConversationsToStorage();
       renderSidebarConversations();
     }

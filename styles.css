@@ -7150,9 +7150,15 @@ html body .palette-row:focus-visible { background: var(--bg-hover) !important; o
 .palette-new-chat .palette-row-icon { background: var(--bg-subtle); }
 .palette-row-title { font-size: 14px; font-weight: 500; }
 .palette-row-text { display: grid; min-width: 0; flex: 1; gap: 1px; }
-.palette-row .history-search-result-title { overflow: hidden; font-size: 14px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.palette-row .history-search-result-title {
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: normal;
+}
 .palette-row .history-search-result-snippet { overflow: hidden; color: var(--text-muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.palette-row .history-search-result-meta { flex: 0 0 auto; color: var(--text-muted); font-size: 12px; }
+.palette-row .history-search-result-meta { align-self: flex-start; flex: 0 0 auto; padding-top: 2px; color: var(--text-muted); font-size: 12px; }
 .palette-group-label { padding: 14px 12px 4px; color: var(--text-muted); font-size: 12px; font-weight: 500; }
 #historySearchModalBackdrop .history-search-empty { padding: 28px 12px; border: 0; background: none; color: var(--text-muted); font-size: 14px; text-align: center; }
 .palette-footer { display: flex; gap: 16px; padding: 10px 20px; border-top: 1px solid var(--border-color); color: var(--text-muted); font-size: 12px; }
