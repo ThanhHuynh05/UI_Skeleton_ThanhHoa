@@ -54,15 +54,43 @@
           <span>Settings</span>
         </button>
         <div class="user-menu-wrapper admin-user-menu" id="adminUserBadge">
-          <button type="button" class="admin-persona-button" id="adminUserMenuBtn" aria-label="User profile and roles" aria-expanded="false">
-            <span class="admin-persona-avatar" aria-hidden="true">A</span>
+          <button type="button" class="admin-persona-button" id="adminUserMenuBtn" aria-label="User profile and roles" aria-haspopup="menu" aria-expanded="false">
+            <span class="admin-persona-avatar" id="adminPersonaAvatar" aria-hidden="true">A</span>
             <span class="admin-persona-copy" id="adminUserLabel"><strong>Admin</strong><small>Data / Admin team</small></span>
             <span class="user-menu-chevron" aria-hidden="true">&#9662;</span>
           </button>
-          <div class="user-menu-dropdown" id="adminUserMenuDropdown" role="menu">
-            <div class="user-menu-context"><strong>Demo persona</strong><span>Access and masking are simulated.</span></div>
-            <a href="index.html" class="user-menu-item" role="menuitem">Return to business workspace</a>
-            <button type="button" class="user-menu-item" id="adminSwitchPersonaBtn" role="menuitem"><span>Switch demo persona</span></button>
+          <div class="user-menu-dropdown account-menu admin-account-menu" id="adminUserMenuDropdown" role="menu" aria-label="Account">
+            <div class="user-menu-context account-menu-header">
+              <span class="account-menu-avatar" id="adminMenuAvatar" aria-hidden="true">A</span>
+              <span class="account-menu-identity">
+                <span class="sr-only">Current demo persona:</span>
+                <strong id="adminMenuPersonaName">Admin</strong>
+                <span id="adminMenuPersonaRole">Data / Admin team</span>
+              </span>
+              <span class="account-menu-badge">Demo</span>
+            </div>
+            <a href="index.html" class="user-menu-item" role="menuitem">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+              <span>Return to workspace</span>
+            </a>
+            <button type="button" class="user-menu-item" id="adminSwitchPersonaBtn" role="menuitem">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M21 3l-7 7M8 21H3v-5M3 21l7-7"></path></svg>
+              <span>Switch persona</span>
+            </button>
+            <button type="button" class="user-menu-item" id="adminMenuSettingsBtn" role="menuitem">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"></path></svg>
+              <span>Settings</span>
+            </button>
+            <button type="button" class="user-menu-item" id="adminMenuHelpBtn" role="menuitem">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.1 9a3 3 0 1 1 5.8 1c0 2-3 3-3 3M12 17h.01"></path></svg>
+              <span>Help &amp; shortcuts</span>
+            </button>
+            <div class="user-menu-separator" role="separator"></div>
+            <button type="button" class="user-menu-item danger" id="adminResetDemoBtn" role="menuitem">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 4v6h6M23 20v-6h-6M20.5 9A9 9 0 0 0 5.6 5.6L1 10M23 14l-4.6 4.4A9 9 0 0 1 3.5 15"></path></svg>
+              <span>Reset demo data</span>
+            </button>
+            <p class="account-menu-note">Synthetic data · access and masking are simulated</p>
           </div>
         </div>
       </div>
@@ -348,15 +376,33 @@
         <div class="modal-title" id="adminSettingsTitle">Settings</div>
         <button type="button" class="header-icon-btn modal-close" id="closeAdminSettingsBtn" aria-label="Close settings"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
       </div>
-      <div class="modal-body">
-        <section class="settings-row admin-settings-group" aria-labelledby="appearanceSettingLabel">
+      <div class="admin-settings-layout">
+        <nav class="admin-settings-nav" aria-label="Settings sections">
+          <button type="button" class="admin-settings-tab active" id="adminGeneralTab" data-admin-settings-view="general">General</button>
+          <button type="button" class="admin-settings-tab" id="adminHelpTab" data-admin-settings-view="help">Help &amp; shortcuts</button>
+        </nav>
+        <div class="modal-body admin-settings-content">
+        <section id="adminGeneralPanel" class="admin-settings-panel" aria-labelledby="appearanceSettingLabel">
+          <h2>General</h2>
+          <div class="settings-row admin-settings-group">
           <div class="settings-row-copy"><strong id="appearanceSettingLabel">Theme</strong><span>Light, dark, or follow your system.</span></div>
           <div class="admin-setting-options segmented-control" data-setting-group="theme">
             <button type="button" class="admin-setting-option" data-theme-choice="light">Light</button>
             <button type="button" class="admin-setting-option" data-theme-choice="dark">Dark</button>
             <button type="button" class="admin-setting-option" data-theme-choice="system">System</button>
           </div>
+          </div>
         </section>
+        <section id="adminHelpPanel" class="admin-settings-panel" hidden>
+          <h2>Help &amp; shortcuts</h2>
+          <p class="admin-help-intro">Use these shortcuts while working in the admin console.</p>
+          <div class="settings-shortcuts-list">
+            <div class="settings-shortcut-item"><kbd>Esc</kbd><span>Close an open menu or dialog</span></div>
+            <div class="settings-shortcut-item"><kbd>Tab</kbd><span>Move between controls</span></div>
+            <div class="settings-shortcut-item"><kbd>Enter</kbd><span>Activate the focused control</span></div>
+          </div>
+        </section>
+        </div>
       </div>
     </div>
   </div>
@@ -375,6 +421,11 @@
       
       if (currentUser) {
          document.getElementById('adminUserLabel').innerHTML = `<strong>${esc(currentUser.name)}</strong><small>${esc(currentUser.roleTitle || 'Data / Admin team')}</small>`;
+         const initial = (currentUser.name || 'A').trim().charAt(0).toUpperCase();
+         document.getElementById('adminPersonaAvatar').textContent = initial;
+         document.getElementById('adminMenuAvatar').textContent = initial;
+         document.getElementById('adminMenuPersonaName').textContent = currentUser.name;
+         document.getElementById('adminMenuPersonaRole').textContent = currentUser.roleTitle || 'Data / Admin team';
       }
 
       if (!isAdmin) {
@@ -405,6 +456,19 @@
       const adminSettingsBackdrop = document.getElementById('adminSettingsBackdrop');
       const closeAdminSettingsBtn = document.getElementById('closeAdminSettingsBtn');
       const adminSettingsDialog = adminSettingsBackdrop.querySelector('[role="dialog"]');
+      const adminGeneralPanel = document.getElementById('adminGeneralPanel');
+      const adminHelpPanel = document.getElementById('adminHelpPanel');
+      let adminSettingsTrigger = adminSettingsBtn;
+      const setAdminSettingsView = (view) => {
+        const showHelp = view === 'help';
+        adminGeneralPanel.hidden = showHelp;
+        adminHelpPanel.hidden = !showHelp;
+        document.querySelectorAll('[data-admin-settings-view]').forEach(button => {
+          const selected = button.dataset.adminSettingsView === view;
+          button.classList.toggle('active', selected);
+          button.setAttribute('aria-selected', String(selected));
+        });
+      };
       const syncSettingsControls = () => {
         const theme = localStorage.getItem('aria_theme') || 'light';
         document.querySelectorAll('[data-theme-choice]').forEach(button => {
@@ -413,8 +477,10 @@
           button.setAttribute('aria-pressed', String(selected));
         });
       };
-      const openAdminSettings = () => {
+      const openAdminSettings = (view = 'general', trigger = adminSettingsBtn) => {
+        adminSettingsTrigger = trigger;
         syncSettingsControls();
+        setAdminSettingsView(view);
         adminSettingsBackdrop.classList.add('open');
         adminSettingsBackdrop.setAttribute('aria-hidden', 'false');
         requestAnimationFrame(() => closeAdminSettingsBtn.focus());
@@ -422,9 +488,9 @@
       const closeAdminSettings = () => {
         adminSettingsBackdrop.classList.remove('open');
         adminSettingsBackdrop.setAttribute('aria-hidden', 'true');
-        requestAnimationFrame(() => adminSettingsBtn.focus());
+        requestAnimationFrame(() => adminSettingsTrigger?.focus());
       };
-      adminSettingsBtn.addEventListener('click', openAdminSettings);
+      adminSettingsBtn.addEventListener('click', () => openAdminSettings('general', adminSettingsBtn));
       closeAdminSettingsBtn.addEventListener('click', closeAdminSettings);
       adminSettingsBackdrop.addEventListener('click', event => {
         if (event.target === adminSettingsBackdrop) closeAdminSettings();
@@ -439,6 +505,9 @@
           document.documentElement.setAttribute('data-theme', resolved);
           syncSettingsControls();
         });
+      });
+      document.querySelectorAll('[data-admin-settings-view]').forEach(button => {
+        button.addEventListener('click', () => setAdminSettingsView(button.dataset.adminSettingsView));
       });
       const adminSidebar = document.getElementById('adminSidebar');
       const adminSidebarToggle = document.getElementById('adminSidebarToggle');
@@ -477,6 +546,10 @@
 
       const adminUserMenuBtn = document.getElementById('adminUserMenuBtn');
       const adminUserMenuDropdown = document.getElementById('adminUserMenuDropdown');
+      const closeAdminUserMenu = () => {
+        adminUserMenuDropdown.classList.remove('open');
+        adminUserMenuBtn.setAttribute('aria-expanded', 'false');
+      };
       adminUserMenuBtn.addEventListener('click', (event) => {
         event.stopPropagation();
         const isOpen = adminUserMenuDropdown.classList.toggle('open');
@@ -484,12 +557,34 @@
       });
       adminUserMenuDropdown.addEventListener('click', (event) => event.stopPropagation());
       document.addEventListener('click', () => {
-        adminUserMenuDropdown.classList.remove('open');
-        adminUserMenuBtn.setAttribute('aria-expanded', 'false');
+        closeAdminUserMenu();
       });
       document.getElementById('adminSwitchPersonaBtn').addEventListener('click', () => {
         localStorage.removeItem('aria_user_profile');
         window.location.href = 'index.html';
+      });
+      document.getElementById('adminMenuSettingsBtn').addEventListener('click', () => {
+        closeAdminUserMenu();
+        openAdminSettings('general', adminUserMenuBtn);
+      });
+      document.getElementById('adminMenuHelpBtn').addEventListener('click', () => {
+        closeAdminUserMenu();
+        openAdminSettings('help', adminUserMenuBtn);
+      });
+      document.getElementById('adminResetDemoBtn').addEventListener('click', () => {
+        closeAdminUserMenu();
+        if (confirm('Reset all demo data and start fresh?')) {
+          localStorage.clear();
+          window.location.href = 'index.html';
+        }
+      });
+      document.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') return;
+        if (adminSettingsBackdrop.classList.contains('open')) closeAdminSettings();
+        else if (adminUserMenuDropdown.classList.contains('open')) {
+          closeAdminUserMenu();
+          adminUserMenuBtn.focus();
+        }
       });
 
       let currentStrategyKey = 'full_schema';

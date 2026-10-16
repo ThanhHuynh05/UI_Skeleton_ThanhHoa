@@ -6397,7 +6397,36 @@ body.dashboard-page {
 .admin-persona-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .admin-persona-copy strong { font-size: 13px; font-weight: 600; }
 .admin-persona-copy small { color: var(--text-muted); font-size: 12px; }
-.admin-user-menu .user-menu-dropdown { right: auto; bottom: calc(100% + 8px); left: 0; top: auto; width: 260px; }
+.admin-user-menu .user-menu-dropdown { right: auto; bottom: calc(100% + 8px); left: 0; top: auto; width: 300px; }
+.admin-account-menu { padding: 8px; border-radius: 18px; }
+.admin-account-menu .account-menu-header {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 12px;
+}
+.admin-account-menu .account-menu-avatar {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-fg);
+  font-weight: 700;
+}
+.admin-account-menu .account-menu-identity { display: grid; min-width: 0; gap: 2px; }
+.admin-account-menu .account-menu-identity strong,
+.admin-account-menu .account-menu-identity span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-account-menu .account-menu-identity strong { color: var(--text-primary); font-size: 14px; }
+.admin-account-menu .account-menu-identity span { color: var(--text-muted); font-size: 12px; }
+.admin-account-menu .account-menu-badge { padding: 3px 9px; border: 1px solid var(--border-color); border-radius: var(--radius-full); color: var(--text-secondary); font-size: 11px; }
+.admin-account-menu .user-menu-item { min-height: 42px; padding: 9px 10px; color: var(--text-primary); font-size: 14px; }
+.admin-account-menu .user-menu-item svg { width: 18px; height: 18px; flex: 0 0 18px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.admin-account-menu .user-menu-item.danger { color: var(--danger-color); }
+.admin-account-menu .account-menu-note { margin: 4px 4px 0; padding: 10px 6px 2px; border-top: 1px solid var(--border-color); color: var(--text-muted); font-size: 11px; line-height: 1.45; }
 
 .admin-sidebar.collapsed .admin-brand-name,
 .admin-sidebar.collapsed .admin-nav-item span,
@@ -7785,8 +7814,22 @@ html body .restricted-actions :is(.btn-secondary, .btn-new-chat) { display: inli
 #inspectionModalBody .collapsible-header { border-radius: 12px; font-size: 13px; }
 
 /* Admin settings */
-#adminSettingsBackdrop .admin-settings-modal > .modal-body { padding-bottom: 20px; }
-#adminSettingsBackdrop .admin-settings-group { padding-top: 8px; border-bottom: 0; }
+#adminSettingsBackdrop .admin-settings-modal { width: min(820px, calc(100vw - 32px)); }
+#adminSettingsBackdrop .admin-settings-layout { display: grid; min-height: 360px; grid-template-columns: 210px minmax(0, 1fr); }
+#adminSettingsBackdrop .admin-settings-nav { display: grid; align-content: start; gap: 4px; padding: 16px 12px; border-right: 1px solid var(--border-color); background: var(--bg-sidebar); }
+#adminSettingsBackdrop .admin-settings-tab { min-height: 42px; padding: 9px 12px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-secondary); font: inherit; font-size: 14px; text-align: left; }
+#adminSettingsBackdrop .admin-settings-tab:hover { background: var(--bg-hover); color: var(--text-primary); }
+#adminSettingsBackdrop .admin-settings-tab.active { background: var(--bg-active); color: var(--text-primary); font-weight: 600; }
+#adminSettingsBackdrop .admin-settings-content { padding: 18px 28px 28px; }
+#adminSettingsBackdrop .admin-settings-panel[hidden] { display: none; }
+#adminSettingsBackdrop .admin-settings-panel h2 { margin: 0; padding: 4px 0 16px; border-bottom: 1px solid var(--border-color); font-size: 20px; }
+#adminSettingsBackdrop .admin-settings-group { padding-top: 18px; border-bottom: 0; }
+#adminSettingsBackdrop .admin-help-intro { margin: 18px 0 6px; color: var(--text-secondary); font-size: 14px; }
+@media (max-width: 640px) {
+  #adminSettingsBackdrop .admin-settings-layout { grid-template-columns: 1fr; }
+  #adminSettingsBackdrop .admin-settings-nav { grid-template-columns: auto auto; border-right: 0; border-bottom: 1px solid var(--border-color); }
+  #adminSettingsBackdrop .admin-settings-content { padding: 14px 18px 22px; }
+}
 
 /* --- Fit and finish ------------------------------------------------------ */
 /* The Data Guide is a page now; its old dimming backdrop never shows. */
