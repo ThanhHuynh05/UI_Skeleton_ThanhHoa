@@ -5749,39 +5749,32 @@
     URL.revokeObjectURL(url);
   }
 
-  function initResizablePanels() {
-    const sidebarHandle = document.getElementById('sidebarResizeHandle');
+  function initResizableEvidencePanel() {
     const evidenceHandle = document.getElementById('evidenceResizeHandle');
     const root = document.documentElement;
-    const storageKeys = { sidebar: 'aria_sidebar_width_v1', evidence: 'aria_evidence_width_v1' };
+    const storageKey = 'aria_evidence_width_v1';
 
-    const limits = (kind) => kind === 'sidebar'
-      ? { min: 180, max: Math.max(220, Math.min(440, window.innerWidth - 520)) }
-      : { min: 320, max: Math.max(360, Math.min(760, window.innerWidth - 360)) };
+    const limits = () => ({ min: 320, max: Math.max(360, Math.min(760, window.innerWidth - 360)) });
 
-    const applyWidth = (kind, value, persist = true) => {
-      const range = limits(kind);
+    const applyWidth = (value, persist = true) => {
+      const range = limits();
       const width = Math.min(range.max, Math.max(range.min, Math.round(value)));
-      root.style.setProperty(kind === 'sidebar' ? '--sidebar-width' : '--drawer-width', `${width}px`);
+      root.style.setProperty('--drawer-width', `${width}px`);
       if (persist) {
-        try { localStorage.setItem(storageKeys[kind], String(width)); } catch (e) { /* Storage is optional. */ }
+        try { localStorage.setItem(storageKey, String(width)); } catch (e) { /* Storage is optional. */ }
       }
       return width;
     };
 
-    Object.keys(storageKeys).forEach((kind) => {
-      try {
-        const savedWidth = Number(localStorage.getItem(storageKeys[kind]));
-        if (Number.isFinite(savedWidth) && savedWidth > 0) applyWidth(kind, savedWidth, false);
-      } catch (e) { /* Keep the CSS default. */ }
-    });
+    try {
+      const savedWidth = Number(localStorage.getItem(storageKey));
+      if (Number.isFinite(savedWidth) && savedWidth > 0) applyWidth(savedWidth, false);
+    } catch (e) { /* Keep the CSS default. */ }
 
-    const bindHandle = (handle, kind) => {
+    const bindHandle = (handle) => {
       if (!handle) return;
       let activePointerId = null;
-      const pointerWidth = (clientX) => kind === 'sidebar'
-        ? clientX - sidebarEl.getBoundingClientRect().left
-        : window.innerWidth - clientX;
+      const pointerWidth = (clientX) => window.innerWidth - clientX;
 
       handle.addEventListener('pointerdown', (event) => {
         if (window.innerWidth <= 820 || event.button !== 0) return;
@@ -5792,12 +5785,12 @@
       });
       handle.addEventListener('pointermove', (event) => {
         if (activePointerId !== event.pointerId) return;
-        applyWidth(kind, pointerWidth(event.clientX), false);
+        applyWidth(pointerWidth(event.clientX), false);
       });
 
       const finishResize = (event) => {
         if (activePointerId === null || event.pointerId !== activePointerId) return;
-        applyWidth(kind, pointerWidth(event.clientX));
+        applyWidth(pointerWidth(event.clientX));
         if (handle.hasPointerCapture(activePointerId)) handle.releasePointerCapture(activePointerId);
         activePointerId = null;
         document.body.classList.remove('panel-resizing');
@@ -5807,22 +5800,18 @@
 
       handle.addEventListener('keydown', (event) => {
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        const panel = kind === 'sidebar' ? sidebarEl : scopeInspectorPanel;
-        const currentWidth = panel.getBoundingClientRect().width;
-        const visualDirection = event.key === 'ArrowRight' ? 1 : -1;
-        const delta = kind === 'sidebar' ? visualDirection * 16 : visualDirection * -16;
-        applyWidth(kind, currentWidth + delta);
+        const currentWidth = scopeInspectorPanel.getBoundingClientRect().width;
+        const delta = event.key === 'ArrowRight' ? -16 : 16;
+        applyWidth(currentWidth + delta);
         event.preventDefault();
       });
     };
 
-    bindHandle(sidebarHandle, 'sidebar');
-    bindHandle(evidenceHandle, 'evidence');
+    bindHandle(evidenceHandle);
     window.addEventListener('resize', () => {
       if (window.innerWidth <= 820) return;
-      if (!sidebarEl.classList.contains('collapsed')) applyWidth('sidebar', sidebarEl.getBoundingClientRect().width, false);
       // A closed panel measures 0px; re-clamping that would discard the saved width.
-      if (scopeInspectorPanel.classList.contains('open')) applyWidth('evidence', scopeInspectorPanel.getBoundingClientRect().width, false);
+      if (scopeInspectorPanel.classList.contains('open')) applyWidth(scopeInspectorPanel.getBoundingClientRect().width, false);
     });
   }
 
@@ -5839,7 +5828,7 @@
     updateScopeEditorUI();
     initSettingsAndHelp();
     initSettingsDialogFocus();
-    initResizablePanels();
+    initResizableEvidencePanel();
 
     // Chat Input Keys & Send
     chatInputEl.addEventListener('keydown', (e) => {
