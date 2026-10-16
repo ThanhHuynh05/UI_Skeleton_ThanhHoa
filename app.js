@@ -1863,6 +1863,7 @@
 
     const latestUserMessage = [...conv.messages].reverse().find((message) => message.role === 'user');
     if (state.isThinking && latestUserMessage && latestUserMessage.id === userMessage.id && state.activeAbortController) {
+      state.activeAbortController.cancelledForQuestionEdit = true;
       state.activeAbortController.abort();
     }
 
@@ -2326,11 +2327,14 @@
 
         clarificationController.signal.addEventListener('abort', () => {
           window.clearTimeout(clarificationTimer);
-          state.isThinking = false;
-          state.activeAbortController = null;
+          if (state.activeAbortController === clarificationController) {
+            state.isThinking = false;
+            state.activeAbortController = null;
+          }
           chatContainerEl.setAttribute('aria-busy', 'false');
           document.getElementById(`thinking_row_${confirmationMsg.id}`)?.remove();
           updateSendButtonState();
+          if (clarificationController.cancelledForQuestionEdit) return;
           // Leave a "stopped" note with Retry, like any other cancelled run.
           if (state.conversations.includes(conv)) {
             conv.messages.push({
@@ -2362,7 +2366,8 @@
     state.isThinking = true;
     chatContainerEl.setAttribute('aria-busy', 'true');
     updateSendButtonState();
-    state.activeAbortController = new AbortController();
+    const requestController = new AbortController();
+    state.activeAbortController = requestController;
 
     const agentMsgId = 'msg_' + Date.now() + '_a';
     renderThinkingBubble(agentMsgId);
@@ -2390,9 +2395,12 @@
                   : (options.clarificationPayload ? 'clarification_selection' : (options.sourceMessageId ? 'scope_rerun' : 'question')))),
         selectedClarification: options.clarificationPayload ? promptText : null
       },
-      signal: state.activeAbortController.signal
+      signal: requestController.signal
     })
     .then((result) => {
+      // A cancelled request may still resolve if an underlying mock or network
+      // adapter cannot stop immediately. Never publish that stale answer.
+      if (requestController.signal.aborted || state.activeAbortController !== requestController) return;
       state.isThinking = false;
       chatContainerEl.setAttribute('aria-busy', 'false');
       state.activeAbortController = null;
@@ -2471,12 +2479,19 @@
       scrollToBottom();
     })
     .catch((err) => {
-      state.isThinking = false;
-      chatContainerEl.setAttribute('aria-busy', 'false');
-      state.activeAbortController = null;
-      updateSendButtonState();
+      if (state.activeAbortController === requestController) {
+        state.isThinking = false;
+        state.activeAbortController = null;
+        chatContainerEl.setAttribute('aria-busy', 'false');
+        updateSendButtonState();
+      }
 
       if (!state.conversations.includes(conv)) return;
+      if (requestController.cancelledForQuestionEdit) {
+        renderActiveConversation();
+        requestAnimationFrame(() => document.getElementById(`inlineQuestionInput_${activeAdjustmentUserMessageId}`)?.focus());
+        return;
+      }
       if (err.message && err.message.includes('cancelled')) {
         conv.messages.push({
           id: agentMsgId,
