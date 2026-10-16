@@ -5931,12 +5931,16 @@ html body .clarification-chip:hover:not(:disabled) {
 
 /* --- New chat: centred greeting, composer and starter questions --------- */
 #chatViewport.is-idle {
-  justify-content: center;
+  /* Auto margins provide "safe" vertical centering: they share the spare
+     space while the welcome content fits, then collapse to zero when the
+     reviewer prompts expand. Unlike justify-content:center, this never puts
+     the top of overflowing content above the scroll container's origin. */
+  justify-content: flex-start;
   padding-bottom: 10vh;
   overflow-y: auto;
 }
-#chatViewport.is-idle .chat-topbar { position: absolute; top: 0; right: 0; left: 0; }
-#chatViewport.is-idle .chat-messages { flex: 0 0 auto; overflow: visible; padding: 0 24px 28px; }
+#chatViewport.is-idle .chat-messages { flex: 0 0 auto; margin-top: auto; overflow: visible; padding: 0 24px 28px; }
+#chatViewport.is-idle .chat-input-bar { margin-bottom: auto; }
 #chatViewport.is-idle .composer-disclaimer { display: none; }
 #chatViewport:not(.is-idle) .composer-suggestions { display: none; }
 
@@ -5996,6 +6000,12 @@ html body .clarification-chip:hover:not(:disabled) {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-container);
   background: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+}
+.audit-prompt-content { transform-origin: top center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .audit-prompt-content { transform: none !important; }
 }
 
 /* --- Composer: one rounded box with its tools inside -------------------- */

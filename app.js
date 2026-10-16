@@ -2202,31 +2202,69 @@
           <span>Reviewer test prompts</span>
           <small>${auditPrompts.length} deterministic checks</small>
         </summary>
-        <div class="audit-prompt-help">
-          Select a prompt to place it in the composer, then press Enter to run it. Use a non-admin persona for the access-denied check.
-        </div>
-        ${['Visual examples', 'Result patterns', 'Decision states', 'Access states'].map((group) => `
-          <section class="audit-prompt-group">
-            <h2>${escapeHtml(group)}</h2>
-            <div class="audit-prompt-grid">
-              ${auditPrompts.filter((item) => item.group === group).map((item) => `
-                <button type="button" class="audit-prompt-card" data-query="${escapeHtml(item.text)}">
-                  <span>${escapeHtml(item.expected)}</span>
-                  <strong>${escapeHtml(item.text)}</strong>
-                </button>
-              `).join('')}
-            </div>
-          </section>
-        `).join('')}
-        <div class="audit-manual-checks">
-          <strong>Two interaction checks</strong>
-          <ol>
-            <li>Select Q3 in Period, then ask a question containing Q2 to verify the scope-conflict clarification.</li>
-            <li>Run any result prompt and press Stop while it is processing to verify the Cancelled state.</li>
-          </ol>
+        <div class="audit-prompt-content">
+          <div class="audit-prompt-help">
+            Select a prompt to place it in the composer, then press Enter to run it. Use a non-admin persona for the access-denied check.
+          </div>
+          ${['Visual examples', 'Result patterns', 'Decision states', 'Access states'].map((group) => `
+            <section class="audit-prompt-group">
+              <h2>${escapeHtml(group)}</h2>
+              <div class="audit-prompt-grid">
+                ${auditPrompts.filter((item) => item.group === group).map((item) => `
+                  <button type="button" class="audit-prompt-card" data-query="${escapeHtml(item.text)}">
+                    <span>${escapeHtml(item.expected)}</span>
+                    <strong>${escapeHtml(item.text)}</strong>
+                  </button>
+                `).join('')}
+              </div>
+            </section>
+          `).join('')}
+          <div class="audit-manual-checks">
+            <strong>Two interaction checks</strong>
+            <ol>
+              <li>Select Q3 in Period, then ask a question containing Q2 to verify the scope-conflict clarification.</li>
+              <li>Run any result prompt and press Stop while it is processing to verify the Cancelled state.</li>
+            </ol>
+          </div>
         </div>
       </details>
     `;
+
+    const auditSuiteEl = composerSuggestionsEl.querySelector('.audit-prompt-suite');
+    const auditSummaryEl = auditSuiteEl && auditSuiteEl.querySelector('summary');
+    const auditContentEl = auditSuiteEl && auditSuiteEl.querySelector('.audit-prompt-content');
+    if (auditSuiteEl && auditSummaryEl && auditContentEl) {
+      let auditPanelAnimation = null;
+      auditSummaryEl.addEventListener('click', (event) => {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        event.preventDefault();
+        if (auditPanelAnimation) auditPanelAnimation.finish();
+
+        const isOpening = !auditSuiteEl.open;
+        const startHeight = auditSuiteEl.offsetHeight;
+        if (isOpening) auditSuiteEl.open = true;
+        const endHeight = isOpening
+          ? auditSuiteEl.scrollHeight
+          : Math.max(0, startHeight - auditContentEl.offsetHeight);
+
+        auditSuiteEl.style.overflow = 'hidden';
+        auditContentEl.animate(
+          isOpening
+            ? [{ opacity: 0, transform: 'translateY(-8px)' }, { opacity: 1, transform: 'translateY(0)' }]
+            : [{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(-8px)' }],
+          { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' }
+        );
+        auditPanelAnimation = auditSuiteEl.animate(
+          [{ height: `${startHeight}px` }, { height: `${endHeight}px` }],
+          { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' }
+        );
+        auditPanelAnimation.addEventListener('finish', () => {
+          if (!isOpening) auditSuiteEl.open = false;
+          auditSuiteEl.style.removeProperty('overflow');
+          auditPanelAnimation = null;
+        }, { once: true });
+      });
+    }
 
     composerSuggestionsEl.querySelectorAll('.example-card, .audit-prompt-card').forEach((card) => {
       card.addEventListener('click', () => {
