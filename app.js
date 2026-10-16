@@ -1870,8 +1870,15 @@
 
     const latestUserMessage = [...conv.messages].reverse().find((message) => message.role === 'user');
     if (state.isThinking && latestUserMessage && latestUserMessage.id === userMessage.id && state.activeAbortController) {
-      state.activeAbortController.cancelledForQuestionEdit = true;
-      state.activeAbortController.abort();
+      const controller = state.activeAbortController;
+      controller.cancelledForQuestionEdit = true;
+      controller.abort();
+      if (state.activeAbortController === controller) {
+        state.isThinking = false;
+        state.activeAbortController = null;
+        chatContainerEl.setAttribute('aria-busy', 'false');
+        updateSendButtonState();
+      }
     }
 
     renderActiveConversation();
@@ -2494,11 +2501,7 @@
       }
 
       if (!state.conversations.includes(conv)) return;
-      if (requestController.cancelledForQuestionEdit) {
-        renderActiveConversation();
-        requestAnimationFrame(() => document.getElementById(`inlineQuestionInput_${activeAdjustmentUserMessageId}`)?.focus());
-        return;
-      }
+      if (requestController.cancelledForQuestionEdit) return;
       if (err.message && err.message.includes('cancelled')) {
         conv.messages.push({
           id: agentMsgId,
