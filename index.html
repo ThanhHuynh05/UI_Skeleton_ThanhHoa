@@ -98,10 +98,18 @@
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"></path></svg>
               <span>Settings</span>
             </button>
-            <button type="button" class="user-menu-item" id="userMenuHelpItem" role="menuitem">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>
-              <span>Help &amp; shortcuts</span>
-            </button>
+            <div class="user-help-menu-group" role="none">
+              <button type="button" class="user-menu-item" id="userMenuHelpItem" role="menuitem" aria-haspopup="menu" aria-expanded="false">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>
+                <span>Help &amp; shortcuts</span>
+                <svg class="user-menu-item-chevron" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+              <div class="user-help-submenu" id="userHelpSubmenu" role="menu" aria-label="Help topics">
+                <button type="button" class="user-menu-item help-topic-item" data-help-tab="shortcuts" role="menuitem">Keyboard shortcuts</button>
+                <button type="button" class="user-menu-item help-topic-item" data-help-tab="domains" role="menuitem">Business areas</button>
+                <button type="button" class="user-menu-item help-topic-item" data-help-tab="scope" role="menuitem">Scope &amp; limitations</button>
+              </div>
+            </div>
             <div id="adminWorkspaceNav" class="user-menu-admin-links">
               <a href="admin.html" class="user-menu-item" id="adminNavLink" role="menuitem">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9"></path><path d="M10 19V5"></path><path d="M16 19v-7"></path><path d="M22 19V3"></path></svg>

@@ -69,6 +69,8 @@
   const closeMobileSidebarBtnEl = document.getElementById('closeMobileSidebarBtn');
   const userMenuBtnEl = document.getElementById('userMenuBtn');
   const userMenuDropdownEl = document.getElementById('userMenuDropdown');
+  const userMenuHelpItemEl = document.getElementById('userMenuHelpItem');
+  const userHelpSubmenuEl = document.getElementById('userHelpSubmenu');
   const headerUserLabelEl = document.getElementById('headerUserLabel');
   const switchUserMenuItemEl = document.getElementById('switchUserMenuItem');
   const resetDemoDataMenuItemEl = document.getElementById('resetDemoDataMenuItem');
@@ -5558,6 +5560,8 @@
     // Escape closes overlays; it only changes the page when it closed the Data Guide.
     if (dataGuideWasOpen) showBusinessWorkspaceView('ask', { focusComposer: false });
     userMenuDropdownEl.classList.remove('open');
+    if (userHelpSubmenuEl) userHelpSubmenuEl.classList.remove('open');
+    if (userMenuHelpItemEl) userMenuHelpItemEl.setAttribute('aria-expanded', 'false');
     if (userMenuBtnEl) userMenuBtnEl.setAttribute('aria-expanded', 'false');
     sidebarEl.classList.remove('persona-menu-open');
     closeTypeahead();
@@ -6016,15 +6020,23 @@
       userMenuDropdownEl.classList.toggle('open');
       sidebarEl.classList.toggle('persona-menu-open', userMenuDropdownEl.classList.contains('open'));
       userMenuBtnEl.setAttribute('aria-expanded', userMenuDropdownEl.classList.contains('open') ? 'true' : 'false');
+      if (!userMenuDropdownEl.classList.contains('open') && userHelpSubmenuEl) {
+        userHelpSubmenuEl.classList.remove('open');
+        userMenuHelpItemEl?.setAttribute('aria-expanded', 'false');
+      }
     });
     document.addEventListener('click', () => {
       userMenuDropdownEl.classList.remove('open');
+      userHelpSubmenuEl?.classList.remove('open');
+      userMenuHelpItemEl?.setAttribute('aria-expanded', 'false');
       sidebarEl.classList.remove('persona-menu-open');
       userMenuBtnEl.setAttribute('aria-expanded', 'false');
     });
 
     const closeUserMenu = () => {
       userMenuDropdownEl.classList.remove('open');
+      userHelpSubmenuEl?.classList.remove('open');
+      userMenuHelpItemEl?.setAttribute('aria-expanded', 'false');
       sidebarEl.classList.remove('persona-menu-open');
       userMenuBtnEl.setAttribute('aria-expanded', 'false');
     };
@@ -6040,10 +6052,21 @@
       settingsDrawer.classList.add('open');
     });
 
-    document.getElementById('userMenuHelpItem')?.addEventListener('click', () => {
-      closeUserMenu();
-      openSettingsHelp('shortcuts');
-    });
+    if (userMenuHelpItemEl && userHelpSubmenuEl) {
+      userMenuHelpItemEl.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const isOpen = userHelpSubmenuEl.classList.toggle('open');
+        userMenuHelpItemEl.setAttribute('aria-expanded', String(isOpen));
+      });
+      userHelpSubmenuEl.addEventListener('click', (event) => event.stopPropagation());
+      userHelpSubmenuEl.querySelectorAll('.help-topic-item').forEach((item) => {
+        item.addEventListener('click', () => {
+          const tab = item.getAttribute('data-help-tab') || 'shortcuts';
+          closeUserMenu();
+          openSettingsHelp(tab);
+        });
+      });
+    }
 
     resetDemoDataMenuItemEl.addEventListener('click', () => {
       if (confirm('Reset all demo data and start fresh?')) {
