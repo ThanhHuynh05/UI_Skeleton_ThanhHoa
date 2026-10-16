@@ -206,6 +206,7 @@
   let activeClarificationTrigger = null;
   let activeAdjustmentUserMessageId = null;
   let activeAdjustmentScope = null;
+  let activeAdjustmentDraft = '';
 
   const domainScopeSelectEl = document.getElementById('domainScopeSelect');
   const domainScopeSelectLabelEl = document.getElementById('domainScopeSelectLabel');
@@ -876,6 +877,15 @@
   // 4. RENDERING ACTIVE CONVERSATION & IDLE STATE
   // =========================================================================
   function renderActiveConversation() {
+    const focusedAdjustmentInput = activeAdjustmentUserMessageId
+      ? document.getElementById(`inlineQuestionInput_${activeAdjustmentUserMessageId}`)
+      : null;
+    if (focusedAdjustmentInput) {
+      activeAdjustmentDraft = focusedAdjustmentInput.value;
+      // Background request and preference updates must not replace the editor
+      // while the user is typing. Submit and Cancel clear the active id first.
+      if (document.activeElement === focusedAdjustmentInput) return;
+    }
     if (activeClarificationKeyHandler) {
       document.removeEventListener('keydown', activeClarificationKeyHandler);
       activeClarificationKeyHandler = null;
@@ -1107,7 +1117,7 @@
           ${isEditing ? `
             <form class="inline-question-editor" data-msg-id="${msg.id}">
               <label for="inlineQuestionInput_${msg.id}">Edit question</label>
-              <textarea id="inlineQuestionInput_${msg.id}" class="inline-question-input" rows="3">${escapeHtml(visibleQuestion)}</textarea>
+              <textarea id="inlineQuestionInput_${msg.id}" class="inline-question-input" rows="3">${escapeHtml(activeAdjustmentDraft)}</textarea>
               <div class="inline-question-scope">The revised question will use ${escapeHtml(formatAdjustmentScope(activeAdjustmentScope))}.</div>
               <div class="inline-question-actions">
                 <button type="button" class="action-tool-btn inline-adjust-cancel">Cancel</button>
@@ -1867,6 +1877,7 @@
     if (!conv || !userMessage) return;
     activeAdjustmentUserMessageId = userMessage.id;
     activeAdjustmentScope = getAdjustmentScope(conv, userMessage);
+    activeAdjustmentDraft = userMessage.text || '';
 
     const latestUserMessage = [...conv.messages].reverse().find((message) => message.role === 'user');
     if (state.isThinking && latestUserMessage && latestUserMessage.id === userMessage.id && state.activeAbortController) {
@@ -1895,6 +1906,7 @@
     const messageId = activeAdjustmentUserMessageId;
     activeAdjustmentUserMessageId = null;
     activeAdjustmentScope = null;
+    activeAdjustmentDraft = '';
     renderActiveConversation();
     requestAnimationFrame(() => {
       chatContainerEl.querySelector(`.user-edit-btn[data-msg-id="${messageId}"]`)?.focus();
@@ -1917,6 +1929,7 @@
     const executionScope = JSON.parse(JSON.stringify(activeAdjustmentScope || state.selectedScope));
     activeAdjustmentUserMessageId = null;
     activeAdjustmentScope = null;
+    activeAdjustmentDraft = '';
     processUserPrompt(revisedQuestion, {
       interpretationConfirmed: true,
       originalQuestion: revisedQuestion,
@@ -3469,7 +3482,10 @@
         event.preventDefault();
         confirmAdjustedQuestion(input);
       });
-      input.addEventListener('input', () => input.setCustomValidity(''));
+      input.addEventListener('input', () => {
+        activeAdjustmentDraft = input.value;
+        input.setCustomValidity('');
+      });
       input.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
           event.preventDefault();
