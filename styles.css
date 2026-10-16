@@ -127,7 +127,7 @@
   --font-mono: ui-monospace, "Cascadia Mono", SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Layout */
-  --sidebar-width: 260px;
+  --sidebar-width: 300px;
   --thread-width: 768px;
   --header-height: 0px;
   --drawer-width: 440px;
