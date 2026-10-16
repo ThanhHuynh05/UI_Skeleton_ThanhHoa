@@ -6292,7 +6292,7 @@ button > svg, a[class] > svg, .header-icon-btn svg { width: 16px; height: 16px; 
 
 /* --- Admin workspace ---------------------------------------------------- */
 body.dashboard-page {
-  --admin-sidebar-width: var(--sidebar-width);
+  --admin-sidebar-width: 300px;
   --admin-sidebar-collapsed-width: 72px;
   background: var(--bg-app);
 }
