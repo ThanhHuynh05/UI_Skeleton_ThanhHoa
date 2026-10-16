@@ -102,22 +102,6 @@
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>
               <span>Help &amp; shortcuts</span>
             </button>
-            <button type="button" class="user-menu-item" id="settingsBtn" role="menuitem">
-              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.14.37.36.7.65.96.3.26.67.4 1.06.4H21v4h-.09a1.7 1.7 0 0 0-1.51.64z"></path></svg>
-              <span>Settings</span>
-            </button>
-            <div class="user-help-menu-group">
-              <button type="button" class="user-menu-item" id="helpModalBtn" role="menuitem" aria-haspopup="menu" aria-expanded="false">
-                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.1 9a3 3 0 1 1 5.8 1c0 2-3 2-3 4"></path><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
-                <span>Help</span>
-                <svg class="user-menu-item-chevron" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
-              </button>
-              <div class="user-help-submenu" id="userHelpSubmenu" role="menu" aria-label="Help topics">
-                <button type="button" class="user-menu-item help-topic-item" data-help-tab="shortcuts" role="menuitem">Keyboard shortcuts</button>
-                <button type="button" class="user-menu-item help-topic-item" data-help-tab="domains" role="menuitem">Supported domains</button>
-                <button type="button" class="user-menu-item help-topic-item" data-help-tab="scope" role="menuitem">Scope &amp; limitations</button>
-              </div>
-            </div>
             <div id="adminWorkspaceNav" class="user-menu-admin-links">
               <a href="admin.html" class="user-menu-item" id="adminNavLink" role="menuitem">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9"></path><path d="M10 19V5"></path><path d="M16 19v-7"></path><path d="M22 19V3"></path></svg>
@@ -134,7 +118,11 @@
             <p class="account-menu-note">Synthetic data · access and masking are simulated</p>
           </div>
         </div>
+          <button type="button" class="sidebar-settings-shortcut" id="settingsBtn" aria-label="Preferences" title="Preferences">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.14.37.36.7.65.96.3.26.67.4 1.06.4H21v4h-.09a1.7 1.7 0 0 0-1.51.64z"></path></svg>
+          </button>
         </div>
+        <div class="panel-resize-handle sidebar-resize-handle" id="sidebarResizeHandle" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize history panel"></div>
       </aside>
       <button type="button" class="mobile-sidebar-launcher" id="mobileSidebarLauncherBtn" aria-label="Open workspace navigation sidebar" aria-controls="sidebar">
         <span class="app-logo-mark" aria-hidden="true">A</span>
@@ -328,119 +316,70 @@
   <!-- =========================================================================
        SETTINGS DRAWER (Group H)
        ========================================================================= -->
-  <div class="modal-backdrop settings-page-backdrop" id="settingsModalBackdrop">
-  <div class="app-modal settings-modal" id="settingsDrawer" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
-    <div class="modal-header">
-      <div class="modal-title" id="settingsModalTitle">Aria settings</div>
-      <button type="button" class="header-icon-btn" id="closeSettingsBtn">✕</button>
-    </div>
-    <div class="settings-primary-tabs" role="tablist" aria-label="Settings sections">
-      <button type="button" class="settings-primary-tab active" id="settingsPreferencesTabBtn" role="tab" aria-selected="true" aria-controls="settingsPreferencesPanel">Appearance</button>
-      <button type="button" class="settings-primary-tab" id="settingsHelpTabBtn" role="tab" aria-selected="false" aria-controls="settingsHelpPanel">Preferences</button>
-    </div>
-    <div class="modal-body settings-panel" id="settingsPreferencesPanel" role="tabpanel" aria-labelledby="settingsPreferencesTabBtn">
-      <h1>Appearance</h1>
-      <p class="settings-panel-intro">Choose how Aria looks across your workspace.</p>
-      <div class="schema-table-card">
-        <div style="font-weight: 600; font-size: 13px;">Appearance Theme</div>
-        <div style="display: flex; gap: 8px; margin-top: 6px;">
-          <button type="button" class="view-btn theme-choice-btn" data-theme-choice="light">Light</button>
-          <button type="button" class="view-btn theme-choice-btn" data-theme-choice="dark">Dark</button>
-          <button type="button" class="view-btn theme-choice-btn" data-theme-choice="system">System</button>
+  <div class="app-drawer settings-dialog" id="settingsDrawer" role="dialog" aria-modal="true" aria-labelledby="settingsDialogTitle">
+    <nav class="settings-nav" aria-label="Settings sections">
+      <button type="button" class="header-icon-btn settings-close" id="closeSettingsBtn" aria-label="Close settings">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+      </button>
+      <h2 class="sr-only" id="settingsDialogTitle">Settings</h2>
+      <div class="settings-primary-tabs" role="tablist" aria-orientation="vertical">
+        <button type="button" class="settings-primary-tab active" id="settingsPreferencesTabBtn" role="tab" aria-selected="true" aria-controls="settingsPreferencesPanel">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"></path></svg>
+          <span>General</span>
+        </button>
+        <button type="button" class="settings-primary-tab" id="settingsHelpTabBtn" role="tab" aria-selected="false" aria-controls="settingsHelpPanel">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg>
+          <span>Help &amp; shortcuts</span>
+        </button>
+      </div>
+    </nav>
+
+    <div class="drawer-body settings-panel" id="settingsPreferencesPanel" role="tabpanel" aria-labelledby="settingsPreferencesTabBtn">
+      <h3 class="settings-panel-title">General</h3>
+
+      <div class="settings-row">
+        <div class="settings-row-copy"><strong>Theme</strong><span>Light, dark, or follow your system.</span></div>
+        <div class="segmented-control" role="group" aria-label="Theme">
+          <button type="button" class="theme-choice-btn" data-theme-choice="light">Light</button>
+          <button type="button" class="theme-choice-btn" data-theme-choice="dark">Dark</button>
+          <button type="button" class="theme-choice-btn" data-theme-choice="system">System</button>
         </div>
       </div>
+
+      <div class="settings-row">
+        <div class="settings-row-copy"><strong>Answer detail</strong><span>Detailed adds the supporting figures under each answer.</span></div>
+        <div class="segmented-control" role="group" aria-label="Answer detail">
+          <button type="button" class="detail-choice-btn active" data-detail="detailed" title="Executive summary with supporting figures">Detailed</button>
+          <button type="button" class="detail-choice-btn" data-detail="concise" title="Key takeaway only">Concise</button>
+        </div>
+      </div>
+
+      <label class="settings-row settings-toggle-row" for="settingShowSqlDefault">
+        <span class="settings-row-copy"><strong>Open the query first</strong><span>Evidence &amp; sources starts on the generated SQL.</span></span>
+        <input type="checkbox" class="switch-input" id="settingShowSqlDefault" role="switch">
+      </label>
+
+      <label class="settings-row settings-toggle-row" for="settingShowPipelineDefault">
+        <span class="settings-row-copy"><strong>Show pipeline stages</strong><span>Display each step while Aria works on a question.</span></span>
+        <input type="checkbox" class="switch-input" id="settingShowPipelineDefault" role="switch">
+      </label>
+
+      <label class="settings-row settings-toggle-row" for="settingCompactMode">
+        <span class="settings-row-copy"><strong>Compact spacing</strong><span>Tighter spacing between messages.</span></span>
+        <input type="checkbox" class="switch-input" id="settingCompactMode" role="switch">
+      </label>
     </div>
 
-    <div class="modal-body settings-panel" id="settingsHelpPanel" role="tabpanel" aria-labelledby="settingsHelpTabBtn" hidden>
-      <h1>Preferences</h1>
-      <p class="settings-panel-intro">Control how answers and processing details are displayed.</p>
+    <div class="drawer-body settings-panel settings-help-panel" id="settingsHelpPanel" role="tabpanel" aria-labelledby="settingsHelpTabBtn" hidden>
+      <h3 class="settings-panel-title">Help &amp; shortcuts</h3>
+      <div class="explorer-tabs segmented-control settings-help-tabs">
+        <button type="button" class="explorer-tab-btn active" id="helpTabDomainsBtn">Business areas</button>
+        <button type="button" class="explorer-tab-btn" id="helpTabScopeBtn">Limitations</button>
+        <button type="button" class="explorer-tab-btn" id="helpTabShortcutsBtn">Shortcuts</button>
+      </div>
 
       <div id="helpTabContent">
         <!-- Populated by JavaScript -->
-      </div>
-
-      <div class="schema-table-card settings-switch-card">
-        <label class="settings-switch-row" for="settingShowSqlDefault">
-          <span class="settings-switch-label">Expand SQL query</span>
-          <span class="settings-switch-control">
-            <input type="checkbox" id="settingShowSqlDefault">
-            <span class="settings-switch-track" aria-hidden="true"><span class="switch-option switch-option-off">No</span><span class="switch-option switch-option-on">Yes</span></span>
-          </span>
-        </label>
-      </div>
-
-      <div class="schema-table-card settings-switch-card">
-        <label class="settings-switch-row" for="settingShowPipelineDefault">
-          <span class="settings-switch-label">Animated pipeline stages</span>
-          <span class="settings-switch-control">
-            <input type="checkbox" id="settingShowPipelineDefault">
-            <span class="settings-switch-track" aria-hidden="true"><span class="switch-option switch-option-off">Off</span><span class="switch-option switch-option-on">Show</span></span>
-          </span>
-        </label>
-      </div>
-
-      <div class="schema-table-card settings-switch-card">
-        <label class="settings-switch-row" for="settingCompactMode">
-          <span class="settings-switch-label">Compact messages</span>
-          <span class="settings-switch-control">
-            <input type="checkbox" id="settingCompactMode">
-            <span class="settings-switch-track" aria-hidden="true"><span class="switch-option switch-option-off">No</span><span class="switch-option switch-option-on">Yes</span></span>
-          </span>
-        </label>
-      </div>
-    </div>
-  </div>
-  </div>
-
-  <div class="modal-backdrop focused-modal-backdrop help-modal-backdrop" id="shortcutsHelpModalBackdrop">
-    <div class="app-modal help-modal" role="dialog" aria-modal="true" aria-labelledby="shortcutsHelpModalTitle">
-      <div class="modal-header">
-        <div class="modal-title" id="shortcutsHelpModalTitle">Keyboard shortcuts</div>
-        <button type="button" class="header-icon-btn close-help-modal-btn" aria-label="Close keyboard shortcuts">&times;</button>
-      </div>
-      <div class="modal-body settings-help-panel">
-        <div class="schema-table-card settings-help-intro"><strong>Keyboard shortcuts</strong><span>Use these shortcuts to move around Aria more quickly.</span></div>
-        <div class="settings-shortcuts-list" aria-label="Keyboard shortcuts">
-          <div class="settings-shortcut-item"><kbd>Enter</kbd><span>Send prompt / question</span></div>
-          <div class="settings-shortcut-item"><kbd>Shift + Enter</kbd><span>Insert newline in input</span></div>
-          <div class="settings-shortcut-item"><kbd>/</kbd><span>Focus natural-language question input</span></div>
-          <div class="settings-shortcut-item"><kbd>Ctrl + K / Cmd + K</kbd><span>Focus conversation history search box</span></div>
-          <div class="settings-shortcut-item"><kbd>Esc</kbd><span>Close any active modal or drawer</span></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-backdrop focused-modal-backdrop help-modal-backdrop" id="domainsHelpModalBackdrop">
-    <div class="app-modal help-modal" role="dialog" aria-modal="true" aria-labelledby="domainsHelpModalTitle">
-      <div class="modal-header"><div class="modal-title" id="domainsHelpModalTitle">Supported domains</div><button type="button" class="header-icon-btn close-help-modal-btn" aria-label="Close supported domains">&times;</button></div>
-      <div class="modal-body settings-help-panel">
-        <div class="schema-table-card settings-help-intro"><strong>Supported domains</strong><span>Review the business data covered by this demo.</span></div>
-        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
-          <div class="capability-assumption"><strong>CK1 v2.1 capability map loaded.</strong> Data Guide maps the synthetic demo metrics to the supplied 111-table CK1 schema. Coverage indicates schema readiness, not a live production connection.</div>
-          <div class="schema-table-card"><strong>Finance</strong> <span class="capability-status available">Available in demo</span><p>Receivables, aging and supplier invoice scenarios.</p></div>
-          <div class="schema-table-card"><strong>Sales</strong> <span class="capability-status available">Available in demo</span><p>Executed contracts, buyer ranking and payment schedules.</p></div>
-          <div class="schema-table-card"><strong>Property Management</strong> <span class="capability-status available">Available in demo</span><p>Occupancy and lease-renewal scenarios.</p></div>
-          <div class="schema-table-card"><strong>Projects</strong> <span class="capability-status limited">Limited demo</span><p>Project master and supporting scope data.</p></div>
-          <div class="schema-table-card"><strong>Procurement</strong> <span class="capability-status limited">Limited demo</span><p>Selected spend, purchase-order and supplier scenarios only.</p></div>
-          <div class="schema-table-card"><strong>Construction</strong> <span class="capability-status limited">Limited demo</span><p>Selected progress and damages scenarios only.</p></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-backdrop focused-modal-backdrop help-modal-backdrop" id="scopeHelpModalBackdrop">
-    <div class="app-modal help-modal" role="dialog" aria-modal="true" aria-labelledby="scopeHelpModalTitle">
-      <div class="modal-header"><div class="modal-title" id="scopeHelpModalTitle">Scope &amp; limitations</div><button type="button" class="header-icon-btn close-help-modal-btn" aria-label="Close scope and limitations">&times;</button></div>
-      <div class="modal-body settings-help-panel">
-        <div class="schema-table-card settings-help-intro"><strong>Scope &amp; limitations</strong><span>Understand the prototype boundaries and known limitations.</span></div>
-        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
-          <p><strong>Architecture Boundaries &amp; Known Limitations:</strong></p>
-          <div class="schema-table-card"><strong>Prototype behaviour:</strong> This demo presents read-only interactions with synthetic data. It does not prove production data controls.</div>
-          <div class="schema-table-card"><strong>Catalog Boundaries:</strong> Indexed operational data spans calendar years 2023&ndash;2026. A fiscal-year calendar is not configured. Pre-2023 payroll and internal corporate HR records (stored in Workday) are out-of-scope.</div>
-          <div class="schema-table-card"><strong>Ungrounded Forecasting:</strong> External macroeconomic forecasts (e.g. 2030 mortgage interest rates) are unsupported to prevent hallucination.</div>
-          <div class="schema-table-card"><strong>Simulated access and masking:</strong> Persona-based restrictions and masked fields illustrate intended behaviour only; no production enforcement is implied.</div>
-        </div>
       </div>
     </div>
   </div>

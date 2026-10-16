@@ -42,15 +42,6 @@
     voiceRecognition: null,
     isRecordingVoice: false
   };
-  try {
-    Object.assign(state.settings, JSON.parse(localStorage.getItem('aria_workspace_preferences')) || {});
-  } catch (e) {
-    // Keep the defaults when stored preferences are unavailable or malformed.
-  }
-  const persistWorkspacePreferences = () => {
-    const { detailLevel, showSqlDefault, showPipelineDefault, compactMode } = state.settings;
-    localStorage.setItem('aria_workspace_preferences', JSON.stringify({ detailLevel, showSqlDefault, showPipelineDefault, compactMode }));
-  };
   let activeClarificationKeyHandler = null;
 
   // DOM Elements
@@ -156,7 +147,6 @@
     const savedAnswersBtn = document.getElementById('savedAnswersBtn');
 
   const settingsDrawer = document.getElementById('settingsDrawer');
-  const settingsModalBackdrop = document.getElementById('settingsModalBackdrop');
   const settingsBtn = document.getElementById('settingsBtn');
   const closeSettingsBtn = document.getElementById('closeSettingsBtn');
   const settingsPreferencesTabBtn = document.getElementById('settingsPreferencesTabBtn');
@@ -164,13 +154,13 @@
   const settingsPreferencesPanel = document.getElementById('settingsPreferencesPanel');
   const settingsHelpPanel = document.getElementById('settingsHelpPanel');
 
+  const helpModalBackdrop = document.getElementById('helpModalBackdrop');
   const helpModalBtn = document.getElementById('helpModalBtn');
-  const userHelpSubmenu = document.getElementById('userHelpSubmenu');
-  const helpModalBackdrops = {
-    shortcuts: document.getElementById('shortcutsHelpModalBackdrop'),
-    domains: document.getElementById('domainsHelpModalBackdrop'),
-    scope: document.getElementById('scopeHelpModalBackdrop')
-  };
+  const closeHelpModalBtn = document.getElementById('closeHelpModalBtn');
+  const helpTabContent = document.getElementById('helpTabContent');
+  const helpTabDomainsBtn = document.getElementById('helpTabDomainsBtn');
+  const helpTabScopeBtn = document.getElementById('helpTabScopeBtn');
+  const helpTabShortcutsBtn = document.getElementById('helpTabShortcutsBtn');
 
   const feedbackModalBackdrop = document.getElementById('feedbackModalBackdrop');
   const closeFeedbackModalBtn = document.getElementById('closeFeedbackModalBtn');
@@ -440,42 +430,22 @@
     return newConv;
   }
 
-  function isUntouchedConversation(conversation) {
-    return Boolean(conversation) && (!Array.isArray(conversation.messages) || conversation.messages.length === 0);
-  }
-
   function startNewChat() {
-    const activeConversation = getActiveConversation();
-    let newConversation = isUntouchedConversation(activeConversation)
-      ? activeConversation
-      : state.conversations.find((conversation) => (
-          isUntouchedConversation(conversation)
-          && conversation.title === 'New Conversation'
-          && !conversation.pinned
-        ));
-
-    if (!newConversation) {
-      newConversation = createNewConversation('New Conversation');
-    } else {
-      // Reuse the current draft and remove empty default drafts left behind by
-      // repeated New Chat clicks in older versions of the UI.
-      state.conversations = state.conversations.filter((conversation) => (
-        conversation.id === newConversation.id
-        || !(
-          isUntouchedConversation(conversation)
-          && conversation.title === 'New Conversation'
-          && !conversation.pinned
-        )
-      ));
-      state.activeConversationId = newConversation.id;
+    // Drop blank chats left behind, then reuse one if it exists.
+    pruneEmptyConversations();
+    const active = getActiveConversation();
+    if (active && active.messages.length === 0) {
       saveConversationsToStorage();
       renderSidebarConversations();
       renderActiveConversation();
+    } else {
+      createNewConversation('New Conversation');
     }
     closeConversationSearch();
+    showToast('Started new conversation');
     if (typeof updateRailActiveState === 'function') showBusinessWorkspaceView('ask');
     if (window.innerWidth <= 820) sidebarEl.classList.remove('open');
-    announceAppStatus('New conversation is ready.');
+    announceAppStatus('Started a new conversation.');
   }
 
   function conversationSearchText(conversation) {
@@ -940,12 +910,7 @@
     let hideResponsesForEditedQuestion = false;
     conv.messages.forEach((msg, idx) => {
       if (msg.role === 'user') {
-        // Legacy revisions stored the old and revised turns side by side. Hide
-        // the superseded turn so existing conversations follow the replacement
-        // behavior used by the current adjustment flow.
-        const hideSupersededTurn = Boolean(msg.supersededByUserMessageId);
-        hideResponsesForEditedQuestion = hideSupersededTurn || msg.id === activeAdjustmentUserMessageId;
-        if (hideSupersededTurn) return;
+        hideResponsesForEditedQuestion = msg.id === activeAdjustmentUserMessageId;
         html += renderUserMessageHtml(msg, idx === conv.messages.length - 2 || idx === conv.messages.length - 1);
       } else if (msg.role === 'agent') {
         if (hideResponsesForEditedQuestion) return;
@@ -1118,17 +1083,18 @@
   function renderUserMessageHtml(msg, isLastUserTurn) {
     const rerunScope = msg.scopeEditSummary;
     const isRevision = Boolean(msg.revisionOfUserMessageId);
-    const isAdjusted = Boolean(msg.adjustedAt);
     const isSuperseded = Boolean(msg.supersededByUserMessageId);
-    const turnLabel = isRevision ? 'Revised question' : (isAdjusted ? 'Adjusted question' : (msg.isScopeRerun ? 'Re-run with edited scope' : 'Your question'));
+    const turnLabel = isRevision ? 'Revised question' : (msg.isScopeRerun ? 'Re-run with edited scope' : 'Your question');
     const visibleQuestion = msg.isScopeRerun
       ? String(msg.text || '').replace(/\s*\(Applied scope:[\s\S]*\)\??\s*$/i, '').trim()
       : msg.text;
     const isEditing = activeAdjustmentUserMessageId === msg.id;
+    // A plain question needs no label; only revisions and re-runs are called out.
+    const showTurnLabel = isRevision || msg.isScopeRerun;
     return `
       <div class="chat-row user-row" id="msg_row_${msg.id}">
         <article class="user-bubble-container ${isSuperseded ? 'user-turn-superseded' : ''} ${isEditing ? 'is-editing' : ''}" aria-label="${escapeHtml(turnLabel)}">
-          <div class="conversation-turn-label question-turn-label">${escapeHtml(turnLabel)}</div>
+          ${showTurnLabel ? `<div class="conversation-turn-label question-turn-label">${escapeHtml(turnLabel)}</div>` : ''}
           ${isSuperseded ? '<div class="question-version-note">Superseded by a revised question below</div>' : ''}
           ${isRevision ? '<div class="question-version-note">Linked to the original question above</div>' : ''}
           ${isEditing ? `
@@ -1138,7 +1104,7 @@
               <div class="inline-question-scope">The revised question will use ${escapeHtml(formatAdjustmentScope(activeAdjustmentScope))}.</div>
               <div class="inline-question-actions">
                 <button type="button" class="action-tool-btn inline-adjust-cancel">Cancel</button>
-                <button type="submit" class="action-tool-btn primary inline-adjust-confirm" ${state.isThinking ? 'disabled' : ''}>Save adjusted question</button>
+                <button type="submit" class="action-tool-btn primary inline-adjust-confirm" ${state.isThinking ? 'disabled' : ''}>Run revised question</button>
               </div>
             </form>
           ` : `<div class="user-bubble">${escapeHtml(visibleQuestion)}</div>`}
@@ -1149,7 +1115,7 @@
             </details>
           ` : ''}
           <div class="user-bubble-meta">
-            <span class="user-turn-version">${isRevision ? 'Revised prompt' : (isAdjusted ? 'Adjusted prompt' : (msg.isScopeRerun ? 'Edited scope version' : 'Original prompt'))}</span>
+            ${showTurnLabel ? `<span class="user-turn-version">${isRevision ? 'Revised prompt' : 'Edited scope version'}</span>` : ''}
             <span>${msg.time || ''}</span>
             ${isEditing ? '' : `<button type="button" class="user-edit-btn" data-msg-id="${msg.id}">Adjust question</button>`}
           </div>
@@ -1895,9 +1861,6 @@
     activeAdjustmentUserMessageId = userMessage.id;
     activeAdjustmentScope = getAdjustmentScope(conv, userMessage);
 
-    // If this question is still being processed, editing it replaces that
-    // pending request. Stop the old run so the editor never sits above a
-    // misleading "Aria is thinking" state for wording the user is changing.
     const latestUserMessage = [...conv.messages].reverse().find((message) => message.role === 'user');
     if (state.isThinking && latestUserMessage && latestUserMessage.id === userMessage.id && state.activeAbortController) {
       state.activeAbortController.abort();
@@ -1935,34 +1898,16 @@
       input.focus();
       return;
     }
+    const originalId = original.id;
     const executionScope = JSON.parse(JSON.stringify(activeAdjustmentScope || state.selectedScope));
-    const originalIndex = conv.messages.findIndex((item) => item.id === original.id);
-
-    // An adjusted question replaces this turn. Remove the old response because
-    // it no longer answers the wording displayed to the user.
-    let turnEndIndex = originalIndex + 1;
-    while (turnEndIndex < conv.messages.length && conv.messages[turnEndIndex].role !== 'user') {
-      turnEndIndex += 1;
-    }
-    conv.messages.splice(originalIndex + 1, turnEndIndex - originalIndex - 1);
-    original.text = revisedQuestion;
-    original.adjustedAt = Date.now();
-    original.time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    delete original.supersededByUserMessageId;
-    delete original.supersededAt;
-    conv.updatedAt = Date.now();
-    saveConversationsToStorage();
-
     activeAdjustmentUserMessageId = null;
     activeAdjustmentScope = null;
-    // This flow updates the existing user message instead of appending another
-    // one, so render it now to close the inline editor before review begins.
-    renderActiveConversation();
     processUserPrompt(revisedQuestion, {
-      skipUserMessage: true,
+      interpretationConfirmed: true,
       originalQuestion: revisedQuestion,
       displayPromptText: revisedQuestion,
-      selectedScope: executionScope
+      selectedScope: executionScope,
+      revisionOfUserMessageId: originalId
     });
   }
 
@@ -2319,14 +2264,13 @@
     if (!options.interpretationConfirmed && !options.clarificationPayload && !options.scopeConfirmation && !options.interpretationOverride && !options.retryAttempt) {
       const directFixture = window.AriaMock.QUERY_RESPONSES[promptText];
       const questionScope = window.AriaScope.parseQuestionScope(promptText);
-      const promptScope = options.selectedScope || state.selectedScope;
-      const scopeConflict = window.AriaScope.detectScopeConflicts(promptScope, questionScope);
+      const scopeConflict = window.AriaScope.detectScopeConflicts(state.selectedScope, questionScope);
       const securityDecision = window.AriaMock.checkSecurityGateways(promptText, state.currentUser);
       const requiresClarification = Boolean((directFixture && directFixture.type === 'clarification') || scopeConflict);
 
       if (!requiresClarification && !securityDecision.blocked) {
         const intent = window.AriaScope.parseQuestionIntent(promptText, window.DEMO_CONTEXT);
-        const resolved = window.AriaScope.resolveSelectedScope(promptScope, questionScope, window.DEMO_CONTEXT);
+        const resolved = window.AriaScope.resolveSelectedScope(state.selectedScope, questionScope, window.DEMO_CONTEXT);
         const previewResult = { domain: resolved.domain || 'All Domains', originalQuery: promptText };
         const previewAppliedScope = window.AriaScope.buildAppliedInterpretation(previewResult, resolved, intent);
         const confirmationMsg = {
@@ -2583,10 +2527,8 @@
   // 7. THINKING PIPELINE ANIMATION & STOP BUTTON (Group A)
   // =========================================================================
   function renderThinkingBubble(msgId, options = {}) {
-    // An inline revision replaces the pending wording. Do not let a delayed
-    // loading render put the old request's status back underneath the editor.
     if (activeAdjustmentUserMessageId) return;
-
+    state.pendingRun = { convId: state.activeConversationId, msgId, options };
     const thinkingRow = document.createElement('div');
     thinkingRow.className = 'chat-row agent-row';
     thinkingRow.id = `thinking_row_${msgId}`;
@@ -5328,11 +5270,11 @@
   }
 
   function initSettingsAndHelp() {
-    closeSettingsBtn.innerHTML = '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg><span>Back to app</span>';
     settingsDrawer.querySelectorAll('.detail-choice-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.getAttribute('data-detail') === state.settings.detailLevel);
     });
     document.body.classList.toggle('compact-mode', Boolean(state.settings.compactMode));
+
     settingsPreferencesTabBtn.addEventListener('click', () => setSettingsSection('preferences'));
     settingsHelpTabBtn.addEventListener('click', () => setSettingsSection('help'));
 
@@ -5348,7 +5290,6 @@
     settingsDrawer.querySelectorAll('.detail-choice-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         state.settings.detailLevel = btn.getAttribute('data-detail');
-        persistWorkspacePreferences();
         settingsDrawer.querySelectorAll('.detail-choice-btn').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         saveSettings();
@@ -5357,14 +5298,13 @@
       });
     });
 
-    // Preference switches
+    // Checkboxes
     const showSqlChk = document.getElementById('settingShowSqlDefault');
     if (showSqlChk) {
       showSqlChk.checked = Boolean(state.settings.showSqlDefault);
       showSqlChk.addEventListener('change', () => {
         state.settings.showSqlDefault = showSqlChk.checked;
-        persistWorkspacePreferences();
-        renderActiveConversation();
+        saveSettings();
       });
     }
 
@@ -5373,7 +5313,7 @@
       showPipelineChk.checked = Boolean(state.settings.showPipelineDefault);
       showPipelineChk.addEventListener('change', () => {
         state.settings.showPipelineDefault = showPipelineChk.checked;
-        persistWorkspacePreferences();
+        saveSettings();
         showToast(showPipelineChk.checked
           ? 'Technical processing details will be shown for new requests.'
           : 'New requests will show a concise business-friendly loading state.');
@@ -5385,10 +5325,26 @@
       compactChk.checked = Boolean(state.settings.compactMode);
       compactChk.addEventListener('change', () => {
         state.settings.compactMode = compactChk.checked;
-        persistWorkspacePreferences();
+        saveSettings();
         document.body.classList.toggle('compact-mode', compactChk.checked);
       });
     }
+
+    // Help Modal Content Rendering
+    renderHelpTabContent('domains');
+
+    helpTabDomainsBtn.addEventListener('click', () => {
+      setActiveHelpTab(helpTabDomainsBtn);
+      renderHelpTabContent('domains');
+    });
+    helpTabScopeBtn.addEventListener('click', () => {
+      setActiveHelpTab(helpTabScopeBtn);
+      renderHelpTabContent('scope');
+    });
+    helpTabShortcutsBtn.addEventListener('click', () => {
+      setActiveHelpTab(helpTabShortcutsBtn);
+      renderHelpTabContent('shortcuts');
+    });
 
     // Keyboard Shortcuts Global Listener
     document.addEventListener('keydown', (e) => {
@@ -5460,8 +5416,11 @@
   }
 
   function openSettingsHelp(tab = 'domains') {
-    const modal = helpModalBackdrops[tab] || helpModalBackdrops.domains;
-    if (modal) modal.classList.add('open');
+    settingsDrawer.classList.add('open');
+    setSettingsSection('help');
+    const tabButton = tab === 'scope' ? helpTabScopeBtn : (tab === 'shortcuts' ? helpTabShortcutsBtn : helpTabDomainsBtn);
+    setActiveHelpTab(tabButton);
+    renderHelpTabContent(tab);
   }
 
   function setActiveHelpTab(activeBtn) {
@@ -5528,8 +5487,7 @@
     const dataGuideWasOpen = dataExplorerDrawer.classList.contains('open');
     dataExplorerDrawer.classList.remove('open');
     settingsDrawer.classList.remove('open');
-    if (settingsModalBackdrop) settingsModalBackdrop.classList.remove('open');
-    Object.values(helpModalBackdrops).forEach((modal) => modal && modal.classList.remove('open'));
+    if (helpModalBackdrop) helpModalBackdrop.classList.remove('open');
     feedbackModalBackdrop.classList.remove('open');
     sourceTableModalBackdrop.classList.remove('open');
     if (clearHistoryModalBackdrop) clearHistoryModalBackdrop.classList.remove('open');
@@ -5574,10 +5532,10 @@
       document.documentElement.setAttribute('data-theme', t);
     }
     localStorage.setItem('aria_theme', t);
-    document.querySelectorAll('.theme-choice-btn').forEach((button) => {
-      const isSelected = button.getAttribute('data-theme-choice') === t;
-      button.classList.toggle('active', isSelected);
-      button.setAttribute('aria-pressed', String(isSelected));
+    document.querySelectorAll('.theme-choice-btn').forEach((btn) => {
+      const selected = btn.getAttribute('data-theme-choice') === t;
+      btn.classList.toggle('active', selected);
+      btn.setAttribute('aria-pressed', String(selected));
     });
     updateThemeIcon();
   }
@@ -5592,8 +5550,6 @@
   }
 
   function showToast() {
-    // Toast notifications are intentionally disabled across the application.
-    // Clear any toast that may still be visible from an earlier action.
     if (toastContainerEl) toastContainerEl.replaceChildren();
   }
 
@@ -5736,31 +5692,38 @@
   }
 
   function initResizablePanels() {
+    const sidebarHandle = document.getElementById('sidebarResizeHandle');
     const evidenceHandle = document.getElementById('evidenceResizeHandle');
     const root = document.documentElement;
-    const evidenceStorageKey = 'aria_evidence_width_v1';
+    const storageKeys = { sidebar: 'aria_sidebar_width_v1', evidence: 'aria_evidence_width_v1' };
 
-    const limits = () => ({ min: 320, max: Math.max(360, Math.min(760, window.innerWidth - 360)) });
+    const limits = (kind) => kind === 'sidebar'
+      ? { min: 180, max: Math.max(220, Math.min(440, window.innerWidth - 520)) }
+      : { min: 320, max: Math.max(360, Math.min(760, window.innerWidth - 360)) };
 
-    const applyWidth = (value, persist = true) => {
-      const range = limits();
+    const applyWidth = (kind, value, persist = true) => {
+      const range = limits(kind);
       const width = Math.min(range.max, Math.max(range.min, Math.round(value)));
-      root.style.setProperty('--drawer-width', `${width}px`);
+      root.style.setProperty(kind === 'sidebar' ? '--sidebar-width' : '--drawer-width', `${width}px`);
       if (persist) {
-        try { localStorage.setItem(evidenceStorageKey, String(width)); } catch (e) { /* Storage is optional. */ }
+        try { localStorage.setItem(storageKeys[kind], String(width)); } catch (e) { /* Storage is optional. */ }
       }
       return width;
     };
 
-    try {
-      const savedWidth = Number(localStorage.getItem(evidenceStorageKey));
-      if (Number.isFinite(savedWidth) && savedWidth > 0) applyWidth(savedWidth, false);
-    } catch (e) { /* Keep the CSS default. */ }
+    Object.keys(storageKeys).forEach((kind) => {
+      try {
+        const savedWidth = Number(localStorage.getItem(storageKeys[kind]));
+        if (Number.isFinite(savedWidth) && savedWidth > 0) applyWidth(kind, savedWidth, false);
+      } catch (e) { /* Keep the CSS default. */ }
+    });
 
-    const bindHandle = (handle) => {
+    const bindHandle = (handle, kind) => {
       if (!handle) return;
       let activePointerId = null;
-      const pointerWidth = (clientX) => window.innerWidth - clientX;
+      const pointerWidth = (clientX) => kind === 'sidebar'
+        ? clientX - sidebarEl.getBoundingClientRect().left
+        : window.innerWidth - clientX;
 
       handle.addEventListener('pointerdown', (event) => {
         if (window.innerWidth <= 820 || event.button !== 0) return;
@@ -5771,12 +5734,12 @@
       });
       handle.addEventListener('pointermove', (event) => {
         if (activePointerId !== event.pointerId) return;
-        applyWidth(pointerWidth(event.clientX), false);
+        applyWidth(kind, pointerWidth(event.clientX), false);
       });
 
       const finishResize = (event) => {
         if (activePointerId === null || event.pointerId !== activePointerId) return;
-        applyWidth(pointerWidth(event.clientX));
+        applyWidth(kind, pointerWidth(event.clientX));
         if (handle.hasPointerCapture(activePointerId)) handle.releasePointerCapture(activePointerId);
         activePointerId = null;
         document.body.classList.remove('panel-resizing');
@@ -5786,18 +5749,22 @@
 
       handle.addEventListener('keydown', (event) => {
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        const currentWidth = scopeInspectorPanel.getBoundingClientRect().width;
+        const panel = kind === 'sidebar' ? sidebarEl : scopeInspectorPanel;
+        const currentWidth = panel.getBoundingClientRect().width;
         const visualDirection = event.key === 'ArrowRight' ? 1 : -1;
-        const delta = visualDirection * -16;
-        applyWidth(currentWidth + delta);
+        const delta = kind === 'sidebar' ? visualDirection * 16 : visualDirection * -16;
+        applyWidth(kind, currentWidth + delta);
         event.preventDefault();
       });
     };
 
-    bindHandle(evidenceHandle);
+    bindHandle(sidebarHandle, 'sidebar');
+    bindHandle(evidenceHandle, 'evidence');
     window.addEventListener('resize', () => {
       if (window.innerWidth <= 820) return;
-      applyWidth(scopeInspectorPanel.getBoundingClientRect().width, false);
+      if (!sidebarEl.classList.contains('collapsed')) applyWidth('sidebar', sidebarEl.getBoundingClientRect().width, false);
+      // A closed panel measures 0px; re-clamping that would discard the saved width.
+      if (scopeInspectorPanel.classList.contains('open')) applyWidth('evidence', scopeInspectorPanel.getBoundingClientRect().width, false);
     });
   }
 
@@ -5991,15 +5958,9 @@
       userMenuDropdownEl.classList.toggle('open');
       sidebarEl.classList.toggle('persona-menu-open', userMenuDropdownEl.classList.contains('open'));
       userMenuBtnEl.setAttribute('aria-expanded', userMenuDropdownEl.classList.contains('open') ? 'true' : 'false');
-      if (!userMenuDropdownEl.classList.contains('open') && userHelpSubmenu) {
-        userHelpSubmenu.classList.remove('open');
-        helpModalBtn.setAttribute('aria-expanded', 'false');
-      }
     });
     document.addEventListener('click', () => {
       userMenuDropdownEl.classList.remove('open');
-      if (userHelpSubmenu) userHelpSubmenu.classList.remove('open');
-      if (helpModalBtn) helpModalBtn.setAttribute('aria-expanded', 'false');
       sidebarEl.classList.remove('persona-menu-open');
       userMenuBtnEl.setAttribute('aria-expanded', 'false');
     });
@@ -6044,7 +6005,7 @@
       railAskBtn.addEventListener('click', () => {
         dataExplorerDrawer.classList.remove('open');
                 settingsDrawer.classList.remove('open');
-        Object.values(helpModalBackdrops).forEach((modal) => modal && modal.classList.remove('open'));
+        if (helpModalBackdrop) helpModalBackdrop.classList.remove('open');
         showBusinessWorkspaceView('ask');
         if (window.innerWidth <= 820 && sidebarEl) {
           sidebarEl.classList.remove('open');
@@ -6146,43 +6107,13 @@
 
     settingsBtn.addEventListener('click', () => {
       setSettingsSection('preferences');
-      userMenuDropdownEl.classList.remove('open');
-      sidebarEl.classList.remove('persona-menu-open');
-      userMenuBtnEl.setAttribute('aria-expanded', 'false');
-      settingsModalBackdrop.classList.add('open');
+      settingsDrawer.classList.add('open');
     });
-    closeSettingsBtn.addEventListener('click', () => settingsModalBackdrop.classList.remove('open'));
-    settingsModalBackdrop.addEventListener('click', (event) => {
-      if (event.target === settingsModalBackdrop) settingsModalBackdrop.classList.remove('open');
-    });
+    closeSettingsBtn.addEventListener('click', () => settingsDrawer.classList.remove('open'));
+    document.getElementById('settingsBackdrop')?.addEventListener('click', () => settingsDrawer.classList.remove('open'));
 
-    if (helpModalBtn && userHelpSubmenu) helpModalBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      const isOpen = userHelpSubmenu.classList.toggle('open');
-      helpModalBtn.setAttribute('aria-expanded', String(isOpen));
-    });
-    if (userHelpSubmenu) {
-      userHelpSubmenu.addEventListener('click', (event) => event.stopPropagation());
-      userHelpSubmenu.querySelectorAll('.help-topic-item').forEach((item) => {
-        item.addEventListener('click', () => {
-          const tab = item.getAttribute('data-help-tab') || 'shortcuts';
-          userHelpSubmenu.classList.remove('open');
-          helpModalBtn.setAttribute('aria-expanded', 'false');
-          userMenuDropdownEl.classList.remove('open');
-          sidebarEl.classList.remove('persona-menu-open');
-          userMenuBtnEl.setAttribute('aria-expanded', 'false');
-          openSettingsHelp(tab);
-        });
-      });
-    }
-    Object.values(helpModalBackdrops).forEach((modal) => {
-      if (!modal) return;
-      const closeButton = modal.querySelector('.close-help-modal-btn');
-      if (closeButton) closeButton.addEventListener('click', () => modal.classList.remove('open'));
-      modal.addEventListener('click', (event) => {
-        if (event.target === modal) modal.classList.remove('open');
-      });
-    });
+    if (helpModalBtn && helpModalBackdrop) helpModalBtn.addEventListener('click', () => openSettingsHelp('domains'));
+    if (closeHelpModalBtn && helpModalBackdrop) closeHelpModalBtn.addEventListener('click', () => helpModalBackdrop.classList.remove('open'));
 
     // Feedback Modal Submission
     closeFeedbackModalBtn.addEventListener('click', () => feedbackModalBackdrop.classList.remove('open'));
