@@ -1118,7 +1118,7 @@
             <form class="inline-question-editor" data-msg-id="${msg.id}">
               <label for="inlineQuestionInput_${msg.id}">Edit question</label>
               <textarea id="inlineQuestionInput_${msg.id}" class="inline-question-input" rows="3">${escapeHtml(activeAdjustmentDraft)}</textarea>
-              <div class="inline-question-scope">The revised question will use ${escapeHtml(formatAdjustmentScope(activeAdjustmentScope))}.</div>
+              <div class="inline-question-scope">${escapeHtml(formatAdjustmentScope(activeAdjustmentScope))}. The time period will come from the revised question.</div>
               <div class="inline-question-actions">
                 <button type="button" class="action-tool-btn inline-adjust-cancel">Cancel</button>
                 <button type="submit" class="action-tool-btn primary inline-adjust-confirm" ${state.isThinking ? 'disabled' : ''}>Run revised question</button>
@@ -1852,9 +1852,14 @@
       if (item.role === 'user') break;
       appliedScope = item.appliedScope || (item.resultsData && item.resultsData.appliedScope) || appliedScope;
     }
-    return appliedScope
+    const adjustmentScope = appliedScope
       ? buildSavedExecutionOptions(appliedScope).selectedScope
       : JSON.parse(JSON.stringify(state.selectedScope));
+    // A revision may change the year or date wording. Preserve the business
+    // area, but never carry an old time filter into the revised question.
+    adjustmentScope.time = { mode: 'auto', preset: 'auto', start: null, end: null };
+    if ('timeRange' in adjustmentScope) adjustmentScope.timeRange = 'Auto';
+    return adjustmentScope;
   }
 
   function formatAdjustmentScope(scope) {
@@ -1863,12 +1868,7 @@
           ? scope.domain.values.join(' + ')
           : (scope.domain.value || 'Auto — infer from question'))
       : 'Auto — infer from question';
-    const time = scope && scope.time
-      ? (scope.time.mode === 'custom'
-          ? `${scope.time.start || 'Start date'} to ${scope.time.end || 'End date'}`
-          : (scope.time.label || scope.time.preset || 'Auto — infer from question'))
-      : 'Auto — infer from question';
-    return `Business area: ${domain} · Period: ${time}`;
+    return `Business area: ${domain}`;
   }
 
   function openAdjustQuestionEditor(messageId) {
