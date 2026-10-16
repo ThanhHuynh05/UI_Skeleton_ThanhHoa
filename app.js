@@ -910,13 +910,16 @@
     let hideResponsesForEditedQuestion = false;
     conv.messages.forEach((msg, idx) => {
       if (msg.role === 'user') {
-        // Keep the original question for context, but hide its old answer while
-        // editing and after a revised question supersedes it.
+        const isSupersededQuestion = Boolean(msg.supersededByUserMessageId);
+        // Hide the original turn after a revision. While its inline editor is
+        // open, keep the question visible but temporarily hide its old answer.
         hideResponsesForEditedQuestion = (
           msg.id === activeAdjustmentUserMessageId
-          || Boolean(msg.supersededByUserMessageId)
+          || isSupersededQuestion
         );
-        html += renderUserMessageHtml(msg, idx === conv.messages.length - 2 || idx === conv.messages.length - 1);
+        if (!isSupersededQuestion) {
+          html += renderUserMessageHtml(msg, idx === conv.messages.length - 2 || idx === conv.messages.length - 1);
+        }
       } else if (msg.role === 'agent') {
         if (hideResponsesForEditedQuestion) return;
         html += renderAgentMessageHtml(msg, idx);
@@ -1101,7 +1104,6 @@
         <article class="user-bubble-container ${isSuperseded ? 'user-turn-superseded' : ''} ${isEditing ? 'is-editing' : ''}" aria-label="${escapeHtml(turnLabel)}">
           ${showTurnLabel ? `<div class="conversation-turn-label question-turn-label">${escapeHtml(turnLabel)}</div>` : ''}
           ${isSuperseded ? '<div class="question-version-note">Superseded by a revised question below</div>' : ''}
-          ${isRevision ? '<div class="question-version-note">Linked to the original question above</div>' : ''}
           ${isEditing ? `
             <form class="inline-question-editor" data-msg-id="${msg.id}">
               <label for="inlineQuestionInput_${msg.id}">Edit question</label>
