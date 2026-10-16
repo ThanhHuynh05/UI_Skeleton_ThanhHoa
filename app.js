@@ -910,7 +910,12 @@
     let hideResponsesForEditedQuestion = false;
     conv.messages.forEach((msg, idx) => {
       if (msg.role === 'user') {
-        hideResponsesForEditedQuestion = msg.id === activeAdjustmentUserMessageId;
+        // Keep the original question for context, but hide its old answer while
+        // editing and after a revised question supersedes it.
+        hideResponsesForEditedQuestion = (
+          msg.id === activeAdjustmentUserMessageId
+          || Boolean(msg.supersededByUserMessageId)
+        );
         html += renderUserMessageHtml(msg, idx === conv.messages.length - 2 || idx === conv.messages.length - 1);
       } else if (msg.role === 'agent') {
         if (hideResponsesForEditedQuestion) return;
