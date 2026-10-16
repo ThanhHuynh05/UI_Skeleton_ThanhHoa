@@ -9,81 +9,81 @@
    links, selection, focus and data series; status colours carry meaning only. */
 :root {
   /* Surfaces */
-  --bg-app: #fcfbfa;
+  --bg-app: #ffffff;
   --bg-surface: #ffffff;
-  --bg-sidebar: #f6f3f1;
-  --bg-subtle: #f5f3f0;
-  --bg-hover: #eae7e1;
-  --bg-active: #dfdcd5;
-  --bg-code: #1c1919;
-  --text-code: #fcfbfa;
+  --bg-sidebar: #f9f9f9;
+  --bg-subtle: #f4f4f4;
+  --bg-hover: #ececec;
+  --bg-active: #e3e3e3;
+  --bg-code: #171717;
+  --text-code: #f4f4f4;
 
-  --border-color: #dcd8d3;
-  --border-strong: #bcb7b0;
+  --border-color: #e5e5e5;
+  --border-strong: #d0d0d0;
 
   /* Text */
-  --text-primary: #1a1516;
-  --text-secondary: #4a4443;
-  --text-muted: #736b69;
+  --text-primary: #0d0d0d;
+  --text-secondary: #4f4f4f;
+  --text-muted: #6b6b6b;
   --text-inverse: #ffffff;
 
   /* Accent: links, selection, focus and data. Never a primary button fill. */
-  --accent-primary: #802323;
-  --accent-hover: #631919;
-  --accent-subtle: #f7eaea;
-  --accent-border: #dcb3b3;
-  --accent-text: #802323;
-  --focus-ring: #802323;
+  --accent-primary: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-subtle: #eef4ff;
+  --accent-border: #c7d7fe;
+  --accent-text: #1d4ed8;
+  --focus-ring: #2563eb;
   --control-bg: #ffffff;
-  --control-disabled-bg: #eae7e1;
-  --control-disabled-text: #625b59;
+  --control-disabled-bg: #f4f4f4;
+  --control-disabled-text: #6b6b6b;
 
   /* Interactive colour pairs: foreground and background always move together. */
-  --button-primary-bg: #802323;
+  --button-primary-bg: #0d0d0d;
   --button-primary-fg: #ffffff;
-  --button-primary-hover-bg: #631919;
+  --button-primary-hover-bg: #2f2f2f;
   --button-primary-hover-fg: #ffffff;
-  --button-primary-active-bg: #4f1212;
+  --button-primary-active-bg: #000000;
   --button-primary-active-fg: #ffffff;
   --button-secondary-bg: #ffffff;
-  --button-secondary-fg: #1a1516;
-  --button-secondary-hover-bg: #eae7e1;
-  --button-secondary-hover-fg: #1a1516;
-  --button-secondary-active-bg: #dfdcd5;
-  --button-secondary-active-fg: #1a1516;
-  --button-disabled-bg: #eae7e1;
-  --button-disabled-fg: #625b59;
-  --button-danger-bg: #a63131;
+  --button-secondary-fg: #0d0d0d;
+  --button-secondary-hover-bg: #f4f4f4;
+  --button-secondary-hover-fg: #0d0d0d;
+  --button-secondary-active-bg: #ececec;
+  --button-secondary-active-fg: #0d0d0d;
+  --button-disabled-bg: #ececec;
+  --button-disabled-fg: #6b6b6b;
+  --button-danger-bg: #c4281c;
   --button-danger-fg: #ffffff;
-  --button-danger-hover-bg: #8f2525;
-  --user-turn-bg: #802323;
-  --user-turn-fg: #ffffff;
+  --button-danger-hover-bg: #a3200f;
+  --user-turn-bg: #f4f4f4;
+  --user-turn-fg: #0d0d0d;
   --user-turn-border: transparent;
-  --assistant-turn-bg: #f5f3f0;
-  --assistant-turn-border: #cfc9c2;
+  --assistant-turn-bg: transparent;
+  --assistant-turn-border: transparent;
 
   /* Status: reserved for meaning, never decoration. */
-  --success-color: #2b593f;
-  --success-bg: #eaf3ed;
-  --success-border: #b8d4c4;
+  --success-color: #0f7b3f;
+  --success-bg: #edfaf2;
+  --success-border: #b6e3c7;
 
-  --warning-color: #8c5b19;
-  --warning-bg: #fdf6ec;
-  --warning-border: #e6c89e;
+  --warning-color: #9a5b00;
+  --warning-bg: #fff7e8;
+  --warning-border: #f2d39b;
 
-  --danger-color: #a63131;
-  --danger-bg: #fbeded;
-  --danger-border: #e8baba;
+  --danger-color: #c4281c;
+  --danger-bg: #fdf1f0;
+  --danger-border: #f5c3be;
 
-  --info-color: #802323;
+  --info-color: #1d4ed8;
 
   --user-bubble-bg: transparent;
-  --user-bubble-text: #1a1516;
+  --user-bubble-text: #0d0d0d;
   --agent-bubble-bg: transparent;
 
-  --table-header-bg: #fcfbfa;
-  --table-row-hover: #f5f4f1;
-  --table-border: #dcd8d3;
+  --table-header-bg: #f9f9f9;
+  --table-row-hover: #f9f9f9;
+  --table-border: #e5e5e5;
 
   /* Data visualisation */
   --chart-1: #2563eb;
@@ -136,77 +136,77 @@
 
 /* Dark Mode Overrides */
 [data-theme="dark"] {
-  --bg-app: #151313;
-  --bg-surface: #151313;
-  --bg-sidebar: #1c1919;
-  --bg-subtle: #201d1d;
-  --bg-hover: #2a2626;
-  --bg-active: #383333;
-  --bg-code: #000000;
-  --text-code: #fcfbfa;
+  --bg-app: #212121;
+  --bg-surface: #212121;
+  --bg-sidebar: #171717;
+  --bg-subtle: #2f2f2f;
+  --bg-hover: #2a2a2a;
+  --bg-active: #383838;
+  --bg-code: #0d0d0d;
+  --text-code: #ececec;
 
-  --border-color: #383333;
-  --border-strong: #4f4848;
+  --border-color: #383838;
+  --border-strong: #4d4d4d;
 
-  --text-primary: #f5f4f1;
-  --text-secondary: #bcb7b0;
-  --text-muted: #aaa29f;
-  --text-inverse: #ffffff;
+  --text-primary: #ececec;
+  --text-secondary: #c4c4c4;
+  --text-muted: #a3a3a3;
+  --text-inverse: #0d0d0d;
 
-  --accent-primary: #a83c3c;
-  --accent-hover: #c44e4e;
-  --accent-subtle: #2d1414;
-  --accent-border: #4d2323;
-  --accent-text: #eebfbf;
-  --focus-ring: #eebfbf;
-  --control-bg: #201d1d;
-  --control-disabled-bg: #2a2626;
-  --control-disabled-text: #bcb7b0;
+  --accent-primary: #2f6fe4; /* fill-safe: white text passes 4.5:1; text uses --accent-text */
+  --accent-hover: #4a84f0;
+  --accent-subtle: #1c2840;
+  --accent-border: #2f4a80;
+  --accent-text: #8ab4ff;
+  --focus-ring: #8ab4ff;
+  --control-bg: #2a2a2a;
+  --control-disabled-bg: #2a2a2a;
+  --control-disabled-text: #a3a3a3;
 
-  --button-primary-bg: #8f3030;
-  --button-primary-fg: #ffffff;
-  --button-primary-hover-bg: #762525;
-  --button-primary-hover-fg: #ffffff;
-  --button-primary-active-bg: #641d1d;
-  --button-primary-active-fg: #ffffff;
-  --button-secondary-bg: #201d1d;
-  --button-secondary-fg: #f5f4f1;
-  --button-secondary-hover-bg: #383333;
+  --button-primary-bg: #ececec;
+  --button-primary-fg: #0d0d0d;
+  --button-primary-hover-bg: #ffffff;
+  --button-primary-hover-fg: #0d0d0d;
+  --button-primary-active-bg: #d4d4d4;
+  --button-primary-active-fg: #0d0d0d;
+  --button-secondary-bg: #212121;
+  --button-secondary-fg: #ececec;
+  --button-secondary-hover-bg: #2f2f2f;
   --button-secondary-hover-fg: #ffffff;
-  --button-secondary-active-bg: #4f4848;
+  --button-secondary-active-bg: #383838;
   --button-secondary-active-fg: #ffffff;
-  --button-disabled-bg: #2a2626;
-  --button-disabled-fg: #bcb7b0;
-  --button-danger-bg: #a63131;
+  --button-disabled-bg: #2f2f2f;
+  --button-disabled-fg: #8f8f8f;
+  --button-danger-bg: #d0352a;
   --button-danger-fg: #ffffff;
-  --button-danger-hover-bg: #c44e4e;
-  --user-turn-bg: #8f3030;
-  --user-turn-fg: #ffffff;
+  --button-danger-hover-bg: #e04a3f;
+  --user-turn-bg: #2f2f2f;
+  --user-turn-fg: #ececec;
   --user-turn-border: transparent;
-  --assistant-turn-bg: #201d1d;
-  --assistant-turn-border: #4f4848;
+  --assistant-turn-bg: transparent;
+  --assistant-turn-border: transparent;
 
-  --success-color: #5bb07e;
-  --success-bg: #143020;
-  --success-border: #1e4a31;
+  --success-color: #5fd08f;
+  --success-bg: #12291c;
+  --success-border: #1f4d33;
 
-  --warning-color: #e3a956;
-  --warning-bg: #3d270c;
-  --warning-border: #5c3a12;
+  --warning-color: #f2b45a;
+  --warning-bg: #2c2210;
+  --warning-border: #5b4016;
 
-  --danger-color: #e06060;
-  --danger-bg: #3d1414;
-  --danger-border: #632121;
+  --danger-color: #ff8a80;
+  --danger-bg: #2e1614;
+  --danger-border: #5e2722;
 
-  --info-color: #eebfbf;
+  --info-color: #8ab4ff;
 
   --user-bubble-bg: transparent;
-  --user-bubble-text: #f5f4f1;
+  --user-bubble-text: #ececec;
   --agent-bubble-bg: transparent;
 
-  --table-header-bg: #151313;
-  --table-row-hover: #1c1919;
-  --table-border: #383333;
+  --table-header-bg: #262626;
+  --table-row-hover: #262626;
+  --table-border: #383838;
 
   --chart-1: #6b9bff;
   --chart-2: #34c79b;
@@ -6827,7 +6827,7 @@ kbd {
 .app-modal > .modal-body { gap: 16px; padding: 12px 24px 8px; }
 .app-modal .modal-body > p,
 .app-modal .feedback-help,
-.app-modal .modal-lead,
+.app-modal .modal-lead { margin: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.55; }
 .app-modal.modal-confirm .modal-body > p { color: var(--text-primary); }
 .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 24px 24px; }
 .modal-footer-inline { padding: 24px 0 16px; }
