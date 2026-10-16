@@ -19,7 +19,6 @@
     .action-panel { display: flex; gap: 12px; background: var(--bg-surface); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 24px; align-items: center; justify-content: space-between; }
     .action-title { font-weight: 600; font-size: 15px; }
     .action-desc { font-size: 12px; color: var(--text-secondary); }
-    .admin-settings-modal { width: min(520px, calc(100vw - 32px)); }
   </style>
 </head>
 <body class="dashboard-page">
@@ -49,10 +48,6 @@
       </nav>
 
       <div class="admin-sidebar-footer">
-        <button type="button" class="admin-settings-link" id="adminSettingsBtn" title="Settings" aria-label="Open settings" aria-haspopup="dialog">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.09A1.7 1.7 0 0 0 8.95 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.09A1.7 1.7 0 0 0 4.6 8.95a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06A1.7 1.7 0 0 0 8.97 4.6 1.7 1.7 0 0 0 10 3.04V3h4v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 10H21v4h-.09A1.7 1.7 0 0 0 19.4 15Z"></path></svg>
-          <span>Settings</span>
-        </button>
         <div class="user-menu-wrapper admin-user-menu" id="adminUserBadge">
           <button type="button" class="admin-persona-button" id="adminUserMenuBtn" aria-label="User profile and roles" aria-expanded="false">
             <span class="admin-persona-avatar" aria-hidden="true">A</span>
@@ -61,6 +56,10 @@
           </button>
           <div class="user-menu-dropdown" id="adminUserMenuDropdown" role="menu">
             <div class="user-menu-context"><strong>Demo persona</strong><span>Access and masking are simulated.</span></div>
+            <button type="button" class="user-menu-item" id="adminSettingsBtn" role="menuitem" aria-haspopup="dialog">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.09A1.7 1.7 0 0 0 8.95 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.09A1.7 1.7 0 0 0 4.6 8.95a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06A1.7 1.7 0 0 0 8.97 4.6 1.7 1.7 0 0 0 10 3.04V3h4v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 10H21v4h-.09A1.7 1.7 0 0 0 19.4 15Z"></path></svg>
+              <span>Settings</span>
+            </button>
             <a href="index.html" class="user-menu-item" role="menuitem">Return to business workspace</a>
             <button type="button" class="user-menu-item" id="adminSwitchPersonaBtn" role="menuitem"><span>Switch demo persona</span></button>
           </div>
@@ -342,21 +341,41 @@
     </div>
   </div>
 
-  <div class="modal-backdrop" id="adminSettingsBackdrop" aria-hidden="true">
-    <div class="app-modal admin-settings-modal" role="dialog" aria-modal="true" aria-labelledby="adminSettingsTitle" tabindex="-1">
+  <div class="modal-backdrop settings-page-backdrop" id="adminSettingsBackdrop" aria-hidden="true">
+    <div class="app-modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="adminSettingsTitle" tabindex="-1">
       <div class="modal-header">
-        <div class="modal-title" id="adminSettingsTitle">Settings</div>
-        <button type="button" class="header-icon-btn modal-close" id="closeAdminSettingsBtn" aria-label="Close settings"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+        <div class="modal-title" id="adminSettingsTitle">Aria settings</div>
+        <button type="button" class="header-icon-btn" id="closeAdminSettingsBtn" aria-label="Close settings">✕</button>
       </div>
-      <div class="modal-body">
-        <section class="settings-row admin-settings-group" aria-labelledby="appearanceSettingLabel">
-          <div class="settings-row-copy"><strong id="appearanceSettingLabel">Theme</strong><span>Light, dark, or follow your system.</span></div>
-          <div class="admin-setting-options segmented-control" data-setting-group="theme">
-            <button type="button" class="admin-setting-option" data-theme-choice="light">Light</button>
-            <button type="button" class="admin-setting-option" data-theme-choice="dark">Dark</button>
-            <button type="button" class="admin-setting-option" data-theme-choice="system">System</button>
+      <div class="settings-primary-tabs" role="tablist" aria-label="Settings sections">
+        <button type="button" class="settings-primary-tab active" id="adminAppearanceTabBtn" role="tab" aria-selected="true" aria-controls="adminAppearancePanel">Appearance</button>
+        <button type="button" class="settings-primary-tab" id="adminPreferencesTabBtn" role="tab" aria-selected="false" aria-controls="adminPreferencesPanel">Preferences</button>
+      </div>
+      <div class="modal-body settings-panel" id="adminAppearancePanel" role="tabpanel" aria-labelledby="adminAppearanceTabBtn">
+        <h1>Appearance</h1>
+        <p class="settings-panel-intro">Choose how Aria looks across your workspace.</p>
+        <div class="schema-table-card">
+          <div style="font-weight: 600; font-size: 13px;">Appearance Theme</div>
+          <div style="display: flex; gap: 8px; margin-top: 6px;">
+            <button type="button" class="view-btn theme-choice-btn" data-theme-choice="light">Light</button>
+            <button type="button" class="view-btn theme-choice-btn" data-theme-choice="dark">Dark</button>
+            <button type="button" class="view-btn theme-choice-btn" data-theme-choice="system">System</button>
           </div>
-        </section>
+        </div>
+      </div>
+      <div class="modal-body settings-panel" id="adminPreferencesPanel" role="tabpanel" aria-labelledby="adminPreferencesTabBtn" hidden>
+        <h1>Preferences</h1>
+        <p class="settings-panel-intro">Control how answers and processing details are displayed.</p>
+        <div class="schema-table-card">
+          <div style="font-weight: 600; font-size: 13px;">Answer Detail Level</div>
+          <div style="display: flex; gap: 8px; margin-top: 6px;">
+            <button type="button" class="view-btn admin-detail-choice-btn active" data-detail="detailed">Detailed (Executive Summary + Stats)</button>
+            <button type="button" class="view-btn admin-detail-choice-btn" data-detail="concise">Concise (Key Takeaway only)</button>
+          </div>
+        </div>
+        <div class="schema-table-card settings-switch-card"><label class="settings-switch-row" for="adminSettingShowSql"><span class="settings-switch-label">Expand SQL query</span><span class="settings-switch-control"><input type="checkbox" id="adminSettingShowSql"><span class="settings-switch-track" aria-hidden="true"><span class="switch-option switch-option-off">No</span><span class="switch-option switch-option-on">Yes</span></span></span></label></div>
+        <div class="schema-table-card settings-switch-card"><label class="settings-switch-row" for="adminSettingShowPipeline"><span class="settings-switch-label">Animated pipeline stages</span><span class="settings-switch-control"><input type="checkbox" id="adminSettingShowPipeline"><span class="settings-switch-track" aria-hidden="true"><span class="switch-option switch-option-off">Off</span><span class="switch-option switch-option-on">Show</span></span></span></label></div>
+        <div class="schema-table-card settings-switch-card"><label class="settings-switch-row" for="adminSettingCompactMode"><span class="settings-switch-label">Compact messages</span><span class="settings-switch-control"><input type="checkbox" id="adminSettingCompactMode"><span class="settings-switch-track" aria-hidden="true"><span class="switch-option switch-option-off">No</span><span class="switch-option switch-option-on">Yes</span></span></span></label></div>
       </div>
     </div>
   </div>
@@ -405,15 +424,48 @@
       const adminSettingsBackdrop = document.getElementById('adminSettingsBackdrop');
       const closeAdminSettingsBtn = document.getElementById('closeAdminSettingsBtn');
       const adminSettingsDialog = adminSettingsBackdrop.querySelector('[role="dialog"]');
+      closeAdminSettingsBtn.innerHTML = '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg><span>Back to app</span>';
+      closeAdminSettingsBtn.setAttribute('aria-label', 'Back to admin workspace');
+      const adminAppearanceTabBtn = document.getElementById('adminAppearanceTabBtn');
+      const adminPreferencesTabBtn = document.getElementById('adminPreferencesTabBtn');
+      const adminAppearancePanel = document.getElementById('adminAppearancePanel');
+      const adminPreferencesPanel = document.getElementById('adminPreferencesPanel');
+      const getWorkspacePreferences = () => {
+        try { return JSON.parse(localStorage.getItem('aria_workspace_preferences')) || {}; } catch (e) { return {}; }
+      };
+      const saveWorkspacePreferences = preferences => localStorage.setItem('aria_workspace_preferences', JSON.stringify(preferences));
+      const setAdminSettingsSection = section => {
+        const showPreferences = section === 'preferences';
+        adminAppearancePanel.hidden = showPreferences;
+        adminPreferencesPanel.hidden = !showPreferences;
+        adminAppearanceTabBtn.classList.toggle('active', !showPreferences);
+        adminPreferencesTabBtn.classList.toggle('active', showPreferences);
+        adminAppearanceTabBtn.setAttribute('aria-selected', String(!showPreferences));
+        adminPreferencesTabBtn.setAttribute('aria-selected', String(showPreferences));
+      };
       const syncSettingsControls = () => {
         const theme = localStorage.getItem('aria_theme') || 'light';
+        const preferences = getWorkspacePreferences();
         document.querySelectorAll('[data-theme-choice]').forEach(button => {
           const selected = button.dataset.themeChoice === theme;
           button.classList.toggle('active', selected);
           button.setAttribute('aria-pressed', String(selected));
         });
+        document.querySelectorAll('.admin-detail-choice-btn').forEach(button => {
+          const selected = button.dataset.detail === (preferences.detailLevel || 'detailed');
+          button.classList.toggle('active', selected);
+          button.setAttribute('aria-pressed', String(selected));
+        });
+        document.getElementById('adminSettingShowSql').checked = Boolean(preferences.showSqlDefault);
+        document.getElementById('adminSettingShowPipeline').checked = Boolean(preferences.showPipelineDefault);
+        document.getElementById('adminSettingCompactMode').checked = Boolean(preferences.compactMode);
       };
       const openAdminSettings = () => {
+        const adminUserMenuDropdown = document.getElementById('adminUserMenuDropdown');
+        const adminUserMenuBtn = document.getElementById('adminUserMenuBtn');
+        adminUserMenuDropdown.classList.remove('open');
+        adminUserMenuBtn.setAttribute('aria-expanded', 'false');
+        setAdminSettingsSection('appearance');
         syncSettingsControls();
         adminSettingsBackdrop.classList.add('open');
         adminSettingsBackdrop.setAttribute('aria-hidden', 'false');
@@ -425,6 +477,8 @@
         requestAnimationFrame(() => adminSettingsBtn.focus());
       };
       adminSettingsBtn.addEventListener('click', openAdminSettings);
+      adminAppearanceTabBtn.addEventListener('click', () => setAdminSettingsSection('appearance'));
+      adminPreferencesTabBtn.addEventListener('click', () => setAdminSettingsSection('preferences'));
       closeAdminSettingsBtn.addEventListener('click', closeAdminSettings);
       adminSettingsBackdrop.addEventListener('click', event => {
         if (event.target === adminSettingsBackdrop) closeAdminSettings();
@@ -438,6 +492,25 @@
             : theme;
           document.documentElement.setAttribute('data-theme', resolved);
           syncSettingsControls();
+        });
+      });
+      document.querySelectorAll('.admin-detail-choice-btn').forEach(button => {
+        button.addEventListener('click', () => {
+          const preferences = getWorkspacePreferences();
+          preferences.detailLevel = button.dataset.detail;
+          saveWorkspacePreferences(preferences);
+          syncSettingsControls();
+        });
+      });
+      [
+        ['adminSettingShowSql', 'showSqlDefault'],
+        ['adminSettingShowPipeline', 'showPipelineDefault'],
+        ['adminSettingCompactMode', 'compactMode']
+      ].forEach(([id, key]) => {
+        document.getElementById(id).addEventListener('change', event => {
+          const preferences = getWorkspacePreferences();
+          preferences[key] = event.target.checked;
+          saveWorkspacePreferences(preferences);
         });
       });
       const adminSidebar = document.getElementById('adminSidebar');
