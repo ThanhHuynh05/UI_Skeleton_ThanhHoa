@@ -4635,14 +4635,6 @@ details[open] .sql-chevron { transform: rotate(180deg); }
 }
 
 .saved-insight-card.is-snapshot { border-left-color: #0e7490; }
-.saved-question-text,
-.saved-scope-block { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
-.saved-question-text > span,
-.saved-scope-block > span { color: var(--text-muted); font-size: 12px; font-weight: 700; }
-.saved-question-text > strong { color: var(--text-primary); font-family: var(--font-sans); font-size: 16px; line-height: 1.45; }
-.saved-scope-block { padding: 10px 12px; border-radius: var(--radius-control); background: var(--bg-hover); }
-.saved-scope-block > strong { color: var(--text-primary); font-size: 13px; line-height: 1.5; }
-.saved-scope-block > small { color: var(--text-muted); font-size: 12px; line-height: 1.4; }
 .saved-item-metadata { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; color: var(--text-muted); font-size: 12px; }
 .saved-item-metadata strong { color: var(--text-secondary); }
 .saved-action-note { margin-top: 12px; padding: 8px 10px; border-left: 3px solid var(--border-strong); background: var(--bg-hover); color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
@@ -7405,12 +7397,31 @@ html body #dataExplorerDrawer .use-guide-question { align-self: flex-start; min-
 .library-card-kind svg { width: 14px; height: 14px; }
 html body .library-card .btn-rename-insight { width: 30px; height: 30px; min-height: 30px; padding: 0; border: 0 !important; border-radius: 50% !important; background: transparent !important; color: var(--text-muted) !important; }
 html body .library-card .btn-rename-insight:hover { background: var(--bg-hover) !important; color: var(--text-primary) !important; }
-.library-card .insight-title-text { margin: 0; color: var(--text-primary); font-size: 15px; font-weight: 600; line-height: 1.35; }
+.library-card .insight-title-container { min-width: 0; }
+.library-card .insight-title-text {
+  overflow: visible;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
 .library-card .insight-rename-form { display: none; align-items: center; gap: 6px; }
 .library-card .insight-rename-form .form-control { min-height: 36px; padding: 6px 10px; }
-#savedInsightsViewport .library-card :is(.saved-question-text, .saved-scope-block, .saved-item-metadata, .saved-action-note) { margin: 0; padding: 0; border: 0; background: none; }
-#savedInsightsViewport .library-card .saved-question-text { color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
-#savedInsightsViewport .library-card .saved-scope-block { color: var(--text-muted); font-size: 12px; line-height: 1.45; }
+#savedInsightsViewport .library-card :is(.saved-item-metadata, .saved-action-note) { margin: 0; padding: 0; border: 0; background: none; }
+.saved-mini-chart { min-width: 0; overflow: hidden; padding: 10px; border-radius: 12px; background: var(--bg-subtle); }
+.saved-mini-chart svg { display: block; width: 100%; max-height: 160px; margin: 0 auto; }
+.saved-mini-chart-line svg,
+.saved-mini-chart-pie svg { aspect-ratio: auto; }
+.saved-mini-table-wrap { min-width: 0; overflow: hidden; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-subtle); }
+.saved-mini-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
+.saved-mini-table th,
+.saved-mini-table td { overflow: hidden; padding: 8px 9px; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.saved-mini-table th { color: var(--text-primary); font-weight: 600; }
+.saved-mini-table tbody tr:last-child td { border-bottom: 0; }
 .library-card-preview { padding: 12px; border-radius: 12px; background: var(--bg-subtle); }
 .library-card-figure { display: block; margin-bottom: 4px; color: var(--text-primary); font-size: 20px; font-weight: 600; }
 .library-card-preview p { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }

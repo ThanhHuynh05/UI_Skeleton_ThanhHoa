@@ -3891,6 +3891,7 @@
               executionOptions: { ...buildSavedExecutionOptions(scopeToSave), clarificationPayload: msg.clarificationPayload || null },
               latestResult: JSON.parse(JSON.stringify(msg.resultsData)),
               resultPattern: msg.resultPattern || msg.pattern || 'default',
+              activeView: msg.activeView || getDefaultResultView(msg.resultPattern || inferResultPattern(msg.resultsData), msg.resultsData),
               sourceMessageId: msg.id,
               sourceConversationId: conv.id,
               savedAt: Date.now(),
@@ -4618,6 +4619,50 @@
     return result;
   }
 
+  function generateSavedInsightVisualPreview(resultData, preferredView) {
+    if (!resultData) return '';
+
+    const pattern = inferResultPattern(resultData);
+    const visualDecision = getResultVisualDecision(pattern, resultData);
+    const activeView = preferredView || (visualDecision.kind === 'table' ? 'table' : 'chart');
+
+    if (activeView === 'table' && resultData.table && Array.isArray(resultData.table.rows)) {
+      const table = resultData.table;
+      const visibleColumns = (table.columns || []).slice(0, 3);
+      if (!visibleColumns.length) return '';
+      return `
+        <div class="saved-mini-table-wrap">
+          <table class="saved-mini-table" aria-label="${escapeHtml(table.title || 'Saved result table')}">
+            <thead><tr>${visibleColumns.map((column, index) => `<th>${escapeHtml(String((table.headers || [])[index] || column))}</th>`).join('')}</tr></thead>
+            <tbody>
+              ${table.rows.slice(0, 3).map(row => `<tr>${visibleColumns.map(column => `<td title="${escapeHtml(String(row[column] ?? ''))}">${escapeHtml(String(row[column] ?? ''))}</td>`).join('')}</tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    const chartData = resultData.chart && Array.isArray(resultData.chart.items)
+      ? { ...resultData.chart, items: resultData.chart.items.slice(0, 5) }
+      : null;
+    if (!chartData || visualDecision.kind === 'table') return '';
+    const validItems = chartData.items.filter(item => item.label !== undefined && Number.isFinite(Number(item.value)));
+    if (!validItems.length) return '';
+    const safeChartData = { ...chartData, items: validItems };
+    const chartType = visualDecision.kind;
+
+    let chartHtml = '';
+    if (chartType === 'line') chartHtml = renderSvgLineChart(safeChartData);
+    else if (chartType === 'pie') chartHtml = renderSvgPieChart(safeChartData);
+    else chartHtml = renderSvgBarChart(safeChartData);
+
+    return `
+      <div class="saved-mini-chart saved-mini-chart-${chartType}" role="img" aria-label="${escapeHtml(safeChartData.title || 'Saved result chart')}">
+        ${chartHtml}
+      </div>
+    `;
+  }
+
   function renderSavedInsights() {
     const listContainer = document.getElementById('savedInsightsListContainer');
     if (!listContainer) return;
@@ -4654,20 +4699,9 @@
     listContainer.innerHTML = librarySummary + '<div class="library-grid">' + list.map((item) => {
       const isSnapshot = item.type === 'snapshot';
 
-      const scopeParts = [];
-      if (item.scope) {
-        if (item.scope.metric && item.scope.metric.label) scopeParts.push(item.scope.metric.label);
-        const domainLabel = item.scope.domain ? (item.scope.domain.label || item.scope.domain.value || item.scope.domain) : '';
-        if (domainLabel && domainLabel !== 'Auto') scopeParts.push(domainLabel);
-        if (item.scope.time && item.scope.time.label) scopeParts.push(item.scope.time.label);
-        else if (item.scope.period) scopeParts.push(item.scope.period);
-        if (item.scope.breakdown && item.scope.breakdown.label) scopeParts.push(item.scope.breakdown.label);
-        if (item.scope.projectScope && item.scope.projectScope.label) scopeParts.push(item.scope.projectScope.label);
-      }
-      const scopeText = scopeParts.length ? scopeParts.join(' · ') : 'Scope inferred from the question';
-
       const resultData = isSnapshot ? item.result : item.latestResult;
       const escapedItemId = escapeHtml(String(item.id || ''));
+      const visualPreviewHtml = generateSavedInsightVisualPreview(resultData, item.activeView);
 
       let previewHtml = '';
       if (resultData) {
@@ -4700,8 +4734,7 @@
           <button type="button" class="action-tool-btn primary btn-rename-save" data-id="${escapedItemId}">Save</button>
           <button type="button" class="action-tool-btn btn-rename-cancel" data-id="${escapedItemId}">Cancel</button>
         </div>
-        <p class="saved-question-text">${escapeHtml(item.question)}</p>
-        <p class="saved-scope-block" title="Scope controls query reuse; data access is evaluated separately.">${escapeHtml(scopeText)}</p>
+        ${visualPreviewHtml}
         ${previewHtml}
         <p class="saved-item-metadata">${isSnapshot ? 'Captured' : 'Saved'} ${formatDisplayDateTime(savedTime)} · ${refreshLine}${!isSnapshot && resultData && resultData.refreshMetadata ? ` · revision ${escapeHtml(String(resultData.refreshMetadata.fixtureRevision))}` : ''} · Data as of ${dataAsOf}</p>
         ${!isSnapshot && item.canRefresh === false
