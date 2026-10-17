@@ -42,15 +42,6 @@
     voiceRecognition: null,
     isRecordingVoice: false
   };
-  try {
-    Object.assign(state.settings, JSON.parse(localStorage.getItem('aria_workspace_preferences')) || {});
-  } catch (e) {
-    // Keep the defaults when stored preferences are unavailable or malformed.
-  }
-  const persistWorkspacePreferences = () => {
-    const { detailLevel, showSqlDefault, showPipelineDefault, compactMode } = state.settings;
-    localStorage.setItem('aria_workspace_preferences', JSON.stringify({ detailLevel, showSqlDefault, showPipelineDefault, compactMode }));
-  };
   let activeClarificationKeyHandler = null;
 
   // DOM Elements
@@ -156,7 +147,6 @@
     const savedAnswersBtn = document.getElementById('savedAnswersBtn');
 
   const settingsDrawer = document.getElementById('settingsDrawer');
-  const settingsModalBackdrop = document.getElementById('settingsModalBackdrop');
   const settingsBtn = document.getElementById('settingsBtn');
   const closeSettingsBtn = document.getElementById('closeSettingsBtn');
   const settingsPreferencesTabBtn = document.getElementById('settingsPreferencesTabBtn');
@@ -164,13 +154,13 @@
   const settingsPreferencesPanel = document.getElementById('settingsPreferencesPanel');
   const settingsHelpPanel = document.getElementById('settingsHelpPanel');
 
+  const helpModalBackdrop = document.getElementById('helpModalBackdrop');
   const helpModalBtn = document.getElementById('helpModalBtn');
-  const userHelpSubmenu = document.getElementById('userHelpSubmenu');
-  const helpModalBackdrops = {
-    shortcuts: document.getElementById('shortcutsHelpModalBackdrop'),
-    domains: document.getElementById('domainsHelpModalBackdrop'),
-    scope: document.getElementById('scopeHelpModalBackdrop')
-  };
+  const closeHelpModalBtn = document.getElementById('closeHelpModalBtn');
+  const helpTabContent = document.getElementById('helpTabContent');
+  const helpTabDomainsBtn = document.getElementById('helpTabDomainsBtn');
+  const helpTabScopeBtn = document.getElementById('helpTabScopeBtn');
+  const helpTabShortcutsBtn = document.getElementById('helpTabShortcutsBtn');
 
   const feedbackModalBackdrop = document.getElementById('feedbackModalBackdrop');
   const closeFeedbackModalBtn = document.getElementById('closeFeedbackModalBtn');
@@ -216,6 +206,7 @@
   let activeClarificationTrigger = null;
   let activeAdjustmentUserMessageId = null;
   let activeAdjustmentScope = null;
+  let activeAdjustmentDraft = '';
 
   const domainScopeSelectEl = document.getElementById('domainScopeSelect');
   const domainScopeSelectLabelEl = document.getElementById('domainScopeSelectLabel');
@@ -224,6 +215,9 @@
   const resetDomainScopeBtnEl = document.getElementById('resetDomainScopeBtn');
   const timeRangeSelectEl = document.getElementById('timeRangeSelect');
   const scopeEditorBarEl = document.getElementById('scopeEditorBar');
+  const chatViewportEl = document.getElementById('chatViewport');
+  const chatTopbarTitleEl = document.getElementById('chatTopbarTitle');
+  const composerSuggestionsEl = document.getElementById('composerSuggestions');
   const customDateRangeBarEl = document.getElementById('customDateRangeBar');
   const customStartDateEl = document.getElementById('customStartDate');
   const customEndDateEl = document.getElementById('customEndDate');
@@ -270,6 +264,11 @@
   }
 
   function showFirstAccessModal() {
+    if (state.currentUser && window.AriaMock.USER_ROLES[state.currentUser.role]) {
+      selectedRoleKey = state.currentUser.role;
+    }
+    const cancelProfileBtn = document.getElementById('cancelProfileBtn');
+    if (cancelProfileBtn) cancelProfileBtn.hidden = !state.currentUser;
     userProfileModalBackdrop.classList.add('open');
     renderRoleCards();
     if (state.currentUser) {
@@ -280,26 +279,27 @@
   }
 
   let selectedRoleKey = 'sales_manager';
+  let lastAutoFocusedClarificationId = null;
   function renderRoleCards() {
     const roles = window.AriaMock.USER_ROLES;
     roleCardsGrid.innerHTML = Object.keys(roles).map((key) => {
       const r = roles[key];
       const isSelected = key === selectedRoleKey;
+      const initials = r.title.split(/[\s/]+/).filter(Boolean).slice(0, 2).map(word => word.charAt(0)).join('').toUpperCase();
       return `
-        <button type="button" class="role-select-card ${isSelected ? 'selected' : ''}" data-role-key="${key}" aria-pressed="${isSelected ? 'true' : 'false'}">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div class="role-card-title">${escapeHtml(r.title)}</div>
-            <span class="brand-badge" style="font-size: 12px;">${escapeHtml(r.category)}</span>
-          </div>
-          <div class="role-card-desc">${escapeHtml(r.description)}</div>
-          <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
-            Allowed: ${r.allowedDomains.join(', ')}
-          </div>
+        <button type="button" class="role-option ${isSelected ? 'selected' : ''}" data-role-key="${key}" aria-pressed="${isSelected ? 'true' : 'false'}">
+          <span class="role-option-avatar" aria-hidden="true">${escapeHtml(initials)}</span>
+          <span class="role-option-copy">
+            <span class="role-option-title">${escapeHtml(r.title)} <span class="role-option-category">${escapeHtml(r.category)}</span></span>
+            <span class="role-option-desc">${escapeHtml(r.description)}</span>
+            ${isSelected ? `<span class="role-option-scope">Can ask about ${escapeHtml(r.allowedDomains.join(', '))}</span>` : ''}
+          </span>
+          <span class="role-option-radio" aria-hidden="true"></span>
         </button>
       `;
     }).join('');
 
-    roleCardsGrid.querySelectorAll('.role-select-card').forEach((card) => {
+    roleCardsGrid.querySelectorAll('.role-option').forEach((card) => {
       card.addEventListener('click', () => {
         selectedRoleKey = card.getAttribute('data-role-key');
         const roleDef = window.AriaMock.USER_ROLES[selectedRoleKey];
@@ -313,7 +313,14 @@
     });
   }
 
+  // A request still running belongs to the conversation it was asked in; stop
+  // it before that conversation is deleted or swapped out with the persona.
+  function cancelInFlightRequest() {
+    if (state.activeAbortController) state.activeAbortController.abort();
+  }
+
   function saveUserProfile() {
+    cancelInFlightRequest();
     const name = profileNameInput.value.trim() || 'Enterprise User';
     const roleDef = window.AriaMock.USER_ROLES[selectedRoleKey] || window.AriaMock.USER_ROLES.sales_manager;
 
@@ -349,12 +356,14 @@
     const menuPersonaRole = document.getElementById('userMenuPersonaRole');
     if (menuPersonaName) menuPersonaName.textContent = state.currentUser.name;
     if (menuPersonaRole) menuPersonaRole.textContent = state.currentUser.roleTitle || state.currentUser.role || 'Demo user';
+    const menuAvatar = document.getElementById('userMenuAvatar');
+    if (menuAvatar) menuAvatar.textContent = (state.currentUser.name || 'A').trim().charAt(0).toUpperCase();
     if (userMenuBtnEl) {
       userMenuBtnEl.setAttribute('aria-label', `Current demo persona: ${state.currentUser.name}, ${state.currentUser.roleTitle || state.currentUser.role || 'Demo user'}. Open user menu`);
     }
     const adminNav = document.getElementById('adminWorkspaceNav');
     if (adminNav) {
-      adminNav.style.display = state.currentUser.role === 'data_admin' ? 'block' : 'none';
+      adminNav.style.display = state.currentUser.role === 'data_admin' ? 'contents' : 'none';
     }
   }
 
@@ -377,11 +386,35 @@
       state.conversations = storedConvs ? JSON.parse(storedConvs) : [];
       const storedActive = localStorage.getItem(getStorageKeyActiveConv());
       state.activeConversationId = storedActive || (state.conversations.length > 0 ? state.conversations[0].id : null);
+      // Blank chats left by earlier sessions are not history.
+      pruneEmptyConversations();
+      // Earlier versions shortened generated titles to 40 characters. Recover
+      // the complete title from the first user question when it is an exact
+      // continuation of that automatically generated prefix.
+      let recoveredTitle = false;
+      state.conversations.forEach((conversation) => {
+        const firstQuestion = (conversation.messages || []).find((message) => message.role === 'user' && message.text);
+        const fullQuestion = firstQuestion ? String(firstQuestion.text).trim() : '';
+        if (
+          fullQuestion.length > 40
+          && String(conversation.title || '').length === 40
+          && fullQuestion.startsWith(conversation.title)
+        ) {
+          conversation.title = fullQuestion;
+          recoveredTitle = true;
+        }
+      });
+      if (recoveredTitle) saveConversationsToStorage();
     } catch (e) {
       console.warn('Failed to load conversations', e);
       state.conversations = [];
       state.activeConversationId = null;
     }
+  }
+
+  // A chat with no messages only exists while it is the open one.
+  function pruneEmptyConversations() {
+    state.conversations = state.conversations.filter((c) => (c.messages || []).length > 0 || c.id === state.activeConversationId);
   }
 
   function saveConversationsToStorage() {
@@ -415,42 +448,22 @@
     return newConv;
   }
 
-  function isUntouchedConversation(conversation) {
-    return Boolean(conversation) && (!Array.isArray(conversation.messages) || conversation.messages.length === 0);
-  }
-
   function startNewChat() {
-    const activeConversation = getActiveConversation();
-    let newConversation = isUntouchedConversation(activeConversation)
-      ? activeConversation
-      : state.conversations.find((conversation) => (
-          isUntouchedConversation(conversation)
-          && conversation.title === 'New Conversation'
-          && !conversation.pinned
-        ));
-
-    if (!newConversation) {
-      newConversation = createNewConversation('New Conversation');
-    } else {
-      // Reuse the current draft and remove empty default drafts left behind by
-      // repeated New Chat clicks in older versions of the UI.
-      state.conversations = state.conversations.filter((conversation) => (
-        conversation.id === newConversation.id
-        || !(
-          isUntouchedConversation(conversation)
-          && conversation.title === 'New Conversation'
-          && !conversation.pinned
-        )
-      ));
-      state.activeConversationId = newConversation.id;
+    // Drop blank chats left behind, then reuse one if it exists.
+    pruneEmptyConversations();
+    const active = getActiveConversation();
+    if (active && active.messages.length === 0) {
       saveConversationsToStorage();
       renderSidebarConversations();
       renderActiveConversation();
+    } else {
+      createNewConversation('New Conversation');
     }
     closeConversationSearch();
+    showToast('Started new conversation');
     if (typeof updateRailActiveState === 'function') showBusinessWorkspaceView('ask');
     if (window.innerWidth <= 820) sidebarEl.classList.remove('open');
-    announceAppStatus('New conversation is ready.');
+    announceAppStatus('Started a new conversation.');
   }
 
   function conversationSearchText(conversation) {
@@ -480,6 +493,7 @@
     const conversation = state.conversations.find((item) => item.id === conversationId);
     if (!conversation) return;
     state.activeConversationId = conversationId;
+    pruneEmptyConversations();
     saveConversationsToStorage();
     historySearchModalBackdrop.classList.remove('open');
     renderSidebarConversations();
@@ -495,7 +509,8 @@
   function renderConversationSearchResults() {
     if (!historySearchResultsEl || !historySearchStatusEl) return;
     const query = historySearchDialogInputEl.value.trim().toLowerCase();
-    const results = [...state.conversations]
+    const results = state.conversations
+      .filter((conversation) => (conversation.messages || []).length > 0)
       .filter((conversation) => !query || conversationSearchText(conversation).includes(query))
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
@@ -506,27 +521,36 @@
     if (!results.length) {
       const hasConversationHistory = state.conversations.length > 0;
       historySearchResultsEl.innerHTML = hasConversationHistory
-        ? `<div class="history-search-empty">No conversations match “${escapeHtml(historySearchDialogInputEl.value.trim())}”. Try another title or message phrase.</div>`
-        : `<div class="history-search-empty">
-            <strong>No conversations yet</strong>
-            <span>Start a new chat to build your history.</span>
-            <button type="button" class="btn-new-chat history-empty-new-chat">
-              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              <span>New Chat</span>
-            </button>
-          </div>`;
-      const emptyNewChatBtn = historySearchResultsEl.querySelector('.history-empty-new-chat');
-      if (emptyNewChatBtn) emptyNewChatBtn.addEventListener('click', startNewChat);
+        ? `<div class="history-search-empty">No chats match “${escapeHtml(historySearchDialogInputEl.value.trim())}”.</div>`
+        : '<div class="history-search-empty">No chats yet. Your conversations will appear here.</div>';
       return;
     }
 
-    historySearchResultsEl.innerHTML = results.map((conversation) => `
-      <button type="button" class="history-search-result" data-conversation-id="${escapeHtml(conversation.id)}">
-        <span class="history-search-result-title">${escapeHtml(conversation.title || 'Untitled conversation')}</span>
-        <span class="history-search-result-snippet">${escapeHtml(conversationSearchSnippet(conversation, query))}</span>
-        <span class="history-search-result-meta">${new Date(conversation.updatedAt || conversation.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
-      </button>
-    `).join('');
+    // Group by recency, the way chat assistants list history.
+    const startOfToday = new Date().setHours(0, 0, 0, 0);
+    const dayMs = 24 * 60 * 60 * 1000;
+    const groupLabel = (time) => {
+      if (time >= startOfToday) return 'Today';
+      if (time >= startOfToday - dayMs) return 'Yesterday';
+      if (time >= startOfToday - 7 * dayMs) return 'Previous 7 days';
+      return 'Older';
+    };
+    let currentGroup = '';
+    historySearchResultsEl.innerHTML = results.map((conversation) => {
+      const time = conversation.updatedAt || conversation.createdAt || 0;
+      const label = groupLabel(time);
+      const heading = label !== currentGroup ? `<div class="palette-group-label">${label}</div>` : '';
+      currentGroup = label;
+      return `${heading}
+      <button type="button" class="history-search-result palette-row" data-conversation-id="${escapeHtml(conversation.id)}">
+        <span class="palette-row-icon" aria-hidden="true"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></span>
+        <span class="palette-row-text">
+          <span class="history-search-result-title">${escapeHtml(conversation.title || 'Untitled conversation')}</span>
+          ${query ? `<span class="history-search-result-snippet">${escapeHtml(conversationSearchSnippet(conversation, query))}</span>` : ''}
+        </span>
+        <span class="history-search-result-meta">${label === 'Today' ? formatDisplayTime(time) : formatDisplayDateTime(time)}</span>
+      </button>`;
+    }).join('');
 
     historySearchResultsEl.querySelectorAll('.history-search-result').forEach((result) => {
       result.addEventListener('click', () => openConversationFromSearch(result.getAttribute('data-conversation-id')));
@@ -588,8 +612,22 @@
   window.addEventListener('resize', () => closeConversationActionMenus());
   sidebarConversationsListEl?.addEventListener('scroll', () => closeConversationActionMenus(), { passive: true });
 
+  // Plain-text summary of any agent message, for exports.
+  function describeAgentMessageText(m) {
+    if (m.type === 'results' && m.resultsData) return String(m.resultsData.answer || '').replace(/\*\*/g, '');
+    if (m.type === 'clarification') {
+      const choices = (m.options || []).map((option) => option.label).filter(Boolean);
+      return `${m.question || 'Aria asked for clarification.'}${choices.length ? ` Options: ${choices.join('; ')}.` : ''}`;
+    }
+    if (m.type === 'error' || m.type === 'cancelled') {
+      const error = m.errorData || {};
+      return [error.title, error.message].filter(Boolean).join(': ') || 'The request did not complete.';
+    }
+    return [m.title, m.message].filter(Boolean).join(': ') || '';
+  }
+
   function exportConversationAsMarkdown(conv) {
-    let md = `# ${conv.title}\n\n> **Demo • Synthetic data** — This export comes from a prototype. Persona access and masking are simulated and do not demonstrate production security enforcement.\n\n*Exported from Aria on ${new Date().toLocaleString()}*\n\n---\n\n`;
+    let md = `# ${conv.title}\n\n> **Demo • Synthetic data** — This export comes from a prototype. Persona access and masking are simulated and do not demonstrate production security enforcement.\n\n*Exported from Aria on ${formatDisplayDateTime(Date.now())}*\n\n---\n\n`;
     conv.messages.forEach((m) => {
       if (m.role === 'user') {
         md += `### User Query (${m.time})\n> ${m.text}\n\n`;
@@ -612,12 +650,13 @@
           }
           md += `\n`;
         }
-        if (m.resultsData) {
+        const isResult = m.type === 'results' && m.resultsData;
+        if (isResult) {
           md += `- **Data as of:** ${m.resultsData.dataAsOf || 'Not recorded'}\n`;
           md += `- **Result label:** Demo — Synthetic data\n\n`;
         }
-        md += `### Aria Answer (${m.time})\n${m.resultsData ? m.resultsData.answer : (m.message || '')}\n\n`;
-        if (m.resultsData && m.resultsData.sql) md += `\`\`\`sql\n${m.resultsData.sql}\n\`\`\`\n\n`;
+        md += `### Aria ${isResult ? 'Answer' : 'Response'} (${m.time})\n${describeAgentMessageText(m)}\n\n`;
+        if (isResult && m.resultsData.sql) md += `\`\`\`sql\n${m.resultsData.sql}\n\`\`\`\n\n`;
       }
     });
     downloadFile(`${conv.title.replace(/[^a-zA-Z0-9]/g, '_')}.md`, md, 'text/markdown');
@@ -629,8 +668,8 @@
       if (message.role === 'user') {
         return `<h2>User question</h2><p>${escapeHtml(message.text || '')}</p>`;
       }
-      const answer = message.resultsData ? message.resultsData.answer : (message.message || '');
-      return `<h2>Aria answer</h2><p>${escapeHtml(answer).replace(/\n/g, '<br>')}</p>`;
+      const answer = describeAgentMessageText(message);
+      return `<h2>Aria ${message.type === 'results' ? 'answer' : 'response'}</h2><p>${escapeHtml(answer).replace(/\n/g, '<br>')}</p>`;
     }).join('');
     const documentHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(conv.title)}</title><style>body{font-family:Arial,sans-serif;line-height:1.55;max-width:760px;margin:40px auto;color:#222}h1{border-bottom:1px solid #ccc;padding-bottom:12px}h2{font-size:16px;margin-top:28px}p{white-space:normal}</style></head><body><h1>${escapeHtml(conv.title)}</h1>${body}</body></html>`;
     downloadFile(`${conv.title.replace(/[^a-zA-Z0-9]/g, '_')}.doc`, documentHtml, 'application/msword');
@@ -640,14 +679,34 @@
   // =========================================================================
   // 3. SIDEBAR CONVERSATION RENDERING
   // =========================================================================
-  function renderSidebarConversations() {
-    if (!sidebarConversationsListEl) return;
+  // A new chat centres the greeting and composer; a thread docks the composer
+  // at the bottom. Starter questions only exist in the new-chat layout.
+  function setIdleLayout(isIdle) {
+    if (chatViewportEl) chatViewportEl.classList.toggle('is-idle', isIdle);
+    if (!isIdle && composerSuggestionsEl) composerSuggestionsEl.innerHTML = '';
+  }
 
-    const convs = [...state.conversations].sort((a, b) => {
+  function updateChatTopbarTitle() {
+    if (!chatTopbarTitleEl) return;
+    const conv = getActiveConversation();
+    const hasMessages = conv && conv.messages && conv.messages.length > 0;
+    chatTopbarTitleEl.textContent = hasMessages ? conv.title : 'New chat';
+  }
+
+  // Pinned first, then most recently updated — the order the sidebar shows.
+  function sortConversationsForSidebar(conversations) {
+    return [...conversations].sort((a, b) => {
       const pinOrder = Number(Boolean(b.pinned)) - Number(Boolean(a.pinned));
       if (pinOrder !== 0) return pinOrder;
       return (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
     });
+  }
+
+  function renderSidebarConversations() {
+    updateChatTopbarTitle();
+    if (!sidebarConversationsListEl) return;
+
+    const convs = sortConversationsForSidebar(state.conversations.filter((c) => (c.messages || []).length > 0));
 
     if (convs.length === 0) {
       sidebarConversationsListEl.innerHTML = `
@@ -668,11 +727,19 @@
       item.addEventListener('click', (e) => {
         if (e.target.closest('.conv-actions')) return;
         state.activeConversationId = convId;
+        pruneEmptyConversations();
         saveConversationsToStorage();
         renderSidebarConversations();
         renderActiveConversation();
         if (typeof updateRailActiveState === 'function') showBusinessWorkspaceView('ask', { focusComposer: false });
         if (window.innerWidth <= 820) sidebarEl.classList.remove('open');
+      });
+
+      item.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === item) {
+          e.preventDefault();
+          item.click();
+        }
       });
 
       const menuTrigger = item.querySelector('.conv-menu-trigger');
@@ -717,6 +784,7 @@
             target.pinned = !target.pinned;
             saveConversationsToStorage();
             renderSidebarConversations();
+            if (target.id === state.activeConversationId) renderActiveConversation();
             showToast(target.pinned ? 'Conversation pinned' : 'Conversation unpinned');
           }
         });
@@ -735,6 +803,12 @@
             renameInput.value = target.title;
             renameBackdrop.classList.add('open');
             renameInput.focus();
+            renameInput.onkeydown = (event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                document.getElementById('submitRenameConvBtn').click();
+              }
+            };
 
             const closeRename = () => renameBackdrop.classList.remove('open');
             document.getElementById('closeRenameConvModalBtn').onclick = closeRename;
@@ -768,9 +842,11 @@
             document.getElementById('closeDeleteConvModalBtn').onclick = closeDelete;
             document.getElementById('cancelDeleteConvBtn').onclick = closeDelete;
             document.getElementById('submitDeleteConvBtn').onclick = () => {
+              if (state.activeConversationId === convId && state.isThinking) cancelInFlightRequest();
               state.conversations = state.conversations.filter((c) => c.id !== convId);
               if (state.activeConversationId === convId) {
-                state.activeConversationId = state.conversations.length > 0 ? state.conversations[0].id : null;
+                const next = sortConversationsForSidebar(state.conversations)[0];
+                state.activeConversationId = next ? next.id : null;
               }
               saveConversationsToStorage();
               renderSidebarConversations();
@@ -818,6 +894,15 @@
   // 4. RENDERING ACTIVE CONVERSATION & IDLE STATE
   // =========================================================================
   function renderActiveConversation() {
+    const focusedAdjustmentInput = activeAdjustmentUserMessageId
+      ? document.getElementById(`inlineQuestionInput_${activeAdjustmentUserMessageId}`)
+      : null;
+    if (focusedAdjustmentInput) {
+      activeAdjustmentDraft = focusedAdjustmentInput.value;
+      // Background request and preference updates must not replace the editor
+      // while the user is typing. Submit and Cancel clear the active id first.
+      if (document.activeElement === focusedAdjustmentInput) return;
+    }
     if (activeClarificationKeyHandler) {
       document.removeEventListener('keydown', activeClarificationKeyHandler);
       activeClarificationKeyHandler = null;
@@ -828,6 +913,8 @@
       renderIdleState();
       return;
     }
+    setIdleLayout(false);
+    updateChatTopbarTitle();
 
     let html = `
       <div class="active-conversation-header">
@@ -850,13 +937,16 @@
     let hideResponsesForEditedQuestion = false;
     conv.messages.forEach((msg, idx) => {
       if (msg.role === 'user') {
-        // Legacy revisions stored the old and revised turns side by side. Hide
-        // the superseded turn so existing conversations follow the replacement
-        // behavior used by the current adjustment flow.
-        const hideSupersededTurn = Boolean(msg.supersededByUserMessageId);
-        hideResponsesForEditedQuestion = hideSupersededTurn || msg.id === activeAdjustmentUserMessageId;
-        if (hideSupersededTurn) return;
-        html += renderUserMessageHtml(msg, idx === conv.messages.length - 2 || idx === conv.messages.length - 1);
+        const isSupersededQuestion = Boolean(msg.supersededByUserMessageId);
+        // Hide the original turn after a revision. While its inline editor is
+        // open, keep the question visible but temporarily hide its old answer.
+        hideResponsesForEditedQuestion = (
+          msg.id === activeAdjustmentUserMessageId
+          || isSupersededQuestion
+        );
+        if (!isSupersededQuestion) {
+          html += renderUserMessageHtml(msg, idx === conv.messages.length - 2 || idx === conv.messages.length - 1);
+        }
       } else if (msg.role === 'agent') {
         if (hideResponsesForEditedQuestion) return;
         html += renderAgentMessageHtml(msg, idx);
@@ -881,15 +971,15 @@
     
     // Understanding tab uses the same complete Applied Scope component as the result card.
     let understandingHtml = '<div id="evidence-tab-understanding" class="evidence-tab-content">';
-    understandingHtml += '<h3 style="font-family: var(--font-serif); font-size: 20px; margin-bottom: 16px;">Applied Scope</h3>';
-    understandingHtml += '<div style="margin-bottom: 24px; color: var(--text-secondary); font-size: 14px; line-height: 1.6;">';
-    understandingHtml += generateAppliedScopeHtml(scope);
+    understandingHtml += '<h3 class="evidence-tab-title">How Aria read the question</h3>';
+    understandingHtml += '<div class="evidence-tab-body">';
+    understandingHtml += generateInterpretationHtml(scope, msg);
     understandingHtml += '</div></div>';
 
     // Evidence tab
     let evidenceHtml = '<div id="evidence-tab-evidence" class="evidence-tab-content" style="display: none;">';
-    evidenceHtml += '<h3 style="font-family: var(--font-serif); font-size: 20px; margin-bottom: 16px;">Sources &amp; Definitions</h3>';
-    evidenceHtml += '<div style="margin-bottom: 24px; color: var(--text-secondary); font-size: 14px; line-height: 1.6;">';
+    evidenceHtml += '<h3 class="evidence-tab-title">Sources</h3>';
+    evidenceHtml += '<div class="evidence-tab-body">';
     const sources = res.sources || [];
     const sourceHtml = sources.length > 0
       ? sources.map((source) => {
@@ -908,19 +998,19 @@
           </article>`;
         }).join('')
       : '<p>Enterprise business records. A more specific source definition is not available for this result.</p>';
-    evidenceHtml += '<div class="evidence-business-summary"><span>Data freshness</span><strong>' + escapeHtml(res.dataAsOf || 'Not provided') + '</strong></div>';
+    evidenceHtml += '<div class="evidence-business-summary"><span>Data as of</span><strong>' + escapeHtml(res.dataAsOf || 'Not provided') + '</strong></div>';
     evidenceHtml += '<div class="evidence-source-list">' + sourceHtml + '</div>';
     evidenceHtml += '</div></div>';
 
     // Technical tab
     let technicalHtml = '<div id="evidence-tab-technical" class="evidence-tab-content" style="display: none;">';
-    technicalHtml += '<h3 style="font-family: var(--font-serif); font-size: 20px; margin-bottom: 16px;">Technical Trace</h3>';
-    technicalHtml += '<div style="margin-bottom: 24px; color: var(--text-secondary); font-size: 14px; line-height: 1.6;">';
+    technicalHtml += '<h3 class="evidence-tab-title">Query trace</h3>';
+    technicalHtml += '<div class="evidence-tab-body">';
     const generatedSql = res.sql || res.queryGenerated || '';
-    technicalHtml += '<p><strong>Execution details:</strong> ' + escapeHtml(res.summary || 'Completed successfully') + '</p>';
-    technicalHtml += '<p><strong>Validation:</strong> Role authorization passed. AST check completed with no destructive operations detected.</p>';
+    technicalHtml += '<dl class="evidence-trace-list"><div><dt>Execution</dt><dd>' + escapeHtml(res.summary || 'Completed successfully') + '</dd></div>';
+    technicalHtml += '<div><dt>Validation</dt><dd>Role authorisation passed. Query check found no write operations.</dd></div></dl>';
     if (sources.length > 0) {
-      technicalHtml += '<h4 style="margin-top: 16px; margin-bottom: 8px;">Physical schema</h4>';
+      technicalHtml += '<h4 class="evidence-subhead">Physical tables</h4>';
       technicalHtml += sources.map((source) => {
         const physicalName = String(source.name || '').replace('enterprise_dw.', '');
         const tableDef = (window.AriaMock.SCHEMA_CATALOG || []).find(table => table.name === physicalName);
@@ -932,9 +1022,9 @@
       }).join('');
     }
     if (generatedSql) {
-       technicalHtml += '<h4 style="margin-top: 16px; margin-bottom: 8px;">Generated SQL</h4>';
-       technicalHtml += '<pre class="sql-code-block" style="margin-top: 8px;"><code>' + escapeHtml(generatedSql) + '</code></pre>';
-       technicalHtml += '<button type="button" class="action-tool-btn evidence-copy-sql-btn" style="margin-top: 10px;">Copy SQL</button>';
+       technicalHtml += '<h4 class="evidence-subhead">Generated SQL</h4>';
+       technicalHtml += '<pre class="sql-code-block"><code>' + escapeHtml(generatedSql) + '</code></pre>';
+       technicalHtml += '<button type="button" class="action-tool-btn evidence-copy-sql-btn">Copy SQL</button>';
     }
     technicalHtml += '</div></div>';
     
@@ -966,8 +1056,7 @@
     const tabs = evidenceDesk.querySelectorAll('.drawer-tab');
     tabs.forEach((t, i) => {
       t.classList.toggle('active', i === 0);
-      t.style.borderBottom = i === 0 ? '2px solid var(--accent-primary)' : 'none';
-      t.style.color = i === 0 ? 'var(--accent-primary)' : 'inherit';
+      t.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
       
       // Remove old event listeners by replacing the node
       const newTab = t.cloneNode(true);
@@ -977,21 +1066,24 @@
         // Deactivate all
         evidenceDesk.querySelectorAll('.drawer-tab').forEach(nt => {
           nt.classList.remove('active');
-          nt.style.borderBottom = 'none';
-          nt.style.color = 'inherit';
+          nt.setAttribute('aria-selected', 'false');
         });
         evidenceDesk.querySelectorAll('.evidence-tab-content').forEach(c => c.style.display = 'none');
         
         // Activate this
         newTab.classList.add('active');
-        newTab.style.borderBottom = '2px solid var(--accent-primary)';
-        newTab.style.color = 'var(--accent-primary)';
+        newTab.setAttribute('aria-selected', 'true');
         
         const contentId = ['evidence-tab-understanding', 'evidence-tab-evidence', 'evidence-tab-technical'][i];
         document.getElementById(contentId).style.display = 'block';
       });
     });
     
+    if (state.settings.showSqlDefault) {
+      const queryTab = evidenceDesk.querySelectorAll('.drawer-tab')[2];
+      if (queryTab) queryTab.click();
+    }
+
     activeScopeInspectorTriggerBtn = document.activeElement;
     evidenceDesk.inert = false;
     evidenceDesk.classList.add('open');
@@ -1009,33 +1101,44 @@
 
     // Attach dynamic handlers
     attachConversationEventHandlers(conv);
+    restorePendingThinkingRow();
     scrollToBottom();
+  }
+
+  // A re-render (paging, feedback, switching back to this chat) rebuilds the
+  // thread; put the in-progress row and its Stop button back if this chat owns
+  // the running request.
+  function restorePendingThinkingRow() {
+    const pending = state.pendingRun;
+    if (!state.isThinking || !pending || pending.convId !== state.activeConversationId) return;
+    if (document.getElementById(`thinking_row_${pending.msgId}`)) return;
+    renderThinkingBubble(pending.msgId, pending.options);
   }
 
   function renderUserMessageHtml(msg, isLastUserTurn) {
     const rerunScope = msg.scopeEditSummary;
     const isRevision = Boolean(msg.revisionOfUserMessageId);
-    const isAdjusted = Boolean(msg.adjustedAt);
     const isSuperseded = Boolean(msg.supersededByUserMessageId);
-    const turnLabel = isRevision ? 'Revised question' : (isAdjusted ? 'Adjusted question' : (msg.isScopeRerun ? 'Re-run with edited scope' : 'Your question'));
+    const turnLabel = isRevision ? 'Revised question' : (msg.isScopeRerun ? 'Re-run with edited scope' : 'Your question');
     const visibleQuestion = msg.isScopeRerun
       ? String(msg.text || '').replace(/\s*\(Applied scope:[\s\S]*\)\??\s*$/i, '').trim()
       : msg.text;
     const isEditing = activeAdjustmentUserMessageId === msg.id;
+    // A plain question needs no label; only revisions and re-runs are called out.
+    const showTurnLabel = isRevision || msg.isScopeRerun;
     return `
       <div class="chat-row user-row" id="msg_row_${msg.id}">
         <article class="user-bubble-container ${isSuperseded ? 'user-turn-superseded' : ''} ${isEditing ? 'is-editing' : ''}" aria-label="${escapeHtml(turnLabel)}">
-          <div class="conversation-turn-label question-turn-label">${escapeHtml(turnLabel)}</div>
+          ${showTurnLabel ? `<div class="conversation-turn-label question-turn-label">${escapeHtml(turnLabel)}</div>` : ''}
           ${isSuperseded ? '<div class="question-version-note">Superseded by a revised question below</div>' : ''}
-          ${isRevision ? '<div class="question-version-note">Linked to the original question above</div>' : ''}
           ${isEditing ? `
             <form class="inline-question-editor" data-msg-id="${msg.id}">
               <label for="inlineQuestionInput_${msg.id}">Edit question</label>
-              <textarea id="inlineQuestionInput_${msg.id}" class="inline-question-input" rows="3">${escapeHtml(visibleQuestion)}</textarea>
-              <div class="inline-question-scope">The revised question will use ${escapeHtml(formatAdjustmentScope(activeAdjustmentScope))}.</div>
+              <textarea id="inlineQuestionInput_${msg.id}" class="inline-question-input" rows="3">${escapeHtml(activeAdjustmentDraft)}</textarea>
+              <div class="inline-question-scope">${escapeHtml(formatAdjustmentScope(activeAdjustmentScope))}. The time period will come from the revised question.</div>
               <div class="inline-question-actions">
                 <button type="button" class="action-tool-btn inline-adjust-cancel">Cancel</button>
-                <button type="submit" class="action-tool-btn primary inline-adjust-confirm" ${state.isThinking ? 'disabled' : ''}>Save adjusted question</button>
+                <button type="submit" class="action-tool-btn primary inline-adjust-confirm" ${state.isThinking ? 'disabled' : ''}>Run revised question</button>
               </div>
             </form>
           ` : `<div class="user-bubble">${escapeHtml(visibleQuestion)}</div>`}
@@ -1046,7 +1149,7 @@
             </details>
           ` : ''}
           <div class="user-bubble-meta">
-            <span class="user-turn-version">${isRevision ? 'Revised prompt' : (isAdjusted ? 'Adjusted prompt' : (msg.isScopeRerun ? 'Edited scope version' : 'Original prompt'))}</span>
+            ${showTurnLabel ? `<span class="user-turn-version">${isRevision ? 'Revised prompt' : 'Edited scope version'}</span>` : ''}
             <span>${msg.time || ''}</span>
             ${isEditing ? '' : `<button type="button" class="user-edit-btn" data-msg-id="${msg.id}">Adjust question</button>`}
           </div>
@@ -1165,10 +1268,6 @@
         </div>
       </div>
     `;
-  }
-
-  function generateAppliedScopeHtml(scope) {
-    return generateInterpretationHtml(scope, null);
   }
 
   const RESULT_PATTERN_META = {
@@ -1365,17 +1464,33 @@
     return `<section class="result-evidence">${heading}${content}</section>`;
   }
 
-  function renderRunMetadata(msg, scope) {
-    const domain = scope && scope.domain ? (scope.domain.label || scope.domain.value || scope.domain) : 'Auto';
-    const period = scope && scope.time ? scope.time.label : (scope && scope.periodLabel ? scope.periodLabel : 'No added time filter');
-    const project = scope && scope.projectScope ? (scope.projectScope.label || scope.projectScope.value || scope.projectScope) : 'All applicable projects';
-    const runAt = new Date(msg.timestamp || Date.now()).toLocaleString();
+  // One unambiguous display format (13 Oct 2026, 14:24) instead of the
+  // browser locale, which mixed US and day-first dates on the same screen.
+  const DISPLAY_DATE_TIME = new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
+  });
+
+  const DISPLAY_TIME = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+  function formatDisplayTime(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : DISPLAY_TIME.format(date);
+  }
+
+  function formatDisplayDateTime(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : DISPLAY_DATE_TIME.format(date);
+  }
+
+  // Scope is shown with the answer and in the Evidence Desk, so run metadata
+  // only records which run this is and when it executed.
+  function renderRunMetadata(msg) {
+    const runAt = formatDisplayDateTime(msg.timestamp || Date.now());
     const runNumber = Number(msg.runNumber) || 1;
     return `
       <div class="answer-run-metadata" aria-label="Answer run metadata">
-        <span><strong>Run:</strong> ${runNumber}</span>
-        <span><strong>Last run:</strong> ${escapeHtml(runAt)}</span>
-        <span><strong>Scope:</strong> ${escapeHtml(`${domain} · ${period} · ${project}`)}</span>
+        <span>Run ${runNumber}</span>
+        <span>${escapeHtml(runAt)}</span>
       </div>
     `;
   }
@@ -1395,7 +1510,7 @@
           <div class="result-state-label">${escapeHtml(config.label)}</div>
           <h3>${escapeHtml(config.title)}</h3>
           <p>${escapeHtml(config.body)}</p>
-          ${renderRunMetadata(msg, scope)}
+          ${renderRunMetadata(msg)}
           ${res.answer ? `<div class="result-state-detail">${formatMarkdownBold(res.answer.replace(/^Combination Not Supported in Mock Ledger:\s*/i, ''))}</div>` : ''}
           ${renderCompactScope(scope, msg)}
           ${renderBusinessProvenance(res)}
@@ -1458,16 +1573,37 @@
     };
   }
 
+  // Short caption under the key figure: what was measured, for when and where.
+  function describeAnswerScope(scope) {
+    if (!scope) return '';
+    const metric = scope.metric && scope.metric.label;
+    const period = scope.time ? scope.time.label : scope.periodLabel;
+    const project = scope.projectScope && scope.projectScope.label;
+    return [metric, period, project].filter(Boolean).join(' · ');
+  }
+
   function renderBusinessProvenance(res) {
     const sources = Array.isArray(res.sources) ? res.sources : [];
     const sourceLabels = sources.map(source => getBusinessSourceDefinition(source.name).label);
     return `
       <section class="result-provenance" aria-label="Data freshness and business sources">
-        <div><span>Data freshness</span><strong>${escapeHtml(res.dataAsOf || 'Not provided')}</strong></div>
-        <div><span>Business sources</span><strong>${escapeHtml(sourceLabels.length ? sourceLabels.join(', ') : 'Enterprise business records')}</strong></div>
+        <div><span>Data as of</span><strong>${escapeHtml(res.dataAsOf || 'Not provided')}</strong></div>
+        <div><span>Sources</span><strong>${escapeHtml(sourceLabels.length ? sourceLabels.join(', ') : 'Enterprise business records')}</strong></div>
       </section>
     `;
   }
+
+  // Stroke icons for the answer toolbar (one visual language with the rest of the UI).
+  const ANSWER_ICONS = {
+    copy: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg>',
+    up: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11"></path><path d="M15 5.9 14 10h5.8a2 2 0 0 1 2 2.3l-1.4 7A2 2 0 0 1 18.5 21H7V10l4-8a2.6 2.6 0 0 1 4 3.9Z"></path></svg>',
+    down: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 14V3"></path><path d="M9 18.1 10 14H4.2a2 2 0 0 1-2-2.3l1.4-7A2 2 0 0 1 5.5 3H17v11l-4 8a2.6 2.6 0 0 1-4-3.9Z"></path></svg>',
+    bookmark: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>',
+    refresh: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"></path><path d="M21 3v5h-5"></path></svg>',
+    more: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg>',
+    sources: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>',
+    arrow: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>'
+  };
 
   function renderAgentMessageHtml(msg, msgIdx) {
     if (msg.type === 'blocked') {
@@ -1489,8 +1625,9 @@
     const activeView = getActiveResultView(msg, pattern, res);
     const scope = msg.appliedScope || res.appliedScope;
     
-    // 1. Direct answer headline
-    const headline = res.answer || 'Business Analysis';
+    // 1. Direct answer headline (Concise shows the key takeaway only)
+    const isConcise = state.settings.detailLevel === 'concise';
+    const headline = (isConcise && res.answerConcise) || res.answer || 'Business Analysis';
     
     // 2. Primary number or conclusion
     const highlights = getAnswerHighlights(headline, scope);
@@ -1502,61 +1639,70 @@
     const savedInsights = window.AriaMock && window.AriaMock.getSavedInsights
       ? window.AriaMock.getSavedInsights(userId)
       : [];
-    const isSaved = savedInsights.some((item) => item.sourceMessageId === msg.id);
+    const isSaved = savedInsights.some((item) => item.sourceMessageId === msg.id && item.type !== 'snapshot');
     const hasTable = Boolean(res.table);
     const canDownload = hasTable;
     const followUps = Array.isArray(res.followUps) ? res.followUps : [];
 
+    const conversation = getActiveConversation();
+    const lastMessage = conversation && conversation.messages[conversation.messages.length - 1];
+    const isLatestAnswer = Boolean(lastMessage && lastMessage.id === msg.id);
+    const feedbackType = msg.feedback ? msg.feedback.type : null;
+    const contextNote = msg.runAgainOfMessageId
+      ? 'Run again with the same scope'
+      : (msg.sourceMessageId ? 'Re-run with the edited interpretation' : '');
+
+    // Chat-style answer: prose first, then one result block for the figure,
+    // visual and provenance, then a compact icon toolbar.
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
-        <div class="agent-response-card ${msg.isSuperseded ? 'answer-superseded' : ''}" data-msg-id="${msg.id}">
+        <article class="agent-response-card answer-message ${msg.isSuperseded ? 'answer-superseded' : ''}" data-msg-id="${msg.id}" aria-label="Aria answer">
           ${msg.isSuperseded ? '<div class="superseded-callout">Superseded by a revised question. This answer is retained for comparison.</div>' : ''}
-          <div class="conversation-turn-label answer-turn-label">
-            <span class="answer-turn-mark" aria-hidden="true">A</span>
-            <span>${msg.runAgainOfMessageId ? 'Aria answer · Run again' : (msg.sourceMessageId ? 'Aria answer · Reinterpreted scope' : 'Aria answer')}</span>
-          </div>
-          ${renderRunMetadata(msg, scope)}
+          ${contextNote ? `<div class="answer-context-note">${escapeHtml(contextNote)}</div>` : ''}
           <div class="message-content">
-            <div class="brief-container">
-              <div class="brief-headline">
-                ${formatMarkdownBold(headline)}
-              </div>
+            <div class="brief-headline answer-prose">${formatMarkdownBold(headline)}</div>
+            <section class="result-block" aria-label="Result and evidence">
               ${primaryNumber ? `
-                <div class="brief-number">
-                  ${escapeHtml(primaryNumber)}
+                <div class="brief-kpi">
+                  <div class="brief-number">${escapeHtml(primaryNumber)}</div>
+                  <div class="brief-kpi-label">${escapeHtml(describeAnswerScope(scope))}</div>
                 </div>
               ` : ''}
-              <div class="brief-evidence">
-                ${evidenceHtml}
-              </div>
+              ${evidenceHtml ? (isConcise
+                ? `<details class="supporting-evidence-disclosure brief-evidence"><summary>Show supporting evidence</summary><div class="supporting-evidence-content">${evidenceHtml}</div></details>`
+                : `<div class="brief-evidence">${evidenceHtml}</div>`) : ''}
               ${renderBusinessProvenance(res)}
-            </div>
+            </section>
           </div>
-          
+
           <div class="agent-footer answer-footer">
-            <div class="answer-primary-actions">
-              <button type="button" class="action-tool-btn btn-open-evidence" data-msg-id="${msg.id}">Evidence Desk</button>
-            </div>
-            <details class="answer-actions-menu">
-              <summary class="action-tool-btn">More actions</summary>
-              <div class="answer-actions-popover">
-                <button type="button" class="action-tool-btn btn-copy-answer" data-answer="${escapeHtml(headline)}">Copy answer</button>
-                ${hasTable ? `<button type="button" class="action-tool-btn btn-copy-table" data-msg-id="${msg.id}">Copy records</button>` : ''}
-                ${canDownload ? `<button type="button" class="action-tool-btn btn-export-csv" data-msg-id="${msg.id}">Export CSV…</button>` : ''}
-                <button type="button" class="action-tool-btn btn-pin-answer ${isSaved ? 'pinned' : ''}" data-msg-id="${msg.id}">${isSaved ? 'Remove from saved' : 'Save insight'}</button>
-                <button type="button" class="action-tool-btn btn-run-again" data-msg-id="${msg.id}">Run again with this scope</button>
-                <button type="button" class="action-tool-btn btn-feedback-up ${msg.feedback && msg.feedback.type === 'up' ? 'feedback-submitted' : ''}" data-msg-id="${msg.id}">${msg.feedback && msg.feedback.type === 'up' ? 'Helpful · Submitted' : 'Helpful'}</button>
-                <button type="button" class="action-tool-btn btn-feedback-down ${msg.feedback && msg.feedback.type === 'down' ? 'feedback-submitted' : ''}" data-msg-id="${msg.id}">${msg.feedback && msg.feedback.type === 'down' ? 'Edit issue feedback' : 'Report an issue'}</button>
-                ${followUps.length > 0 ? `
-                  <div class="answer-followups">
-                    <span>Continue with the same scope</span>
-                    ${followUps.map((query) => `<button type="button" class="followup-chip" data-query="${escapeHtml(query)}" data-source-msg-id="${msg.id}">${escapeHtml(query)}</button>`).join('')}
+            <div class="answer-icon-actions" role="toolbar" aria-label="Answer actions">
+              <button type="button" class="icon-action btn-copy-answer" data-answer="${escapeHtml(headline)}" aria-label="Copy answer" title="Copy answer">${ANSWER_ICONS.copy}</button>
+              <button type="button" class="icon-action btn-feedback-up ${feedbackType === 'up' ? 'is-active' : ''}" data-msg-id="${msg.id}" aria-pressed="${feedbackType === 'up'}" aria-label="Helpful" title="${feedbackType === 'up' ? 'Marked as helpful' : 'Helpful'}">${ANSWER_ICONS.up}</button>
+              <button type="button" class="icon-action btn-feedback-down ${feedbackType === 'down' ? 'is-active' : ''}" data-msg-id="${msg.id}" aria-pressed="${feedbackType === 'down'}" aria-label="${feedbackType === 'down' ? 'Edit issue feedback' : 'Report an issue'}" title="${feedbackType === 'down' ? 'Edit issue feedback' : 'Report an issue'}">${ANSWER_ICONS.down}</button>
+              <button type="button" class="icon-action btn-pin-answer ${isSaved ? 'is-active' : ''}" data-msg-id="${msg.id}" aria-pressed="${isSaved}" aria-label="${isSaved ? 'Remove from saved insights' : 'Save insight'}" title="${isSaved ? 'Remove from saved insights' : 'Save insight'}">${ANSWER_ICONS.bookmark}</button>
+              <button type="button" class="icon-action btn-run-again" data-msg-id="${msg.id}" aria-label="Run again with this scope" title="Run again with this scope">${ANSWER_ICONS.refresh}</button>
+              ${canDownload ? `
+                <details class="answer-actions-menu">
+                  <summary class="icon-action" aria-label="More actions" title="More actions">${ANSWER_ICONS.more}</summary>
+                  <div class="answer-actions-popover" role="menu">
+                    ${hasTable ? `<button type="button" class="menu-action btn-copy-table" data-msg-id="${msg.id}" role="menuitem">Copy records</button>` : ''}
+                    <button type="button" class="menu-action btn-export-csv" data-msg-id="${msg.id}" role="menuitem">Export CSV…</button>
                   </div>
-                ` : ''}
-              </div>
-            </details>
+                </details>
+              ` : ''}
+            </div>
+            <button type="button" class="evidence-pill btn-open-evidence" data-msg-id="${msg.id}">${ANSWER_ICONS.sources}<span>Evidence &amp; sources</span></button>
+            ${renderRunMetadata(msg)}
           </div>
-        </div>
+
+          ${isLatestAnswer && followUps.length > 0 ? `
+            <div class="answer-followups">
+              <span>Follow-up questions</span>
+              ${followUps.map((query) => `<button type="button" class="followup-chip" data-query="${escapeHtml(query)}" data-source-msg-id="${msg.id}"><span>${escapeHtml(query)}</span>${ANSWER_ICONS.arrow}</button>`).join('')}
+            </div>
+          ` : ''}
+        </article>
       </div>
     `;
   }
@@ -1612,150 +1758,82 @@
     const fieldValue = (value) => value && typeof value === 'object'
       ? (value.label || value.value || value.key || '')
       : value;
-    const interpretationItems = [
-      { label: 'Metric', value: fieldValue(understood.metric) },
-      { label: 'Breakdown', value: fieldValue(understood.grain || understood.breakdown) },
-      { label: 'Period', value: fieldValue(understood.period) },
-      { label: 'Business area', value: fieldValue(understood.domain || understood.businessArea) },
-      { label: 'Project scope', value: fieldValue(understood.projectScope) },
-      { label: 'Currency / unit', value: fieldValue(understood.currency) },
-      { label: 'Assumptions', value: Array.isArray(understood.assumptions) ? understood.assumptions.join(' · ') : fieldValue(understood.assumptions) }
-    ].filter((item) => item.value);
 
     const resolved = Boolean(msg.resolvedAt || msg.resolvedPayload);
     if (resolved) return '';
     const superseded = Boolean(msg.isSuperseded);
+
+    // Aria restates the question as one sentence; each interpreted value is a
+    // token. Tokens open the scope editor when that choice is on offer.
+    const canEditScope = !superseded && opts.some((opt) => opt.isEditScope || (opt.payload && opt.payload.resolution === 'edit_scope'));
+    const lowerFirst = (text) => (/^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text);
+    const token = (value, field) => {
+      if (!value) return '';
+      const text = escapeHtml(value);
+      return canEditScope
+        ? `<button type="button" class="reading-token" data-field="${escapeHtml(field)}" data-msg-id="${msg.id}" aria-label="${escapeHtml(field)}: ${text}. Edit scope" title="${escapeHtml(field)} · click to edit"><span class="reading-token-field" aria-hidden="true">${escapeHtml(field)}</span>${text}</button>`
+        : `<span class="reading-token" data-field="${escapeHtml(field)}" title="${escapeHtml(field)}"><span class="reading-token-field" aria-hidden="true">${escapeHtml(field)}</span>${text}</span>`;
+    };
+    const metric = fieldValue(understood.metric);
+    const grain = fieldValue(understood.grain || understood.breakdown);
+    const period = fieldValue(understood.period);
+    const domain = fieldValue(understood.domain || understood.businessArea);
+    const projectScope = fieldValue(understood.projectScope);
+    const currency = fieldValue(understood.currency);
+    const openDetail = String(fieldValue(understood.fieldToClarify) || '').replace(/^Needs confirmation:\s*/i, '');
+    const assumptions = Array.isArray(understood.assumptions) ? understood.assumptions : (understood.assumptions ? [fieldValue(understood.assumptions)] : []);
+
+    const sentence = [
+      metric ? `I’ll measure ${token(metric, 'Metric')}` : 'I read your question as',
+      grain ? ` ${token(lowerFirst(grain), 'Breakdown')}` : '',
+      period ? ` for ${token(period, 'Period')}` : '',
+      domain ? ` across ${token(domain, 'Business area')}` : '',
+      projectScope ? `, covering ${token(lowerFirst(projectScope), 'Project scope')}` : '',
+      currency && !/not applicable/i.test(currency) ? `, shown in ${token(currency, 'Unit')}` : '',
+      openDetail ? ` — but one detail is still open: <span class="reading-gap">${escapeHtml(openDetail)}</span>` : '.'
+    ].join('');
+
+    const shortLabel = (opt) => ({
+      confirm_interpretation: 'Run with this reading',
+      edit_scope: 'Edit scope'
+    })[opt.id] || opt.label;
+    const choices = opts.map((opt, index) => ({
+      key: index + 1,
+      label: opt.label,
+      display: shortLabel(opt),
+      payload: typeof opt.payload === 'object' ? JSON.stringify(opt.payload) : String(opt.payload || opt.label || ''),
+      primary: opt.id === 'confirm_interpretation'
+    }));
+    const isConfirmation = msg.subtype === 'interpretation_confirmation' || choices.some((choice) => choice.primary);
+    const keyRange = opts.length === 2 ? '1–3' : `1–${opts.length}`;
+
     return `
       <div class="chat-row agent-row" id="msg_row_${msg.id}">
-        <div class="agent-response-card clarification-status-card ${resolved ? 'is-resolved' : ''} ${superseded ? 'answer-superseded' : ''}">
+        <div class="agent-response-card clarification-status-card reading-card ${isConfirmation ? 'is-confirmation' : 'is-choice'} ${superseded ? 'answer-superseded' : ''}">
           ${superseded ? '<div class="superseded-callout">Superseded by the revised question below. No run can be started from this clarification.</div>' : ''}
-          <div class="result-state-label">${superseded ? 'Superseded clarification' : (resolved ? 'Clarification confirmed' : 'Clarification needed')}</div>
-          <h3>${escapeHtml(superseded ? 'This clarification is no longer active' : (resolved ? (msg.resolvedChoice || 'Scope confirmed') : 'One choice is needed before I run this question'))}</h3>
-          ${interpretationItems.length ? `<section class="inline-interpretation" aria-label="How Aria interpreted your question">
-            <div class="inline-interpretation-heading">
-              <span>How I interpreted your question</span>
-              <span class="inline-interpretation-status">${resolved ? 'Applied to this run' : 'Review before running'}</span>
-            </div>
-            <dl class="inline-interpretation-grid">
-              ${interpretationItems.map((item) => `<div>
-                <dt>${escapeHtml(item.label)}</dt>
-                <dd>${escapeHtml(item.value)}</dd>
-              </div>`).join('')}
-            </dl>
-          </section>` : ''}
-          <p>${escapeHtml(msg.question || 'Please confirm the intended meaning or scope.')}</p>
-          ${superseded ? '' : (resolved
-            ? `<div class="clarification-resolution">
-                <div><strong>Selected:</strong> ${escapeHtml(msg.resolvedChoice || '')}</div>
-                <span class="clarification-locked-note">
-                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
-                  Confirmed request locked
-                </span>
-              </div>`
-            : `<div class="clarification-chips" role="group" aria-label="Clarification choices">
-                <div class="clarification-key-hint">Select an option or press ${opts.length === 2 ? '1, 2, or 3' : opts.map((_, index) => index + 1).join(', ')}</div>
-                ${opts.map((opt, index) => {
-                  const payload = typeof opt.payload === 'object' ? JSON.stringify(opt.payload) : String(opt.payload || opt.label || '');
-                  return `<button type="button" class="clarification-chip" data-msg-id="${msg.id}" data-payload='${escapeHtml(payload)}' data-label="${escapeHtml(opt.label)}" data-clarification-key="${index + 1}" aria-keyshortcuts="${index + 1}">
-                    <span class="clarification-choice-content"><span class="clarification-choice-number">${index + 1}</span><span>${escapeHtml(opt.label)}</span></span>
-                    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                  </button>`;
-                }).join('')}
-                ${opts.length === 2 ? `<button type="button" class="clarification-chip btn-adjust-question" data-msg-id="${msg.id}" data-clarification-key="3" aria-keyshortcuts="3">
-                  <span class="clarification-choice-content"><span class="clarification-choice-number">3</span><span>Adjust question</span></span>
-                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                </button>` : ''}
-              </div>`)}
-        </div>
-      </div>
-    `;
+          <header class="reading-head">
+            <span class="reading-mark" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c.4 3.9 1.6 6.3 3.4 7.9 1.7 1.5 4 2.3 6.1 2.6-2.1.3-4.4 1.1-6.1 2.6-1.8 1.6-3 4-3.4 7.9-.4-3.9-1.6-6.3-3.4-7.9C6.9 14.1 4.6 13.3 2.5 13c2.1-.3 4.4-1.1 6.1-2.6C10.4 8.8 11.6 6.4 12 2.5z"></path></svg>
+            </span>
+            <h3 class="reading-title">${superseded ? 'This check is no longer active' : (isConfirmation ? 'Before I run this' : 'One detail before I answer')}</h3>
+            <span class="result-state-label reading-status">${superseded ? 'Superseded' : '<span class="reading-status-dot" aria-hidden="true"></span>Waiting for you'}</span>
+          </header>
 
-    if (msg.subtype === 'scope_conflict') {
-      return `
-        <div class="chat-row agent-row" id="msg_row_${msg.id}">
-          <div class="agent-response-card scope-conflict-card" style="border: 2px solid var(--warning-color); padding: 22px;">
-            <div class="conflict-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-              <div class="conflict-badge" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background-color: var(--warning-bg); border: 1px solid var(--warning-border); color: var(--warning-color); border-radius: var(--radius-full); font-size: 12px; font-weight: 700;">
-                <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-                <span>Scope Conflict Resolution Required</span>
-              </div>
-              <span style="font-size: 12px; color: var(--text-muted); font-weight: 500;">Clarification required before query execution</span>
-            </div>
+          <p class="reading-sentence" aria-label="How Aria interpreted your question">${sentence}</p>
+          ${assumptions.length ? `<p class="reading-assumptions"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>Assumes ${escapeHtml(assumptions.map(lowerFirst).join(' · '))}</p>` : ''}
 
-            <p class="conflict-explanation" style="font-size: 14px; margin-bottom: 16px; line-height: 1.5; color: var(--text-primary);">${formatMarkdownBold(msg.question || '')}</p>
-
-            ${msg.resolvedPayload ? `
-              <div class="conflict-resolved-banner" style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--success-bg); border: 1px solid var(--success-color); border-radius: var(--radius-sm); color: var(--success-color); font-size: 12px; font-weight: 600; margin-bottom: 12px;">
-                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                <span>Scope conflict resolved: Applied <strong>${escapeHtml(msg.resolvedChoice || msg.resolvedPayload)}</strong></span>
-              </div>
-            ` : ''}
-
-            <div class="conflict-options-list" style="display: flex; flex-direction: column; gap: 8px;">
-              ${opts.map((opt) => {
-                const payloadStr = typeof opt.payload === 'object' ? JSON.stringify(opt.payload) : opt.payload;
-                const isSelected = msg.resolvedChoice === opt.label || msg.resolvedPayload === opt.label;
-                return `
-                  <button type="button" class="clarification-chip conflict-option-btn ${opt.isEditScope ? 'btn-edit-scope-action' : ''} ${isSelected ? 'selected-resolution' : ''}" data-msg-id="${msg.id}" data-payload='${escapeHtml(payloadStr)}' data-label="${escapeHtml(opt.label)}" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; font-size: 13.5px; border-radius: var(--radius-md); border: 1px solid ${isSelected ? 'var(--success-color)' : 'var(--border-color)'}; background: ${isSelected ? 'var(--success-bg)' : 'var(--bg-surface)'}; text-align: left; cursor: ${msg.resolvedPayload ? 'default' : 'pointer'};" ${msg.resolvedPayload ? 'disabled' : ''}>
-                    <span style="font-weight: 600;">${isSelected ? '✓ ' : ''}${escapeHtml(opt.label)}</span>
-                    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                  </button>
-                `;
-              }).join('')}
+          ${superseded ? '' : `<footer class="reading-actions">
+            <p class="reading-question">${escapeHtml(isConfirmation ? 'Does this match what you meant?' : (msg.question || 'Please confirm the intended meaning or scope.'))}</p>
+            <div class="clarification-chips" role="group" aria-label="Clarification choices">
+              ${choices.map((choice) => `<button type="button" class="clarification-chip ${choice.primary ? 'is-primary' : ''}" data-msg-id="${msg.id}" data-payload='${escapeHtml(choice.payload)}' data-label="${escapeHtml(choice.label)}" data-clarification-key="${choice.key}" aria-keyshortcuts="${choice.key}">
+                <span class="clarification-choice-content"><kbd class="clarification-choice-number">${choice.key}</kbd><span>${escapeHtml(choice.display)}</span></span>
+              </button>`).join('')}
+              ${opts.length === 2 ? `<button type="button" class="clarification-chip btn-adjust-question" data-msg-id="${msg.id}" data-clarification-key="3" aria-keyshortcuts="3">
+                <span class="clarification-choice-content"><kbd class="clarification-choice-number">3</kbd><span>Rephrase</span></span>
+              </button>` : ''}
+              <span class="clarification-key-hint">Press ${keyRange}</span>
             </div>
-          </div>
-        </div>
-      `;
-    }
-
-    return `
-      <div class="chat-row agent-row" id="msg_row_${msg.id}">
-        <div class="agent-response-card" style="border: 2px solid var(--accent-primary); box-shadow: 0 10px 25px rgba(0,0,0,0.1); padding: 24px; position: relative; z-index: 10;">
-          <div class="clarification-box" style="border: none; background: transparent; padding: 0;">
-            <div class="clarification-title" style="font-size: 16px; margin-bottom: 12px; color: var(--text-primary);">
-              <svg width="24" height="24" fill="none" stroke="var(--accent-primary)" stroke-width="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-              </svg>
-              <span style="font-weight: 700;">Agent Clarification Required</span>
-            </div>
-            ${msg.understoodFields ? `
-              <div class="clarification-understood-box" style="margin-bottom: 16px; padding: 12px 14px; background: var(--bg-hover); border-left: 3px solid var(--accent-primary); border-radius: 6px; font-size: 12px;">
-                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                  <span>What I understood so far:</span>
-                </div>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px 14px; color: var(--text-secondary);">
-                  ${msg.understoodFields.domain ? `<div><span style="color: var(--text-muted); font-size: 12px; text-transform: uppercase; font-weight: 600; display: block;">Business area</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.domain)}</strong></div>` : ''}
-                  ${msg.understoodFields.metric ? `<div><span style="color: var(--text-muted); font-size: 12px; text-transform: uppercase; font-weight: 600; display: block;">Metric</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.metric)}</strong></div>` : ''}
-                  ${msg.understoodFields.period ? `<div><span style="color: var(--text-muted); font-size: 12px; text-transform: uppercase; font-weight: 600; display: block;">Period</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.period)}</strong></div>` : ''}
-                  ${msg.understoodFields.projectScope ? `<div><span style="color: var(--text-muted); font-size: 12px; text-transform: uppercase; font-weight: 600; display: block;">Project scope</span><strong style="color: var(--text-primary); font-size: 12px;">${escapeHtml(msg.understoodFields.projectScope)}</strong></div>` : ''}
-                </div>
-                ${msg.understoodFields.fieldToClarify ? `
-                  <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border-color); color: var(--warning-color); font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px;">
-                    <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                    <span>${escapeHtml(msg.understoodFields.fieldToClarify)}</span>
-                  </div>
-                ` : ''}
-              </div>
-            ` : ''}
-            <p class="clarification-question" style="font-size: 15px; margin-bottom: 20px; line-height: 1.5;">${escapeHtml(msg.question || '')}</p>
-            ${msg.resolvedPayload ? `
-              <div class="conflict-resolved-banner" style="display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--success-bg); border: 1px solid var(--success-color); border-radius: var(--radius-sm); color: var(--success-color); font-size: 12px; font-weight: 600; margin-bottom: 12px;">
-                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                <span>Clarification resolved: Selected <strong>${escapeHtml(msg.resolvedChoice || msg.resolvedPayload)}</strong></span>
-              </div>
-            ` : ''}
-            <div class="clarification-chips" style="display: flex; flex-direction: column; gap: 10px;">
-              ${opts.map((opt) => `
-                <button type="button" class="clarification-chip ${msg.resolvedChoice === opt.label ? 'selected-resolution' : ''}" data-msg-id="${msg.id}" data-payload="${escapeHtml(typeof opt.payload === 'object' ? JSON.stringify(opt.payload) : opt.payload)}" data-label="${escapeHtml(opt.label)}" style="width: 100%; justify-content: space-between; padding: 12px 16px; font-size: 14px; border: 1px solid var(--border-color); background: var(--bg-surface); text-align: left;" ${msg.resolvedPayload ? 'disabled' : ''}>
-                  <span style="font-weight: 500;">${msg.resolvedChoice === opt.label ? '✓ ' : ''}${escapeHtml(opt.label)}</span>
-                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                </button>
-              `).join('')}
-            </div>
-          </div>
+          </footer>`}
         </div>
       </div>
     `;
@@ -1791,9 +1869,14 @@
       if (item.role === 'user') break;
       appliedScope = item.appliedScope || (item.resultsData && item.resultsData.appliedScope) || appliedScope;
     }
-    return appliedScope
+    const adjustmentScope = appliedScope
       ? buildSavedExecutionOptions(appliedScope).selectedScope
       : JSON.parse(JSON.stringify(state.selectedScope));
+    // A revision may change the year or date wording. Preserve the business
+    // area, but never carry an old time filter into the revised question.
+    adjustmentScope.time = { mode: 'auto', preset: 'auto', start: null, end: null };
+    if ('timeRange' in adjustmentScope) adjustmentScope.timeRange = 'Auto';
+    return adjustmentScope;
   }
 
   function formatAdjustmentScope(scope) {
@@ -1802,12 +1885,7 @@
           ? scope.domain.values.join(' + ')
           : (scope.domain.value || 'Auto — infer from question'))
       : 'Auto — infer from question';
-    const time = scope && scope.time
-      ? (scope.time.mode === 'custom'
-          ? `${scope.time.start || 'Start date'} to ${scope.time.end || 'End date'}`
-          : (scope.time.label || scope.time.preset || 'Auto — infer from question'))
-      : 'Auto — infer from question';
-    return `Business area: ${domain} · Period: ${time}`;
+    return `Business area: ${domain}`;
   }
 
   function openAdjustQuestionEditor(messageId) {
@@ -1816,13 +1894,19 @@
     if (!conv || !userMessage) return;
     activeAdjustmentUserMessageId = userMessage.id;
     activeAdjustmentScope = getAdjustmentScope(conv, userMessage);
+    activeAdjustmentDraft = userMessage.text || '';
 
-    // If this question is still being processed, editing it replaces that
-    // pending request. Stop the old run so the editor never sits above a
-    // misleading "Aria is thinking" state for wording the user is changing.
     const latestUserMessage = [...conv.messages].reverse().find((message) => message.role === 'user');
     if (state.isThinking && latestUserMessage && latestUserMessage.id === userMessage.id && state.activeAbortController) {
-      state.activeAbortController.abort();
+      const controller = state.activeAbortController;
+      controller.cancelledForQuestionEdit = true;
+      controller.abort();
+      if (state.activeAbortController === controller) {
+        state.isThinking = false;
+        state.activeAbortController = null;
+        chatContainerEl.setAttribute('aria-busy', 'false');
+        updateSendButtonState();
+      }
     }
 
     renderActiveConversation();
@@ -1839,6 +1923,7 @@
     const messageId = activeAdjustmentUserMessageId;
     activeAdjustmentUserMessageId = null;
     activeAdjustmentScope = null;
+    activeAdjustmentDraft = '';
     renderActiveConversation();
     requestAnimationFrame(() => {
       chatContainerEl.querySelector(`.user-edit-btn[data-msg-id="${messageId}"]`)?.focus();
@@ -1857,34 +1942,17 @@
       input.focus();
       return;
     }
+    const originalId = original.id;
     const executionScope = JSON.parse(JSON.stringify(activeAdjustmentScope || state.selectedScope));
-    const originalIndex = conv.messages.findIndex((item) => item.id === original.id);
-
-    // An adjusted question replaces this turn. Remove the old response because
-    // it no longer answers the wording displayed to the user.
-    let turnEndIndex = originalIndex + 1;
-    while (turnEndIndex < conv.messages.length && conv.messages[turnEndIndex].role !== 'user') {
-      turnEndIndex += 1;
-    }
-    conv.messages.splice(originalIndex + 1, turnEndIndex - originalIndex - 1);
-    original.text = revisedQuestion;
-    original.adjustedAt = Date.now();
-    original.time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    delete original.supersededByUserMessageId;
-    delete original.supersededAt;
-    conv.updatedAt = Date.now();
-    saveConversationsToStorage();
-
     activeAdjustmentUserMessageId = null;
     activeAdjustmentScope = null;
-    // This flow updates the existing user message instead of appending another
-    // one, so render it now to close the inline editor before review begins.
-    renderActiveConversation();
+    activeAdjustmentDraft = '';
     processUserPrompt(revisedQuestion, {
-      skipUserMessage: true,
+      interpretationConfirmed: true,
       originalQuestion: revisedQuestion,
       displayPromptText: revisedQuestion,
-      selectedScope: executionScope
+      selectedScope: executionScope,
+      revisionOfUserMessageId: originalId
     });
   }
 
@@ -2006,7 +2074,8 @@
         interpretationConfirmed: true,
         skipUserMessage: true,
         originalQuestion,
-        displayPromptText: originalQuestion
+        displayPromptText: originalQuestion,
+        selectedScope: msg.requestedScope || undefined
       });
       return;
     }
@@ -2097,43 +2166,43 @@
       }
     ];
 
+    const firstName = state.currentUser && state.currentUser.name ? state.currentUser.name.split(' ')[0] : '';
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : (hour < 18 ? 'Good afternoon' : 'Good evening');
+    const groupIcons = {
+      Sales: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"></path><path d="M14 7h7v7"></path></svg>',
+      Finance: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2.5"></circle><path d="M6 12h.01M18 12h.01"></path></svg>',
+      Projects: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"></path><path d="M5 21V7l7-4 7 4v14"></path><path d="M9 21v-6h6v6"></path></svg>'
+    };
+    const auditPrompts = window.AriaMock.AUDIT_TEST_PROMPTS || [];
+
+    setIdleLayout(true);
+    updateChatTopbarTitle();
     chatContainerEl.innerHTML = `
       <section class="welcome-hero" id="welcomeHero">
-        <h1 class="hero-title task-home-title">What does your business need to understand?</h1>
-        <p class="hero-subtitle task-home-subtitle">
-          Aria analyses your enterprise operations, finance, and project intelligence.
-        </p>
+        <h1 class="hero-title task-home-title">${escapeHtml(firstName ? `${greeting}, ${firstName}` : greeting)}</h1>
+        <p class="hero-subtitle task-home-subtitle">What would you like to know about the business today?</p>
+      </section>
+    `;
 
-        <div class="example-section task-groups-section">
-          <div class="example-section-label task-groups-label">
-            <span>Choose a starting point for ${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Sales Manager')}</span>
-            <small>Select a question to place it in the composer, review scope, then press Ask.</small>
-          </div>
-          <div class="example-grid task-groups-grid">
-            ${taskGroups.map((group) => `
-              <section class="task-group-card" aria-labelledby="task_group_${group.key}">
-                <div class="task-group-heading">
-                  <div>
-                    <h2 id="task_group_${group.key}">${escapeHtml(group.key)}</h2>
-                    <p>${escapeHtml(group.description)}</p>
-                  </div>
-                  <span class="task-output-badge">${escapeHtml(group.output)}</span>
-                </div>
-                <button type="button" class="example-card" data-query="${escapeHtml(group.question.text)}">
-                  <span class="example-card-meta">${escapeHtml(group.question.domain || group.key)} · ${escapeHtml(group.output)}</span>
-                  <span class="example-card-text">${escapeHtml(group.question.text)}</span>
-                  <span class="example-card-action">Use this question</span>
-                </button>
-              </section>
-            `).join('')}
-          </div>
-        </div>
+    if (!composerSuggestionsEl) return;
+    composerSuggestionsEl.innerHTML = `
+      <div class="starter-list" aria-label="Suggested questions for ${escapeHtml(state.currentUser ? state.currentUser.roleTitle : 'Sales Manager')}">
+        ${taskGroups.map((group) => `
+          <button type="button" class="example-card starter-row" data-query="${escapeHtml(group.question.text)}" title="Place this question in the composer">
+            <span class="starter-row-icon">${groupIcons[group.key] || ''}</span>
+            <span class="starter-row-text">${escapeHtml(group.question.text)}</span>
+            <span class="starter-row-tag">${escapeHtml(group.key)} · ${escapeHtml(group.output)}</span>
+          </button>
+        `).join('')}
+      </div>
 
-        <details class="audit-prompt-suite">
-          <summary>
-            <span>Audit test prompts</span>
-            <small>${(window.AriaMock.AUDIT_TEST_PROMPTS || []).length} deterministic checks</small>
-          </summary>
+      <details class="audit-prompt-suite">
+        <summary>
+          <span>Reviewer test prompts</span>
+          <small>${auditPrompts.length} deterministic checks</small>
+        </summary>
+        <div class="audit-prompt-content">
           <div class="audit-prompt-help">
             Select a prompt to place it in the composer, then press Enter to run it. Use a non-admin persona for the access-denied check.
           </div>
@@ -2141,7 +2210,7 @@
             <section class="audit-prompt-group">
               <h2>${escapeHtml(group)}</h2>
               <div class="audit-prompt-grid">
-                ${(window.AriaMock.AUDIT_TEST_PROMPTS || []).filter((item) => item.group === group).map((item) => `
+                ${auditPrompts.filter((item) => item.group === group).map((item) => `
                   <button type="button" class="audit-prompt-card" data-query="${escapeHtml(item.text)}">
                     <span>${escapeHtml(item.expected)}</span>
                     <strong>${escapeHtml(item.text)}</strong>
@@ -2157,25 +2226,52 @@
               <li>Run any result prompt and press Stop while it is processing to verify the Cancelled state.</li>
             </ol>
           </div>
-        </details>
-      </section>
+        </div>
+      </details>
     `;
 
-    chatContainerEl.querySelectorAll('.example-card').forEach((card) => {
-      card.addEventListener('click', () => {
-        const q = card.getAttribute('data-query');
-        chatInputEl.value = q;
-        chatInputEl.focus();
-        updateSendButtonState();
-      });
-    });
+    const auditSuiteEl = composerSuggestionsEl.querySelector('.audit-prompt-suite');
+    const auditSummaryEl = auditSuiteEl && auditSuiteEl.querySelector('summary');
+    const auditContentEl = auditSuiteEl && auditSuiteEl.querySelector('.audit-prompt-content');
+    if (auditSuiteEl && auditSummaryEl && auditContentEl) {
+      let auditPanelAnimation = null;
+      auditSummaryEl.addEventListener('click', (event) => {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        event.preventDefault();
+        if (auditPanelAnimation) auditPanelAnimation.finish();
 
-    chatContainerEl.querySelectorAll('.audit-prompt-card').forEach((card) => {
+        const isOpening = !auditSuiteEl.open;
+        const startHeight = auditSuiteEl.offsetHeight;
+        if (isOpening) auditSuiteEl.open = true;
+        const endHeight = isOpening
+          ? auditSuiteEl.scrollHeight
+          : Math.max(0, startHeight - auditContentEl.offsetHeight);
+
+        auditSuiteEl.style.overflow = 'hidden';
+        auditContentEl.animate(
+          isOpening
+            ? [{ opacity: 0, transform: 'translateY(-8px)' }, { opacity: 1, transform: 'translateY(0)' }]
+            : [{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(-8px)' }],
+          { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' }
+        );
+        auditPanelAnimation = auditSuiteEl.animate(
+          [{ height: `${startHeight}px` }, { height: `${endHeight}px` }],
+          { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' }
+        );
+        auditPanelAnimation.addEventListener('finish', () => {
+          if (!isOpening) auditSuiteEl.open = false;
+          auditSuiteEl.style.removeProperty('overflow');
+          auditPanelAnimation = null;
+        }, { once: true });
+      });
+    }
+
+    composerSuggestionsEl.querySelectorAll('.example-card, .audit-prompt-card').forEach((card) => {
       card.addEventListener('click', () => {
         chatInputEl.value = card.getAttribute('data-query');
         chatInputEl.focus();
         updateSendButtonState();
-        chatInputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        resizeChatInput();
       });
     });
   }
@@ -2203,9 +2299,9 @@
     // 1. Ensure Active Conversation exists
     let conv = getActiveConversation();
     if (!conv) {
-      conv = createNewConversation(promptText.substring(0, 40));
-    } else if (conv.messages.length === 0) {
-      conv.title = promptText.substring(0, 40);
+      conv = createNewConversation(promptText.trim());
+    } else if (conv.messages.length === 0 && conv.title === 'New Conversation') {
+      conv.title = promptText.trim();
       saveConversationsToStorage();
       renderSidebarConversations();
     }
@@ -2219,7 +2315,7 @@
         // Keep the executable query unchanged, but show the scope-adjusted wording
         // for interpretation re-runs so the new turn never contradicts its answer.
         text: options.displayPromptText || promptText,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        time: formatDisplayTime(new Date()),
         timestamp: Date.now(),
         isScopeRerun: Boolean(options.sourceMessageId),
         scopeEditSummary: options.scopeEditSummary || null,
@@ -2251,14 +2347,13 @@
     if (!options.interpretationConfirmed && !options.clarificationPayload && !options.scopeConfirmation && !options.interpretationOverride && !options.retryAttempt) {
       const directFixture = window.AriaMock.QUERY_RESPONSES[promptText];
       const questionScope = window.AriaScope.parseQuestionScope(promptText);
-      const promptScope = options.selectedScope || state.selectedScope;
-      const scopeConflict = window.AriaScope.detectScopeConflicts(promptScope, questionScope);
+      const scopeConflict = window.AriaScope.detectScopeConflicts(state.selectedScope, questionScope);
       const securityDecision = window.AriaMock.checkSecurityGateways(promptText, state.currentUser);
       const requiresClarification = Boolean((directFixture && directFixture.type === 'clarification') || scopeConflict);
 
       if (!requiresClarification && !securityDecision.blocked) {
         const intent = window.AriaScope.parseQuestionIntent(promptText, window.DEMO_CONTEXT);
-        const resolved = window.AriaScope.resolveSelectedScope(promptScope, questionScope, window.DEMO_CONTEXT);
+        const resolved = window.AriaScope.resolveSelectedScope(state.selectedScope, questionScope, window.DEMO_CONTEXT);
         const previewResult = { domain: resolved.domain || 'All Domains', originalQuery: promptText };
         const previewAppliedScope = window.AriaScope.buildAppliedInterpretation(previewResult, resolved, intent);
         const confirmationMsg = {
@@ -2269,6 +2364,7 @@
           originalQuery: promptText,
           resultsData: { ...previewResult, appliedScope: previewAppliedScope },
           appliedScope: previewAppliedScope,
+          requestedScope: JSON.parse(JSON.stringify(options.selectedScope || state.selectedScope)),
           question: 'Is this the interpretation you want me to use?',
           reason: 'Confirm the intended metric and scope before the query runs.',
           understoodFields: {
@@ -2278,13 +2374,13 @@
             domain: resolved.domain || 'All business areas',
             projectScope: intent.projects && intent.projects.label,
             currency: /rate|progress|%/i.test(intent.metric && intent.metric.label) ? 'Not applicable (%)' : (/day|time/i.test(intent.metric && intent.metric.label) ? 'Not applicable (Days)' : (/count/i.test(intent.metric && intent.metric.label) ? 'Not applicable (Count)' : 'USD millions')),
-            assumptions: ['Read-only query', resolved.calendarBasis ? `${resolved.calendarBasis} calendar basis` : 'Workspace calendar basis']
+            assumptions: ['Read-only query', resolved.calendarBasis ? (/calendar/i.test(resolved.calendarBasis) ? `${resolved.calendarBasis} basis` : `${resolved.calendarBasis} calendar basis`) : 'Workspace calendar basis']
           },
           options: [
             { id: 'confirm_interpretation', label: 'Use this interpretation', payload: { type: 'interpretation_confirmation', confirmed: true } },
             { id: 'edit_scope', label: 'Edit scope before running', payload: { resolution: 'edit_scope' }, isEditScope: true }
           ],
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: formatDisplayTime(new Date()),
           timestamp: Date.now()
         };
         state.isThinking = true;
@@ -2303,6 +2399,7 @@
           state.activeAbortController = null;
           chatContainerEl.setAttribute('aria-busy', 'false');
           updateSendButtonState();
+          if (!state.conversations.includes(conv)) return;
           conv.messages.push(confirmationMsg);
           conv.updatedAt = Date.now();
           saveConversationsToStorage();
@@ -2312,11 +2409,35 @@
 
         clarificationController.signal.addEventListener('abort', () => {
           window.clearTimeout(clarificationTimer);
-          state.isThinking = false;
-          state.activeAbortController = null;
+          if (state.activeAbortController === clarificationController) {
+            state.isThinking = false;
+            state.activeAbortController = null;
+          }
           chatContainerEl.setAttribute('aria-busy', 'false');
           document.getElementById(`thinking_row_${confirmationMsg.id}`)?.remove();
           updateSendButtonState();
+          if (clarificationController.cancelledForQuestionEdit) return;
+          // Leave a "stopped" note with Retry, like any other cancelled run.
+          if (state.conversations.includes(conv)) {
+            conv.messages.push({
+              id: confirmationMsg.id,
+              role: 'agent',
+              type: 'cancelled',
+              originalQuery: promptText,
+              requestedScope: confirmationMsg.requestedScope,
+              time: formatDisplayTime(new Date()),
+              timestamp: Date.now(),
+              errorData: {
+                kind: 'cancelled',
+                title: 'Request stopped',
+                message: 'You stopped this request before Aria finished reading the question.',
+                reason: 'No query was run.',
+                suggestedActions: ['Ask the question again when you are ready.']
+              }
+            });
+            saveConversationsToStorage();
+            renderActiveConversation();
+          }
           announceAppStatus('Clarification preparation stopped.');
         }, { once: true });
         return;
@@ -2327,7 +2448,8 @@
     state.isThinking = true;
     chatContainerEl.setAttribute('aria-busy', 'true');
     updateSendButtonState();
-    state.activeAbortController = new AbortController();
+    const requestController = new AbortController();
+    state.activeAbortController = requestController;
 
     const agentMsgId = 'msg_' + Date.now() + '_a';
     renderThinkingBubble(agentMsgId);
@@ -2355,13 +2477,18 @@
                   : (options.clarificationPayload ? 'clarification_selection' : (options.sourceMessageId ? 'scope_rerun' : 'question')))),
         selectedClarification: options.clarificationPayload ? promptText : null
       },
-      signal: state.activeAbortController.signal
+      signal: requestController.signal
     })
     .then((result) => {
+      // A cancelled request may still resolve if an underlying mock or network
+      // adapter cannot stop immediately. Never publish that stale answer.
+      if (requestController.signal.aborted || state.activeAbortController !== requestController) return;
       state.isThinking = false;
       chatContainerEl.setAttribute('aria-busy', 'false');
       state.activeAbortController = null;
       updateSendButtonState();
+
+      if (!state.conversations.includes(conv)) return;
 
       // Mask sensitive columns for current role if required
       if (result.table && state.currentUser) {
@@ -2384,7 +2511,7 @@
         type: result.type,
         subtype: result.subtype || null,
         blockedType: result.blockedType || null,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        time: formatDisplayTime(new Date()),
         timestamp: Date.now(),
         resultsData: result.type === 'results' ? result : null,
         appliedScope: result.appliedScope || null,
@@ -2399,7 +2526,9 @@
         clarificationData: result.type === 'clarification' ? result : null,
         question: result.question || null,
         options: result.options || null,
-        originalQuery: result.originalQuery || promptText,
+        originalQuery: options.originalQuestion || result.originalQuery || promptText,
+        clarificationPayload: options.clarificationPayload || null,
+        interpretationOverride: options.interpretationOverride || null,
         title: result.title || null,
         message: result.message || null,
         reason: result.reason || null,
@@ -2432,19 +2561,25 @@
       scrollToBottom();
     })
     .catch((err) => {
-      state.isThinking = false;
-      chatContainerEl.setAttribute('aria-busy', 'false');
-      state.activeAbortController = null;
-      updateSendButtonState();
+      if (state.activeAbortController === requestController) {
+        state.isThinking = false;
+        state.activeAbortController = null;
+        chatContainerEl.setAttribute('aria-busy', 'false');
+        updateSendButtonState();
+      }
 
+      if (!state.conversations.includes(conv)) return;
+      if (requestController.cancelledForQuestionEdit) return;
       if (err.message && err.message.includes('cancelled')) {
         conv.messages.push({
           id: agentMsgId,
           role: 'agent',
           type: 'cancelled',
           originalQuery: options.originalQuestion || promptText,
+          interpretationOverride: options.interpretationOverride || null,
+          clarificationPayload: options.clarificationPayload || null,
           requestedScope: JSON.parse(JSON.stringify(options.selectedScope || state.selectedScope)),
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: formatDisplayTime(new Date()),
           timestamp: Date.now(),
           errorData: {
             kind: 'cancelled',
@@ -2461,7 +2596,7 @@
           type: 'error',
           originalQuery: options.originalQuestion || promptText,
           requestedScope: JSON.parse(JSON.stringify(options.selectedScope || state.selectedScope)),
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: formatDisplayTime(new Date()),
           timestamp: Date.now(),
           errorData: {
             kind: 'service_error',
@@ -2485,10 +2620,8 @@
   // 7. THINKING PIPELINE ANIMATION & STOP BUTTON (Group A)
   // =========================================================================
   function renderThinkingBubble(msgId, options = {}) {
-    // An inline revision replaces the pending wording. Do not let a delayed
-    // loading render put the old request's status back underneath the editor.
     if (activeAdjustmentUserMessageId) return;
-
+    state.pendingRun = { convId: state.activeConversationId, msgId, options };
     const thinkingRow = document.createElement('div');
     thinkingRow.className = 'chat-row agent-row';
     thinkingRow.id = `thinking_row_${msgId}`;
@@ -2643,7 +2776,7 @@
             <thead>
               <tr>
                 ${tableData.headers.map((h, i) => `
-                  <th data-col-idx="${i}" data-msg-id="${msgId}">
+                  <th data-col-idx="${i}" data-msg-id="${msgId}" class="${tableData.sort && tableData.sort.col === i ? `sort-${tableData.sort.dir}` : ''}" aria-sort="${tableData.sort && tableData.sort.col === i ? (tableData.sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}">
                     ${tableData.types[i] === 'masked' ? `
                       <div class="restricted-column-header">
                         <span class="restricted-column-name">${escapeHtml(h)}</span>
@@ -2729,6 +2862,15 @@
     `;
   }
 
+  // "$M" + 23.7 reads as $23.7M; other units follow the number.
+  function formatChartValue(value, unit) {
+    const u = String(unit || '').trim();
+    if (!u) return String(value);
+    if (u.startsWith('$')) return `$${value}${u.slice(1)}`;
+    if (u === '%') return `${value}%`;
+    return `${value} ${u}`;
+  }
+
   function renderSvgBarChart(chartData) {
     const items = chartData.items;
     const maxVal = Math.max(...items.map((i) => Math.max(i.value || 0, i.targetValue || 0))) || 1;
@@ -2743,18 +2885,18 @@
           const y = idx * (barHeight + gap) + 10;
           const numericValue = Number(item.value) || 0;
           const barWidth = numericValue === 0 ? 0 : Math.max(2, Math.round((numericValue / maxVal) * 360));
-          const color = item.color || '#2563eb';
+          const color = item.color || 'var(--chart-1)';
           return `
             <g>
               <text x="110" y="${y + 16}" font-size="11.5" text-anchor="end" fill="var(--text-secondary)" font-family="var(--font-sans)">
                 ${escapeHtml(item.label)}
               </text>
-              <rect x="120" y="${y}" width="380" height="${barHeight}" rx="4" fill="var(--bg-hover)"/>
+              <rect x="120" y="${y}" width="380" height="${barHeight}" rx="4" fill="var(--chart-track)"/>
               <rect x="120" y="${y}" width="${barWidth}" height="${barHeight}" rx="4" fill="${color}">
-                <title>${escapeHtml(item.label)}: ${item.value}${chartData.unit || ''}</title>
+                <title>${escapeHtml(item.label)}: ${escapeHtml(formatChartValue(item.value, chartData.unit))}</title>
               </rect>
-              <text x="${barWidth === 0 ? 124 : Math.min(540, 130 + barWidth)}" y="${y + 16}" font-size="11" font-weight="600" fill="var(--text-primary)" font-family="var(--font-mono)">
-                ${item.value}${chartData.unit || ''}
+              <text x="${barWidth === 0 ? 124 : Math.min(540, 130 + barWidth)}" y="${y + 16}" font-size="12" font-weight="600" fill="var(--text-primary)" font-family="var(--font-sans)">
+                ${escapeHtml(formatChartValue(item.value, chartData.unit))}
               </text>
             </g>
           `;
@@ -2789,15 +2931,15 @@
         <line x1="${padX}" y1="${padY + plotHeight / 2}" x2="${width - padX}" y2="${padY + plotHeight / 2}" stroke="var(--border-color)" stroke-dasharray="3"/>
 
         <!-- Connecting Line -->
-        <polyline fill="none" stroke="var(--accent-primary)" stroke-width="2.5" points="${polylinePts}"/>
+        <polyline fill="none" stroke="var(--chart-1)" stroke-width="2.5" points="${polylinePts}"/>
 
         <!-- Data Points & Labels -->
         ${points.map((p) => `
           <g>
-            <circle cx="${p.x}" cy="${p.y}" r="4.5" fill="var(--accent-primary)" stroke="#fff" stroke-width="2">
-              <title>${escapeHtml(p.label)}: ${p.val}${chartData.unit || ''}</title>
+            <circle cx="${p.x}" cy="${p.y}" r="4.5" fill="var(--chart-1)" stroke="var(--bg-surface)" stroke-width="2">
+              <title>${escapeHtml(p.label)}: ${escapeHtml(formatChartValue(p.val, chartData.unit))}</title>
             </circle>
-            <text x="${p.x}" y="${p.y - 8}" font-size="10" text-anchor="middle" font-weight="600" fill="var(--text-primary)" font-family="var(--font-mono)">${p.val}</text>
+            <text x="${p.x}" y="${p.y - 8}" font-size="10" text-anchor="middle" font-weight="600" fill="var(--text-primary)" font-family="var(--font-sans)">${escapeHtml(formatChartValue(p.val, chartData.unit))}</text>
             <text x="${p.x}" y="${height - 10}" font-size="10.5" text-anchor="middle" fill="var(--text-muted)">${escapeHtml(p.label)}</text>
           </g>
         `).join('')}
@@ -2815,7 +2957,7 @@
     const r = 65;
 
     let cumulativeAngle = 0;
-    const colors = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'];
+    const colors = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
 
     const slices = items.map((item, idx) => {
       const sliceAngle = ((item.value || 0) / total) * 2 * Math.PI;
@@ -2841,7 +2983,7 @@
         <g>
           ${slices.map((s) => `
             <path d="${s.pathData}" fill="${s.color}">
-              <title>${escapeHtml(s.label)}: ${s.value}${chartData.unit || ''} (${s.pct}%)</title>
+              <title>${escapeHtml(s.label)}: ${escapeHtml(formatChartValue(s.value, chartData.unit))} (${s.pct}%)</title>
             </path>
           `).join('')}
         </g>
@@ -2852,7 +2994,7 @@
             <g transform="translate(0, ${idx * 26})">
               <rect x="0" y="0" width="12" height="12" rx="2" fill="${s.color}"/>
               <text x="20" y="10" font-size="11.5" fill="var(--text-secondary)">
-                ${escapeHtml(s.label)}: <tspan font-weight="600" font-family="var(--font-mono)">${s.pct}%</tspan> (${s.value}${chartData.unit || ''})
+                ${escapeHtml(s.label)}: <tspan font-weight="600">${s.pct}%</tspan> (${escapeHtml(formatChartValue(s.value, chartData.unit))})
               </text>
             </g>
           `).join('')}
@@ -3198,8 +3340,6 @@
       srcMsg.resolvedAt = Date.now();
       srcMsg.isLocked = true;
       delete srcMsg.clarificationDismissedAt;
-    } else {
-      srcMsg.isSuperseded = true;
     }
     saveConversationsToStorage();
 
@@ -3211,6 +3351,8 @@
     // Re-run original query with overrides
     processUserPrompt(userQuery, {
       interpretationOverride: overrides,
+      clarificationPayload: srcMsg.clarificationPayload || undefined,
+      originalQuestion: srcMsg.originalQuery || userQuery,
       sourceMessageId: isPreRunConfirmation ? null : msgId,
       interpretationConfirmed: true,
       skipUserMessage: isPreRunConfirmation,
@@ -3226,7 +3368,12 @@
     const scope = (msg && msg.appliedScope) || res.appliedScope || {};
     const grain = scope.grain || scope.breakdown;
     const period = scope.time
-      ? `${scope.time.label || scope.periodLabel || 'Not specified'}${scope.time.dateRange ? ` (${scope.time.dateRange})` : ''}`
+      ? (() => {
+          const label = scope.time.label || scope.periodLabel || 'Not specified';
+          const range = scope.time.dateRange;
+          // Some labels already carry their date range; don't print it twice.
+          return range && !label.includes(range) ? `${label} (${range})` : label;
+        })()
       : (scope.periodLabel || 'Not specified');
     const currency = scope.currencyObj ? scope.currencyObj.label : (scope.currency || 'Not specified');
     const domain = scope.domain ? (scope.domain.label || scope.domain.value || scope.domain) : 'All available domains';
@@ -3390,7 +3537,10 @@
         event.preventDefault();
         confirmAdjustedQuestion(input);
       });
-      input.addEventListener('input', () => input.setCustomValidity(''));
+      input.addEventListener('input', () => {
+        activeAdjustmentDraft = input.value;
+        input.setCustomValidity('');
+      });
       input.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
           event.preventDefault();
@@ -3400,22 +3550,29 @@
       form.querySelector('.inline-adjust-cancel').addEventListener('click', closeAdjustQuestionEditor);
     });
 
-    const clarificationGroups = Array.from(chatContainerEl.querySelectorAll('.clarification-chips'));
-    const activeClarificationGroup = clarificationGroups[clarificationGroups.length - 1];
+    // Number keys only answer a clarification that is still the latest message;
+    // an older, unanswered card stays clickable but never captures the keyboard.
+    const latestMessage = conv.messages[conv.messages.length - 1];
+    const activeClarificationGroup = latestMessage && latestMessage.type === 'clarification'
+      ? chatContainerEl.querySelector(`#msg_row_${latestMessage.id} .clarification-chips`)
+      : null;
     const clarificationKeyChoices = activeClarificationGroup
       ? Array.from(activeClarificationGroup.querySelectorAll('[data-clarification-key]'))
       : [];
     if (clarificationKeyChoices.length) {
       activeClarificationKeyHandler = (event) => {
         if (event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+        // Dialogs, Settings and other views keep their own keys.
+        if (document.querySelector('.modal-backdrop.open, #settingsDrawer.open, #dataExplorerDrawer.open')) return;
+        if (!chatViewportEl || chatViewportEl.offsetParent === null) return;
         const target = event.target;
         const isEmptyComposer = target === chatInputEl && !chatInputEl.value.trim();
         if (target && (target.matches('input, textarea, select') || target.isContentEditable) && !isEmptyComposer) return;
 
-        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        if (['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft'].includes(event.key)) {
           event.preventDefault();
           const currentIndex = clarificationKeyChoices.indexOf(document.activeElement);
-          const direction = event.key === 'ArrowDown' ? 1 : -1;
+          const direction = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1;
           const nextIndex = currentIndex < 0
             ? 0
             : (currentIndex + direction + clarificationKeyChoices.length) % clarificationKeyChoices.length;
@@ -3432,9 +3589,14 @@
         choice.click();
       };
       document.addEventListener('keydown', activeClarificationKeyHandler);
-      requestAnimationFrame(() => {
-        if (document.contains(clarificationKeyChoices[0])) clarificationKeyChoices[0].focus({ preventScroll: true });
-      });
+      // Move focus to the choices once, when the card first appears — not on
+      // every later re-render (typing in a table filter, paging, feedback…).
+      if (lastAutoFocusedClarificationId !== latestMessage.id) {
+        lastAutoFocusedClarificationId = latestMessage.id;
+        requestAnimationFrame(() => {
+          if (document.contains(clarificationKeyChoices[0])) clarificationKeyChoices[0].focus({ preventScroll: true });
+        });
+      }
     }
 
     chatContainerEl.querySelectorAll('.btn-revise-question').forEach((btn) => {
@@ -3475,6 +3637,15 @@
     chatContainerEl.querySelectorAll('.btn-access-guidance').forEach((btn) => {
       btn.addEventListener('click', () => {
         openSettingsHelp('scope');
+      });
+    });
+
+    // Interpretation tokens are shortcuts to the scope editor choice.
+    chatContainerEl.querySelectorAll('button.reading-token').forEach((tokenBtn) => {
+      tokenBtn.addEventListener('click', () => {
+        const card = tokenBtn.closest('.reading-card');
+        const editChoice = card && Array.from(card.querySelectorAll('.clarification-chip')).find((chip) => (chip.getAttribute('data-payload') || '').includes('edit_scope'));
+        if (editChoice) editChoice.click();
       });
     });
 
@@ -3524,11 +3695,14 @@
         renderActiveConversation();
 
         if (targetMsg.subtype === 'interpretation_confirmation') {
+          // Run exactly what was shown on the card, even if the scope editor
+          // changed while the card was waiting.
           processUserPrompt(originalQuestion, {
             interpretationConfirmed: true,
             skipUserMessage: true,
             originalQuestion,
-            displayPromptText: originalQuestion
+            displayPromptText: originalQuestion,
+            selectedScope: targetMsg.requestedScope || undefined
           });
           return;
         }
@@ -3547,17 +3721,15 @@
       chip.addEventListener('click', () => {
         const actionsMenu = chip.closest('.answer-actions-menu');
         if (actionsMenu) actionsMenu.removeAttribute('open');
+        // The follow-up's own wording carries its scope. Copying the previous
+        // answer's area and period into the editor pinned later questions to a
+        // filter the composer doesn't show.
         const query = chip.getAttribute('data-query');
-        const sourceMsg = conv.messages.find((item) => item.id === chip.getAttribute('data-source-msg-id'));
-        const inheritedScope = sourceMsg && (sourceMsg.appliedScope || (sourceMsg.resultsData && sourceMsg.resultsData.appliedScope));
-        if (inheritedScope) applyExecutionScopeToEditor(buildSavedExecutionOptions(inheritedScope).selectedScope);
         chatInputEl.value = query;
         chatInputEl.focus();
         updateSendButtonState();
         chatInputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const followUpStatus = inheritedScope
-          ? 'Follow-up prepared with the previous answer scope. Review or edit scope, then press Ask.'
-          : 'Follow-up prepared. Review the scope, then press Ask.';
+        const followUpStatus = 'Follow-up ready. Edit it if needed, then press Enter.';
         if (window.innerWidth > 820) showToast(followUpStatus);
         else announceAppStatus(followUpStatus);
       });
@@ -3626,7 +3798,9 @@
         if (msg && msg.resultsData && msg.resultsData.table) {
           const table = msg.resultsData.table;
           const colKey = table.columns[colIdx];
-          const isAsc = !th.classList.contains('sort-asc');
+          // Clicking the sorted column flips direction; a new column starts ascending.
+          const isAsc = !(table.sort && table.sort.col === colIdx && table.sort.dir === 'asc');
+          table.sort = { col: colIdx, dir: isAsc ? 'asc' : 'desc' };
 
           table.rows.sort((a, b) => {
             let valA = a[colKey];
@@ -3637,6 +3811,7 @@
             return isAsc ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
           });
 
+          saveConversationsToStorage();
           renderActiveConversation();
         }
       });
@@ -3684,7 +3859,7 @@
         const userId = state.currentUser ? state.currentUser.id : 'default';
         const list = window.AriaMock.getSavedInsights(userId);
 
-        const existing = list.find(a => a.sourceMessageId === msgId);
+        const existing = list.find(a => a.sourceMessageId === msgId && a.type !== 'snapshot');
 
         if (existing) {
           const removed = window.AriaMock.removeSavedInsight(userId, existing.id);
@@ -3698,8 +3873,8 @@
           const msgIdx = conv.messages.findIndex(m => m.id === msgId);
           const msg = conv.messages[msgIdx];
           if (msg && msg.resultsData) {
-            let question = conv.title || 'Saved Query';
-            for (let i = msgIdx - 1; i >= 0; i--) {
+            let question = msg.originalQuery || conv.title || 'Saved Query';
+            for (let i = msgIdx - 1; !msg.originalQuery && i >= 0; i--) {
               if (conv.messages[i].role === 'user') {
                 question = conv.messages[i].text;
                 break;
@@ -3713,7 +3888,7 @@
               title: question.substring(0, 50) + (question.length > 50 ? '...' : ''),
               question: question,
               scope: JSON.parse(JSON.stringify(scopeToSave)),
-              executionOptions: buildSavedExecutionOptions(scopeToSave),
+              executionOptions: { ...buildSavedExecutionOptions(scopeToSave), clarificationPayload: msg.clarificationPayload || null },
               latestResult: JSON.parse(JSON.stringify(msg.resultsData)),
               resultPattern: msg.resultPattern || msg.pattern || 'default',
               sourceMessageId: msg.id,
@@ -3767,6 +3942,7 @@
           displayPromptText: originalQuestion,
           interpretationOverride: execution.interpretationOverride,
           selectedScope: execution.selectedScope,
+          clarificationPayload: msg.clarificationPayload || undefined,
           runAgainOfMessageId: msg.id,
           runRootMessageId,
           runNumber: nextRunNumber
@@ -3791,7 +3967,9 @@
           skipUserMessage: true,
           retryAttempt: true,
           originalQuestion,
-          selectedScope: msg.requestedScope || state.selectedScope
+          selectedScope: msg.requestedScope || state.selectedScope,
+          interpretationOverride: msg.interpretationOverride || undefined,
+          clarificationPayload: msg.clarificationPayload || undefined
         });
         showToast('Retrying the failed run with its original scope.');
       });
@@ -3803,6 +3981,15 @@
         const msgId = btn.getAttribute('data-msg-id');
         const msg = conv.messages.find((m) => m.id === msgId);
         if (!msg) return;
+        // A second click on "Helpful" withdraws the rating.
+        if (msg.feedback && msg.feedback.type === 'up') {
+          msg.feedback = null;
+          window.AriaMock.clearFeedback({ conversationId: conv.id, messageId: msg.id });
+          saveConversationsToStorage();
+          renderActiveConversation();
+          showToast('Feedback removed.');
+          return;
+        }
         const isUpdate = Boolean(msg.feedback);
         msg.feedback = { type: 'up', reason: null, comment: '', submittedAt: Date.now() };
         window.AriaMock.recordFeedback('up', null, null, conv.title, state.currentUser, {
@@ -3824,7 +4011,7 @@
         feedbackReasonChips.querySelectorAll('.reason-chip-btn').forEach((reasonBtn) => {
           reasonBtn.classList.toggle('selected', reasonBtn.textContent.trim() === state.currentFeedbackReason);
         });
-        submitFeedbackBtn.textContent = savedFeedback ? 'Update feedback' : 'Save feedback';
+        submitFeedbackBtn.textContent = savedFeedback ? 'Update' : 'Submit';
         feedbackModalBackdrop.classList.add('open');
       });
     });
@@ -4439,120 +4626,98 @@
     const list = window.AriaMock.getSavedInsights(userId);
     if (list.length === 0) {
       listContainer.innerHTML = `
-        <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 48px 0; border: 1px dashed var(--border-color); border-radius: 8px;">
-          <div style="margin-bottom: 16px;">
-            <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="opacity: 0.5;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
-          </div>
-          <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">No saved queries or snapshots yet</div>
-          <p style="max-width: 320px; margin: 0 auto; line-height: 1.5;">
-            <strong>Save a query</strong> to re-run it with the same scope later.<br>
-            <strong>Save a snapshot</strong> to keep an immutable result at a point in time.
-          </p>
-          <div style="margin-top: 16px;">
-            Return to <strong>Ask</strong> and click "Save insight" on any result.
-          </div>
+        <div class="library-empty">
+          <span class="library-empty-icon" aria-hidden="true">
+            <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+          </span>
+          <h2>Nothing saved yet</h2>
+          <p>Use the bookmark under any answer to keep it here. Save the question to re-run it later, or a snapshot to keep the result as it was.</p>
+          <button type="button" class="library-empty-action" id="savedInsightsAskBtn">Ask a question</button>
         </div>
       `;
+      document.getElementById('savedInsightsAskBtn')?.addEventListener('click', () => showBusinessWorkspaceView('ask'));
       return;
     }
 
     const queryCount = list.filter(item => item.type !== 'snapshot').length;
     const snapshotCount = list.filter(item => item.type === 'snapshot').length;
     const librarySummary = `
-      <div class="saved-library-summary" aria-label="Saved insights summary">
-        <div><span>Saved queries</span><strong>${queryCount}</strong><small>Reusable question + scope</small></div>
-        <div><span>Snapshots</span><strong>${snapshotCount}</strong><small>Immutable captured results</small></div>
+      <div class="library-toolbar" aria-label="Saved insights summary">
+        <span class="library-count"><strong>${queryCount}</strong> saved ${queryCount === 1 ? 'question' : 'questions'}</span>
+        <span class="library-count"><strong>${snapshotCount}</strong> ${snapshotCount === 1 ? 'snapshot' : 'snapshots'}</span>
       </div>
     `;
 
-    listContainer.innerHTML = librarySummary + list.map((item) => {
+    const bookmarkIcon = '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>';
+    const snapshotIcon = '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>';
+
+    listContainer.innerHTML = librarySummary + '<div class="library-grid">' + list.map((item) => {
       const isSnapshot = item.type === 'snapshot';
-      const badgeColor = isSnapshot ? 'var(--info-color, #0ea5e9)' : 'var(--accent-primary)';
 
-      let scopeText = 'Auto';
+      const scopeParts = [];
       if (item.scope) {
-        const parts = [];
-        if (item.scope.metric && item.scope.metric.label) parts.push('Metric: ' + item.scope.metric.label);
-        const domainLabel = item.scope.domain ? (item.scope.domain.label || item.scope.domain.value || item.scope.domain) : 'Auto';
-        if (domainLabel && domainLabel !== 'Auto') parts.push('Domain: ' + domainLabel);
-
-        if (item.scope.time && item.scope.time.label) parts.push('Period: ' + item.scope.time.label);
-        else if (item.scope.period) parts.push('Period: ' + item.scope.period);
-        if (item.scope.breakdown && item.scope.breakdown.label) parts.push('Breakdown: ' + item.scope.breakdown.label);
-
-        if (item.scope.projectScope && item.scope.projectScope.label) parts.push('Project: ' + item.scope.projectScope.label);
-        if (parts.length > 0) scopeText = parts.join(' • ');
+        if (item.scope.metric && item.scope.metric.label) scopeParts.push(item.scope.metric.label);
+        const domainLabel = item.scope.domain ? (item.scope.domain.label || item.scope.domain.value || item.scope.domain) : '';
+        if (domainLabel && domainLabel !== 'Auto') scopeParts.push(domainLabel);
+        if (item.scope.time && item.scope.time.label) scopeParts.push(item.scope.time.label);
+        else if (item.scope.period) scopeParts.push(item.scope.period);
+        if (item.scope.breakdown && item.scope.breakdown.label) scopeParts.push(item.scope.breakdown.label);
+        if (item.scope.projectScope && item.scope.projectScope.label) scopeParts.push(item.scope.projectScope.label);
       }
+      const scopeText = scopeParts.length ? scopeParts.join(' · ') : 'Scope inferred from the question';
 
       const resultData = isSnapshot ? item.result : item.latestResult;
       const escapedItemId = escapeHtml(String(item.id || ''));
 
       let previewHtml = '';
       if (resultData) {
-        const headline = resultData.headline || resultData.kpiHeadline || '';
-        const answer = String(resultData.answerConcise || resultData.answer || (resultData.table ? 'Tabular results available' : ''));
-        const val = resultData.kpiValue ? `<span style="font-weight:700; color:var(--text-primary);">${escapeHtml(resultData.kpiValue)}</span>` : '';
+        const answer = String(resultData.answerConcise || resultData.answer || (resultData.table ? 'Tabular results available' : '')).replace(/\*\*/g, '');
         previewHtml = `
-        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-color); font-size: 12px;">
-          ${headline ? `<div style="font-weight: 600; margin-bottom: 4px;">${escapeHtml(headline)}</div>` : ''}
-          ${val ? `<div style="margin-bottom: 4px;">${val}</div>` : ''}
-          <div style="color: var(--text-secondary);">${escapeHtml(answer.substring(0, 150))}${answer.length > 150 ? '...' : ''}</div>
-        </div>
+          <div class="library-card-preview">
+            ${resultData.kpiValue ? `<strong class="library-card-figure">${escapeHtml(resultData.kpiValue)}</strong>` : ''}
+            <p>${escapeHtml(answer.substring(0, 160))}${answer.length > 160 ? '…' : ''}</p>
+          </div>
         `;
       }
 
-      return `
-      <article class="schema-table-card saved-insight-card ${isSnapshot ? 'is-snapshot' : 'is-query'}" data-insight-id="${escapedItemId}" style="margin-bottom: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
-          <div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 280px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="background: ${badgeColor}; color: white; font-size: 12px; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">
-                ${isSnapshot ? 'Snapshot' : 'Query'}
-              </span>
-              <div style="font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 6px;" class="insight-title-container">
-                <span class="insight-title-text">${escapeHtml(item.title)}</span>
-                <button type="button" class="header-icon-btn btn-rename-insight" data-id="${escapedItemId}" aria-label="Rename" style="padding: 2px; width: 20px; height: 20px;">
-                  <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                </button>
-              </div>
-              <div class="insight-rename-form" style="display: none; align-items: center; gap: 6px;">
-                <input type="text" value="${escapeHtml(item.title)}" aria-label="Saved insight title" style="font-size: 13px; padding: 2px 6px; border: 1px solid var(--border-color); border-radius: 4px; width: 200px;">
-                <button type="button" class="action-tool-btn btn-rename-save" data-id="${escapedItemId}">Save</button>
-                <button type="button" class="action-tool-btn btn-rename-cancel" data-id="${escapedItemId}">Cancel</button>
-              </div>
-            </div>
-            <div class="saved-question-text">
-              <span>Question</span>
-              <strong>${escapeHtml(item.question)}</strong>
-            </div>
-            <div class="saved-scope-block">
-              <span>Saved scope</span>
-              <strong>${escapeHtml(scopeText)}</strong>
-              <small>Scope controls query reuse; data access is evaluated separately.</small>
-            </div>
-            <div class="saved-item-metadata">
-              <span><strong>${isSnapshot ? 'Captured at' : 'Saved at'}:</strong> ${new Date(isSnapshot ? (item.capturedAt || item.savedAt) : item.savedAt).toLocaleString()}</span>
-              ${!isSnapshot ? `<span><strong>Last refreshed:</strong> ${item.refreshCount > 0 && item.lastRefreshedAt ? new Date(item.lastRefreshedAt).toLocaleString() : 'Never'}</span>` : ''}
-              ${!isSnapshot && resultData && resultData.refreshMetadata ? `<span><strong>Refresh status:</strong> Updated · fixture revision ${escapeHtml(String(resultData.refreshMetadata.fixtureRevision))}</span>` : ''}
-              ${isSnapshot ? '<span><strong>State:</strong> Immutable result</span>' : ''}
-              <span><strong>Data as of:</strong> ${typeof item.dataAsOf === 'number' ? new Date(item.dataAsOf).toLocaleString() : escapeHtml(String(item.dataAsOf))}</span>
-            </div>
-          </div>
+      const savedTime = isSnapshot ? (item.capturedAt || item.savedAt) : item.savedAt;
+      const dataAsOf = typeof item.dataAsOf === 'number' ? formatDisplayDateTime(item.dataAsOf) : escapeHtml(String(item.dataAsOf));
+      const refreshLine = !isSnapshot
+        ? (item.refreshCount > 0 && item.lastRefreshedAt ? `Refreshed ${formatDisplayDateTime(item.lastRefreshedAt)}` : 'Not refreshed yet')
+        : 'Frozen result';
 
-          <div style="display: flex; gap: 8px; flex-shrink: 0; align-items: center; flex-wrap: wrap;">
-            <button type="button" class="action-tool-btn btn-open-insight" data-id="${escapedItemId}">Open</button>
-            ${!isSnapshot ? (item.canRefresh === false ? `<button type="button" class="action-tool-btn btn-refresh-query" data-id="${escapedItemId}" disabled title="${escapeHtml(item.refreshDisabledReason || 'Refresh not available')}">Refresh</button>` : `<button type="button" class="action-tool-btn btn-refresh-query" data-id="${escapedItemId}">Refresh</button>`) : '<button type="button" class="action-tool-btn" disabled title="Snapshots are immutable; refresh the source saved query instead">Refresh</button>'}
-            ${!isSnapshot && item.latestResult ? `<button type="button" class="action-tool-btn btn-save-snapshot" data-id="${escapedItemId}">Save Snapshot</button>` : (!isSnapshot ? '<button type="button" class="action-tool-btn" disabled title="Run or refresh this saved query before creating a snapshot">Save Snapshot</button>' : '')}
-            <button type="button" class="conv-action-btn btn-remove-insight" data-id="${escapedItemId}" style="color: var(--danger-color); font-size: 12px; padding: 4px 8px; border: 1px solid transparent; background: transparent; cursor: pointer; border-radius: 4px;">Remove</button>
-          </div>
+      return `
+      <article class="saved-insight-card library-card ${isSnapshot ? 'is-snapshot' : 'is-query'}" data-insight-id="${escapedItemId}">
+        <header class="library-card-head">
+          <span class="library-card-kind">${isSnapshot ? snapshotIcon : bookmarkIcon}<span>${isSnapshot ? 'Snapshot' : 'Saved question'}</span></span>
+          <button type="button" class="header-icon-btn btn-rename-insight" data-id="${escapedItemId}" aria-label="Rename ${escapeHtml(item.title)}" title="Rename">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          </button>
+        </header>
+        <div class="insight-title-container"><h3 class="insight-title-text">${escapeHtml(item.title)}</h3></div>
+        <div class="insight-rename-form">
+          <input type="text" class="form-control" value="${escapeHtml(item.title)}" aria-label="Saved insight title">
+          <button type="button" class="action-tool-btn primary btn-rename-save" data-id="${escapedItemId}">Save</button>
+          <button type="button" class="action-tool-btn btn-rename-cancel" data-id="${escapedItemId}">Cancel</button>
         </div>
-        ${!isSnapshot && item.canRefresh === false
-          ? `<div class="saved-action-note">Refresh unavailable: ${escapeHtml(item.refreshDisabledReason || 'The saved query cannot be reconstructed safely.')}</div>`
-          : (isSnapshot ? '<div class="saved-action-note">Snapshots are immutable. Refresh the source saved query to obtain newer data.</div>' : '')}
+        <p class="saved-question-text">${escapeHtml(item.question)}</p>
+        <p class="saved-scope-block" title="Scope controls query reuse; data access is evaluated separately.">${escapeHtml(scopeText)}</p>
         ${previewHtml}
+        <p class="saved-item-metadata">${isSnapshot ? 'Captured' : 'Saved'} ${formatDisplayDateTime(savedTime)} · ${refreshLine}${!isSnapshot && resultData && resultData.refreshMetadata ? ` · revision ${escapeHtml(String(resultData.refreshMetadata.fixtureRevision))}` : ''} · Data as of ${dataAsOf}</p>
+        ${!isSnapshot && item.canRefresh === false
+          ? `<p class="saved-action-note">Refresh unavailable: ${escapeHtml(item.refreshDisabledReason || 'The saved query cannot be reconstructed safely.')}</p>`
+          : ''}
+        <footer class="library-card-actions">
+          <button type="button" class="action-tool-btn primary btn-open-insight" data-id="${escapedItemId}">Open</button>
+          ${!isSnapshot ? (item.canRefresh === false ? `<button type="button" class="action-tool-btn btn-refresh-query" data-id="${escapedItemId}" disabled title="${escapeHtml(item.refreshDisabledReason || 'Refresh not available')}">Refresh</button>` : `<button type="button" class="action-tool-btn btn-refresh-query" data-id="${escapedItemId}">Refresh</button>`) : ''}
+          ${!isSnapshot && item.latestResult ? `<button type="button" class="action-tool-btn btn-save-snapshot" data-id="${escapedItemId}">Take snapshot</button>` : (!isSnapshot ? '<button type="button" class="action-tool-btn" disabled title="Run or refresh this saved query before creating a snapshot">Take snapshot</button>' : '')}
+          <button type="button" class="conv-action-btn btn-remove-insight library-remove" data-id="${escapedItemId}" aria-label="Remove ${escapeHtml(item.title)}" title="Remove">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
+          </button>
+        </footer>
       </article>
       `;
-    }).join('');
+    }).join('') + '</div>';
 
     // Attach Event Listeners
     listContainer.querySelectorAll('.btn-remove-insight').forEach(btn => {
@@ -4627,7 +4792,7 @@
             id: 'msg_' + Date.now() + '_u',
             role: 'user',
             text: item.question,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            time: formatDisplayTime(new Date()),
             timestamp: Date.now()
           });
 
@@ -4637,7 +4802,7 @@
                 id: 'msg_' + Date.now() + '_a',
                 role: 'agent',
                 type: 'results',
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                time: formatDisplayTime(new Date()),
                 timestamp: Date.now(),
                 resultsData: resultData,
                 resultPattern: item.resultPattern || 'default',
@@ -4687,7 +4852,8 @@
               ? opts.selectedScope.time.preset
               : 'auto',
             selectedScope: opts.selectedScope,
-            interpretationOverride: opts.interpretationOverride
+            interpretationOverride: opts.interpretationOverride,
+            clarificationPayload: (item.executionOptions && item.executionOptions.clarificationPayload) || undefined
           }).then(result => {
             let resultState = 'unknown';
             if (typeof getResultState === 'function') {
@@ -4711,14 +4877,20 @@
                 return;
               }
 
-              item.latestResult = refreshedResult;
-              item.lastRefreshedAt = refreshedResult.refreshMetadata.refreshedAt;
-              item.dataAsOf = refreshedResult.dataAsOf;
-              item.refreshCount = (item.refreshCount || 0) + 1;
-              item.lastRefreshStatus = resultState === 'partial' ? 'partial' : 'updated';
-              item.latestResultFingerprint = refreshedFingerprint;
+              const current = window.AriaMock.getSavedInsights(userId).find(entry => entry.id === item.id);
+              if (!current) {
+                showToast('This saved query was removed while refreshing.');
+                return;
+              }
+              current.latestResult = refreshedResult;
+              current.lastRefreshedAt = refreshedResult.refreshMetadata.refreshedAt;
+              current.dataAsOf = refreshedResult.dataAsOf;
+              current.refreshCount = (current.refreshCount || 0) + 1;
+              current.lastRefreshStatus = resultState === 'partial' ? 'partial' : 'updated';
+              current.latestResultFingerprint = refreshedFingerprint;
+              current.executionOptions = item.executionOptions;
 
-              const saved = window.AriaMock.updateSavedQuery(userId, item);
+              const saved = window.AriaMock.updateSavedQuery(userId, current);
               if (saved) {
                 showToast(resultState === 'partial'
                   ? `Query refreshed with partial data · fixture revision ${refreshedResult.refreshMetadata.fixtureRevision}`
@@ -4911,7 +5083,7 @@
           values: selectedDomains
         };
         domainScopeSelectLabelEl.textContent = isAuto
-          ? 'Auto — infer from question'
+          ? 'All business areas'
           : selectedDomains.join(' + ');
         domainScopeImpactEl.textContent = isAuto
           ? 'Auto searches domains inferred from the question.'
@@ -5155,35 +5327,6 @@
     return opts;
   }
 
-  function applyExecutionScopeToEditor(selectedScope) {
-    if (!selectedScope) return;
-    state.selectedScope = JSON.parse(JSON.stringify(selectedScope));
-
-    const values = selectedScope.domain && Array.isArray(selectedScope.domain.values)
-      ? selectedScope.domain.values
-      : [];
-    if (domainScopeMenuEl) {
-      domainScopeMenuEl.querySelectorAll('input[type="checkbox"]').forEach((input) => {
-        input.checked = values.includes(input.value);
-      });
-    }
-    state.activeDomainScope = values.length ? values : 'Auto';
-    if (domainScopeSelectLabelEl) domainScopeSelectLabelEl.textContent = values.length
-      ? values.join(' + ')
-      : 'Auto — infer from question';
-    if (domainScopeImpactEl) domainScopeImpactEl.textContent = values.length
-      ? `Search is limited to ${values.join(' and ')}. Access policies still apply separately.`
-      : 'Auto searches domains inferred from the question.';
-
-    const time = selectedScope.time || { mode: 'auto', preset: 'auto', start: null, end: null };
-    if (timeRangeSelectEl) timeRangeSelectEl.value = time.mode === 'custom' ? 'custom' : (time.preset || 'auto');
-    if (customStartDateEl) customStartDateEl.value = time.start || '';
-    if (customEndDateEl) customEndDateEl.value = time.end || '';
-    if (customDateRangeBarEl) customDateRangeBarEl.style.display = time.mode === 'custom' ? 'flex' : 'none';
-    state.activeTimeRange = time.mode === 'auto' ? 'Auto' : (time.preset || 'Custom');
-    updateScopeEditorUI();
-  }
-
   function isSavedExecutionOptionsValid(options) {
     if (!options || !options.selectedScope || !options.interpretationOverride) return false;
     const domain = options.selectedScope.domain;
@@ -5200,12 +5343,34 @@
 
   // 15. SETTINGS, HELP MODAL & GLOBAL SHORTCUTS (Group H)
   // =========================================================================
+  const SETTINGS_STORAGE_KEY = 'aria_settings';
+
+  function loadSettings() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || '{}');
+      ['detailLevel', 'showSqlDefault', 'showPipelineDefault', 'compactMode'].forEach((key) => {
+        if (key in stored) state.settings[key] = stored[key];
+      });
+    } catch (e) {
+      console.warn('Failed to load settings', e);
+    }
+  }
+
+  function saveSettings() {
+    try {
+      const { theme, ...preferences } = state.settings;
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(preferences));
+    } catch (e) {
+      console.warn('Failed to save settings', e);
+    }
+  }
+
   function initSettingsAndHelp() {
-    closeSettingsBtn.innerHTML = '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg><span>Back to app</span>';
     settingsDrawer.querySelectorAll('.detail-choice-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.getAttribute('data-detail') === state.settings.detailLevel);
     });
     document.body.classList.toggle('compact-mode', Boolean(state.settings.compactMode));
+
     settingsPreferencesTabBtn.addEventListener('click', () => setSettingsSection('preferences'));
     settingsHelpTabBtn.addEventListener('click', () => setSettingsSection('help'));
 
@@ -5221,22 +5386,21 @@
     settingsDrawer.querySelectorAll('.detail-choice-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         state.settings.detailLevel = btn.getAttribute('data-detail');
-        persistWorkspacePreferences();
         settingsDrawer.querySelectorAll('.detail-choice-btn').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
+        saveSettings();
         showToast(`Answer format set to: ${state.settings.detailLevel}`);
         renderActiveConversation();
       });
     });
 
-    // Preference switches
+    // Checkboxes
     const showSqlChk = document.getElementById('settingShowSqlDefault');
     if (showSqlChk) {
       showSqlChk.checked = Boolean(state.settings.showSqlDefault);
       showSqlChk.addEventListener('change', () => {
         state.settings.showSqlDefault = showSqlChk.checked;
-        persistWorkspacePreferences();
-        renderActiveConversation();
+        saveSettings();
       });
     }
 
@@ -5245,7 +5409,7 @@
       showPipelineChk.checked = Boolean(state.settings.showPipelineDefault);
       showPipelineChk.addEventListener('change', () => {
         state.settings.showPipelineDefault = showPipelineChk.checked;
-        persistWorkspacePreferences();
+        saveSettings();
         showToast(showPipelineChk.checked
           ? 'Technical processing details will be shown for new requests.'
           : 'New requests will show a concise business-friendly loading state.');
@@ -5257,10 +5421,26 @@
       compactChk.checked = Boolean(state.settings.compactMode);
       compactChk.addEventListener('change', () => {
         state.settings.compactMode = compactChk.checked;
-        persistWorkspacePreferences();
+        saveSettings();
         document.body.classList.toggle('compact-mode', compactChk.checked);
       });
     }
+
+    // Help Modal Content Rendering
+    renderHelpTabContent('domains');
+
+    helpTabDomainsBtn.addEventListener('click', () => {
+      setActiveHelpTab(helpTabDomainsBtn);
+      renderHelpTabContent('domains');
+    });
+    helpTabScopeBtn.addEventListener('click', () => {
+      setActiveHelpTab(helpTabScopeBtn);
+      renderHelpTabContent('scope');
+    });
+    helpTabShortcutsBtn.addEventListener('click', () => {
+      setActiveHelpTab(helpTabShortcutsBtn);
+      renderHelpTabContent('shortcuts');
+    });
 
     // Keyboard Shortcuts Global Listener
     document.addEventListener('keydown', (e) => {
@@ -5268,15 +5448,55 @@
       if (e.key === 'Escape') {
         closeAllModalsAndDrawers();
       }
+      // Shortcuts stay inside an open dialog, Settings or the persona picker.
+      const overlayOpen = Boolean(document.querySelector('.modal-backdrop.open, #settingsDrawer.open'));
       // '/' = focus chat input (when not already in input)
-      if (e.key === '/' && document.activeElement !== chatInputEl && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+      if (!overlayOpen && e.key === '/' && document.activeElement !== chatInputEl && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
         e.preventDefault();
         chatInputEl.focus();
       }
       // Ctrl+K / Cmd+K = open the dedicated conversation search dialog
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
+        if (overlayOpen) return;
         openConversationSearch();
+      }
+    });
+  }
+
+  function initSettingsDialogFocus() {
+    let opener = null;
+    new MutationObserver(() => {
+      if (settingsDrawer.classList.contains('open')) {
+        if (!opener) opener = document.activeElement;
+        requestAnimationFrame(() => {
+          const activeTab = settingsDrawer.querySelector('.settings-primary-tab.active') || closeSettingsBtn;
+          if (!settingsDrawer.contains(document.activeElement)) activeTab.focus();
+        });
+      } else if (opener) {
+        const trigger = opener;
+        opener = null;
+        requestAnimationFrame(() => {
+          // Opened from a menu that has since closed: fall back to the gear.
+          const target = document.contains(trigger) && trigger.offsetParent !== null ? trigger : settingsBtn;
+          if (target && typeof target.focus === 'function') target.focus();
+        });
+      }
+    }).observe(settingsDrawer, { attributes: true, attributeFilter: ['class'] });
+
+    settingsDrawer.addEventListener('keydown', (event) => {
+      if (event.key !== 'Tab' || !settingsDrawer.classList.contains('open')) return;
+      const focusable = Array.from(settingsDrawer.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+        .filter((element) => element.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     });
   }
@@ -5292,8 +5512,11 @@
   }
 
   function openSettingsHelp(tab = 'domains') {
-    const modal = helpModalBackdrops[tab] || helpModalBackdrops.domains;
-    if (modal) modal.classList.add('open');
+    settingsDrawer.classList.add('open');
+    setSettingsSection('help');
+    const tabButton = tab === 'scope' ? helpTabScopeBtn : (tab === 'shortcuts' ? helpTabShortcutsBtn : helpTabDomainsBtn);
+    setActiveHelpTab(tabButton);
+    renderHelpTabContent(tab);
   }
 
   function setActiveHelpTab(activeBtn) {
@@ -5303,53 +5526,64 @@
 
   function renderHelpTabContent(tab) {
     if (tab === 'domains') {
+      const domains = [
+        ['Finance', 'available', 'Receivables, aging and supplier invoices.'],
+        ['Sales', 'available', 'Executed contracts, buyer ranking and payment schedules.'],
+        ['Property Management', 'available', 'Occupancy and lease renewals.'],
+        ['Projects', 'limited', 'Project master and supporting scope data.'],
+        ['Procurement', 'limited', 'Selected spend, purchase-order and supplier questions.'],
+        ['Construction', 'limited', 'Selected progress and delay-damages questions.']
+      ];
       helpTabContent.innerHTML = `
-        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
-          <div class="capability-assumption"><strong>CK1 v2.1 capability map loaded.</strong> Data Guide maps the synthetic demo metrics to the supplied 111-table CK1 schema. Coverage indicates schema readiness, not a live production connection.</div>
-          <div class="schema-table-card"><strong>Finance</strong> <span class="capability-status available">Available in demo</span><p>Receivables, aging and supplier invoice scenarios.</p></div>
-          <div class="schema-table-card"><strong>Sales</strong> <span class="capability-status available">Available in demo</span><p>Executed contracts, buyer ranking and payment schedules.</p></div>
-          <div class="schema-table-card"><strong>Property Management</strong> <span class="capability-status available">Available in demo</span><p>Occupancy and lease-renewal scenarios.</p></div>
-          <div class="schema-table-card"><strong>Projects</strong> <span class="capability-status limited">Limited demo</span><p>Project master and supporting scope data.</p></div>
-          <div class="schema-table-card"><strong>Procurement</strong> <span class="capability-status limited">Limited demo</span><p>Selected spend, purchase-order and supplier scenarios only.</p></div>
-          <div class="schema-table-card"><strong>Construction</strong> <span class="capability-status limited">Limited demo</span><p>Selected progress and damages scenarios only.</p></div>
-        </div>
+        <p class="settings-help-note">Coverage reflects the synthetic CK1 v2.1 schema (111 tables), not a live production connection.</p>
+        <ul class="settings-list">
+          ${domains.map(([name, status, copy]) => `
+            <li class="settings-list-row">
+              <span class="settings-row-copy"><strong>${name}</strong><span>${copy}</span></span>
+              <span class="capability-status ${status}">${status === 'available' ? 'Available' : 'Limited'}</span>
+            </li>`).join('')}
+        </ul>
       `;
     } else if (tab === 'scope') {
+      const limits = [
+        ['Read-only prototype', 'Aria reads synthetic data. It cannot change records and does not prove production data controls.'],
+        ['Data range', 'Operational data covers calendar years 2023–2026. No fiscal calendar is configured; pre-2023 payroll and HR records are out of scope.'],
+        ['No external forecasts', 'Macroeconomic forecasts, such as 2030 mortgage rates, are declined rather than guessed.'],
+        ['Simulated access', 'Persona restrictions and masked fields illustrate intended behaviour only.']
+      ];
       helpTabContent.innerHTML = `
-        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
-          <p><strong>Architecture Boundaries &amp; Known Limitations:</strong></p>
-          <div class="schema-table-card">
-            <strong>Prototype behaviour:</strong> This demo presents read-only interactions with synthetic data. It does not prove production data controls.
-          </div>
-          <div class="schema-table-card">
-            <strong>Catalog Boundaries:</strong> Indexed operational data spans calendar years 2023–2026. A fiscal-year calendar is not configured. Pre-2023 payroll and internal corporate HR records (stored in Workday) are out-of-scope.
-          </div>
-          <div class="schema-table-card">
-            <strong>Ungrounded Forecasting:</strong> External macroeconomic forecasts (e.g. 2030 mortgage interest rates) are unsupported to prevent hallucination.
-          </div>
-          <div class="schema-table-card">
-            <strong>Simulated access and masking:</strong> Persona-based restrictions and masked fields illustrate intended behaviour only; no production enforcement is implied.
-          </div>
-        </div>
+        <ul class="settings-list">
+          ${limits.map(([title, copy]) => `
+            <li class="settings-list-row">
+              <span class="settings-row-copy"><strong>${title}</strong><span>${copy}</span></span>
+            </li>`).join('')}
+        </ul>
       `;
     } else if (tab === 'shortcuts') {
+      const shortcuts = [
+        ['Send question', ['Enter']],
+        ['New line in the question', ['Shift', 'Enter']],
+        ['Focus the question box', ['/']],
+        ['Search chats', ['Ctrl', 'K']],
+        ['Close a dialog or panel', ['Esc']]
+      ];
       helpTabContent.innerHTML = `
-        <div class="settings-shortcuts-list" aria-label="Keyboard shortcuts">
-          <div class="settings-shortcut-item"><kbd>Enter</kbd><span>Send prompt / question</span></div>
-          <div class="settings-shortcut-item"><kbd>Shift + Enter</kbd><span>Insert newline in input</span></div>
-          <div class="settings-shortcut-item"><kbd>/</kbd><span>Focus natural-language question input</span></div>
-          <div class="settings-shortcut-item"><kbd>Ctrl + K / Cmd + K</kbd><span>Focus conversation history search box</span></div>
-          <div class="settings-shortcut-item"><kbd>Esc</kbd><span>Close any active modal or drawer</span></div>
-        </div>
+        <ul class="settings-list settings-shortcuts-list" aria-label="Keyboard shortcuts">
+          ${shortcuts.map(([label, keys]) => `
+            <li class="settings-list-row settings-shortcut-item">
+              <span>${label}</span>
+              <span class="kbd-group">${keys.map(key => `<kbd>${key}</kbd>`).join('')}</span>
+            </li>`).join('')}
+        </ul>
       `;
     }
   }
 
   function closeAllModalsAndDrawers() {
+    const dataGuideWasOpen = dataExplorerDrawer.classList.contains('open');
     dataExplorerDrawer.classList.remove('open');
     settingsDrawer.classList.remove('open');
-    if (settingsModalBackdrop) settingsModalBackdrop.classList.remove('open');
-    Object.values(helpModalBackdrops).forEach((modal) => modal && modal.classList.remove('open'));
+    if (helpModalBackdrop) helpModalBackdrop.classList.remove('open');
     feedbackModalBackdrop.classList.remove('open');
     sourceTableModalBackdrop.classList.remove('open');
     if (clearHistoryModalBackdrop) clearHistoryModalBackdrop.classList.remove('open');
@@ -5359,8 +5593,10 @@
     if (editInterpretationModalBackdrop) editInterpretationModalBackdrop.classList.remove('open');
     if (historySearchModalBackdrop) historySearchModalBackdrop.classList.remove('open');
     closeScopeInspector();
-    showBusinessWorkspaceView('ask');
+    // Escape closes overlays; it only changes the page when it closed the Data Guide.
+    if (dataGuideWasOpen) showBusinessWorkspaceView('ask', { focusComposer: false });
     userMenuDropdownEl.classList.remove('open');
+    if (userMenuBtnEl) userMenuBtnEl.setAttribute('aria-expanded', 'false');
     sidebarEl.classList.remove('persona-menu-open');
     closeTypeahead();
   }
@@ -5371,6 +5607,9 @@
   function initTheme() {
     const savedTheme = localStorage.getItem('aria_theme') || 'light';
     setTheme(savedTheme);
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (state.settings.theme === 'system') setTheme('system');
+    });
 
     if (themeToggleBtnEl) {
       themeToggleBtnEl.addEventListener('click', () => {
@@ -5389,10 +5628,10 @@
       document.documentElement.setAttribute('data-theme', t);
     }
     localStorage.setItem('aria_theme', t);
-    document.querySelectorAll('.theme-choice-btn').forEach((button) => {
-      const isSelected = button.getAttribute('data-theme-choice') === t;
-      button.classList.toggle('active', isSelected);
-      button.setAttribute('aria-pressed', String(isSelected));
+    document.querySelectorAll('.theme-choice-btn').forEach((btn) => {
+      const selected = btn.getAttribute('data-theme-choice') === t;
+      btn.classList.toggle('active', selected);
+      btn.setAttribute('aria-pressed', String(selected));
     });
     updateThemeIcon();
   }
@@ -5407,8 +5646,6 @@
   }
 
   function showToast() {
-    // Toast notifications are intentionally disabled across the application.
-    // Clear any toast that may still be visible from an earlier action.
     if (toastContainerEl) toastContainerEl.replaceChildren();
   }
 
@@ -5550,10 +5787,10 @@
     URL.revokeObjectURL(url);
   }
 
-  function initResizablePanels() {
+  function initResizableEvidencePanel() {
     const evidenceHandle = document.getElementById('evidenceResizeHandle');
     const root = document.documentElement;
-    const evidenceStorageKey = 'aria_evidence_width_v1';
+    const storageKey = 'aria_evidence_width_v1';
 
     const limits = () => ({ min: 320, max: Math.max(360, Math.min(760, window.innerWidth - 360)) });
 
@@ -5562,13 +5799,13 @@
       const width = Math.min(range.max, Math.max(range.min, Math.round(value)));
       root.style.setProperty('--drawer-width', `${width}px`);
       if (persist) {
-        try { localStorage.setItem(evidenceStorageKey, String(width)); } catch (e) { /* Storage is optional. */ }
+        try { localStorage.setItem(storageKey, String(width)); } catch (e) { /* Storage is optional. */ }
       }
       return width;
     };
 
     try {
-      const savedWidth = Number(localStorage.getItem(evidenceStorageKey));
+      const savedWidth = Number(localStorage.getItem(storageKey));
       if (Number.isFinite(savedWidth) && savedWidth > 0) applyWidth(savedWidth, false);
     } catch (e) { /* Keep the CSS default. */ }
 
@@ -5602,8 +5839,7 @@
       handle.addEventListener('keydown', (event) => {
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
         const currentWidth = scopeInspectorPanel.getBoundingClientRect().width;
-        const visualDirection = event.key === 'ArrowRight' ? 1 : -1;
-        const delta = visualDirection * -16;
+        const delta = event.key === 'ArrowRight' ? -16 : 16;
         applyWidth(currentWidth + delta);
         event.preventDefault();
       });
@@ -5612,7 +5848,8 @@
     bindHandle(evidenceHandle);
     window.addEventListener('resize', () => {
       if (window.innerWidth <= 820) return;
-      applyWidth(scopeInspectorPanel.getBoundingClientRect().width, false);
+      // A closed panel measures 0px; re-clamping that would discard the saved width.
+      if (scopeInspectorPanel.classList.contains('open')) applyWidth(scopeInspectorPanel.getBoundingClientRect().width, false);
     });
   }
 
@@ -5620,13 +5857,16 @@
   // 17. ATTACH ALL UI BUTTON LISTENERS (DOM READY)
   // =========================================================================
   document.addEventListener('DOMContentLoaded', () => {
+    // Preferences load before the first render so answers use them immediately.
+    loadSettings();
     initTheme();
     initAccessibleModals();
     initUserIdentity();
     initInputHelpers();
     updateScopeEditorUI();
     initSettingsAndHelp();
-    initResizablePanels();
+    initSettingsDialogFocus();
+    initResizableEvidencePanel();
 
     // Chat Input Keys & Send
     chatInputEl.addEventListener('keydown', (e) => {
@@ -5643,6 +5883,7 @@
     // Conversation search dialog (distinct from filtering rows inside a result).
     openHistorySearchBtnEl.addEventListener('click', openConversationSearch);
     closeHistorySearchBtnEl.addEventListener('click', closeConversationSearch);
+    document.getElementById('historySearchNewChatBtn')?.addEventListener('click', startNewChat);
     historySearchDialogInputEl.addEventListener('input', renderConversationSearchResults);
     historySearchModalBackdrop.addEventListener('click', (event) => {
       if (event.target === historySearchModalBackdrop) closeConversationSearch();
@@ -5778,7 +6019,8 @@
       new MutationObserver(() => {
         const isMobileOpen = sidebarEl.classList.contains('open') && window.innerWidth <= 820;
         sidebarMobileBackdropEl.classList.toggle('open', isMobileOpen);
-        mobileMenuBtnEl.setAttribute('aria-expanded', isMobileOpen ? 'true' : 'false');
+        // On desktop the toggle's own click handler owns aria-expanded.
+        if (window.innerWidth <= 820) mobileMenuBtnEl.setAttribute('aria-expanded', isMobileOpen ? 'true' : 'false');
         sidebarEl.inert = window.innerWidth <= 820 && !isMobileOpen;
       }).observe(sidebarEl, { attributes: true, attributeFilter: ['class'] });
       window.addEventListener('resize', () => {
@@ -5801,23 +6043,33 @@
       userMenuDropdownEl.classList.toggle('open');
       sidebarEl.classList.toggle('persona-menu-open', userMenuDropdownEl.classList.contains('open'));
       userMenuBtnEl.setAttribute('aria-expanded', userMenuDropdownEl.classList.contains('open') ? 'true' : 'false');
-      if (!userMenuDropdownEl.classList.contains('open') && userHelpSubmenu) {
-        userHelpSubmenu.classList.remove('open');
-        helpModalBtn.setAttribute('aria-expanded', 'false');
-      }
     });
     document.addEventListener('click', () => {
       userMenuDropdownEl.classList.remove('open');
-      if (userHelpSubmenu) userHelpSubmenu.classList.remove('open');
-      if (helpModalBtn) helpModalBtn.setAttribute('aria-expanded', 'false');
       sidebarEl.classList.remove('persona-menu-open');
       userMenuBtnEl.setAttribute('aria-expanded', 'false');
     });
 
-    switchUserMenuItemEl.addEventListener('click', () => {
+    const closeUserMenu = () => {
       userMenuDropdownEl.classList.remove('open');
       sidebarEl.classList.remove('persona-menu-open');
+      userMenuBtnEl.setAttribute('aria-expanded', 'false');
+    };
+
+    switchUserMenuItemEl.addEventListener('click', () => {
+      closeUserMenu();
       showFirstAccessModal();
+    });
+
+    document.getElementById('userMenuSettingsItem')?.addEventListener('click', () => {
+      closeUserMenu();
+      setSettingsSection('preferences');
+      settingsDrawer.classList.add('open');
+    });
+
+    document.getElementById('userMenuHelpItem')?.addEventListener('click', () => {
+      closeUserMenu();
+      openSettingsHelp('shortcuts');
     });
 
     resetDemoDataMenuItemEl.addEventListener('click', () => {
@@ -5828,13 +6080,17 @@
     });
 
     saveProfileBtn.addEventListener('click', saveUserProfile);
+    document.getElementById('cancelProfileBtn')?.addEventListener('click', () => {
+      // Only an existing persona can back out; first access must choose one.
+      if (state.currentUser) userProfileModalBackdrop.classList.remove('open');
+    });
 
     // Workspace Rail Navigation (Requirement A)
     if (railAskBtn) {
       railAskBtn.addEventListener('click', () => {
         dataExplorerDrawer.classList.remove('open');
                 settingsDrawer.classList.remove('open');
-        Object.values(helpModalBackdrops).forEach((modal) => modal && modal.classList.remove('open'));
+        if (helpModalBackdrop) helpModalBackdrop.classList.remove('open');
         showBusinessWorkspaceView('ask');
         if (window.innerWidth <= 820 && sidebarEl) {
           sidebarEl.classList.remove('open');
@@ -5845,7 +6101,8 @@
 
     if (railDataGuideBtn) {
       railDataGuideBtn.addEventListener('click', () => {
-                dataExplorerDrawer.classList.add('open');
+        closeScopeInspector(false);
+        dataExplorerDrawer.classList.add('open');
         renderDataExplorer();
         updateRailActiveState('data_guide');
         if (window.innerWidth <= 820 && sidebarEl) {
@@ -5935,43 +6192,13 @@
 
     settingsBtn.addEventListener('click', () => {
       setSettingsSection('preferences');
-      userMenuDropdownEl.classList.remove('open');
-      sidebarEl.classList.remove('persona-menu-open');
-      userMenuBtnEl.setAttribute('aria-expanded', 'false');
-      settingsModalBackdrop.classList.add('open');
+      settingsDrawer.classList.add('open');
     });
-    closeSettingsBtn.addEventListener('click', () => settingsModalBackdrop.classList.remove('open'));
-    settingsModalBackdrop.addEventListener('click', (event) => {
-      if (event.target === settingsModalBackdrop) settingsModalBackdrop.classList.remove('open');
-    });
+    closeSettingsBtn.addEventListener('click', () => settingsDrawer.classList.remove('open'));
+    document.getElementById('settingsBackdrop')?.addEventListener('click', () => settingsDrawer.classList.remove('open'));
 
-    if (helpModalBtn && userHelpSubmenu) helpModalBtn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      const isOpen = userHelpSubmenu.classList.toggle('open');
-      helpModalBtn.setAttribute('aria-expanded', String(isOpen));
-    });
-    if (userHelpSubmenu) {
-      userHelpSubmenu.addEventListener('click', (event) => event.stopPropagation());
-      userHelpSubmenu.querySelectorAll('.help-topic-item').forEach((item) => {
-        item.addEventListener('click', () => {
-          const tab = item.getAttribute('data-help-tab') || 'shortcuts';
-          userHelpSubmenu.classList.remove('open');
-          helpModalBtn.setAttribute('aria-expanded', 'false');
-          userMenuDropdownEl.classList.remove('open');
-          sidebarEl.classList.remove('persona-menu-open');
-          userMenuBtnEl.setAttribute('aria-expanded', 'false');
-          openSettingsHelp(tab);
-        });
-      });
-    }
-    Object.values(helpModalBackdrops).forEach((modal) => {
-      if (!modal) return;
-      const closeButton = modal.querySelector('.close-help-modal-btn');
-      if (closeButton) closeButton.addEventListener('click', () => modal.classList.remove('open'));
-      modal.addEventListener('click', (event) => {
-        if (event.target === modal) modal.classList.remove('open');
-      });
-    });
+    if (helpModalBtn && helpModalBackdrop) helpModalBtn.addEventListener('click', () => openSettingsHelp('domains'));
+    if (closeHelpModalBtn && helpModalBackdrop) closeHelpModalBtn.addEventListener('click', () => helpModalBackdrop.classList.remove('open'));
 
     // Feedback Modal Submission
     closeFeedbackModalBtn.addEventListener('click', () => feedbackModalBackdrop.classList.remove('open'));
