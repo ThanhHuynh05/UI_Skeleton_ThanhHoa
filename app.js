@@ -5222,43 +5222,75 @@
 
     // 4. Voice Input (Web Speech API)
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
+    if (SpeechRecognition && voiceInputBtnEl) {
       state.voiceRecognition = new SpeechRecognition();
       state.voiceRecognition.continuous = false;
-      state.voiceRecognition.interimResults = false;
+      state.voiceRecognition.interimResults = true;
       state.voiceRecognition.lang = 'en-US';
+      state.voiceRecognition.maxAlternatives = 1;
+
+      const setVoiceRecordingState = (isRecording) => {
+        state.isRecordingVoice = isRecording;
+        voiceInputBtnEl.classList.toggle('recording', isRecording);
+        voiceInputBtnEl.setAttribute('aria-pressed', String(isRecording));
+        voiceInputBtnEl.setAttribute('aria-label', isRecording ? 'Stop voice input' : 'Voice input');
+        voiceInputBtnEl.title = isRecording ? 'Stop voice input' : 'Voice input';
+      };
+
+      state.voiceRecognition.onstart = () => {
+        setVoiceRecordingState(true);
+        showToast('Listening... Speak your business question.');
+      };
 
       state.voiceRecognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        chatInputEl.value = (chatInputEl.value ? chatInputEl.value + ' ' : '') + transcript;
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+        }
+        const transcript = finalTranscript.trim();
+        if (!transcript) return;
+        chatInputEl.value = `${chatInputEl.value.trim()}${chatInputEl.value.trim() ? ' ' : ''}${transcript}`;
+        chatInputEl.dispatchEvent(new Event('input', { bubbles: true }));
         updateSendButtonState();
         showToast(`Heard: "${transcript}"`);
       };
 
       state.voiceRecognition.onend = () => {
-        state.isRecordingVoice = false;
-        voiceInputBtnEl.classList.remove('recording');
+        setVoiceRecordingState(false);
       };
 
       state.voiceRecognition.onerror = (e) => {
-        state.isRecordingVoice = false;
-        voiceInputBtnEl.classList.remove('recording');
-        showToast(`Voice input error: ${e.error}`);
+        setVoiceRecordingState(false);
+        const messages = {
+          'not-allowed': 'Microphone access was denied. Allow microphone access in your browser settings and try again.',
+          'service-not-allowed': 'Voice recognition is blocked by this browser or page. Use HTTPS or localhost and allow microphone access.',
+          'audio-capture': 'No microphone was detected. Check your microphone connection and browser input settings.',
+          'no-speech': 'No speech was detected. Try again and speak after the button turns red.',
+          'network': 'Voice recognition could not reach the speech service. Check your connection and try again.',
+          'aborted': 'Voice input stopped.'
+        };
+        showToast(messages[e.error] || `Voice input error: ${e.error || 'unknown error'}`);
       };
 
       voiceInputBtnEl.addEventListener('click', () => {
-        if (!state.isRecordingVoice) {
-          state.voiceRecognition.start();
-          state.isRecordingVoice = true;
-          voiceInputBtnEl.classList.add('recording');
-          showToast('Listening... Speak your business question.');
-        } else {
+        if (state.isRecordingVoice) {
           state.voiceRecognition.stop();
-          state.isRecordingVoice = false;
-          voiceInputBtnEl.classList.remove('recording');
+          return;
+        }
+
+        try {
+          state.voiceRecognition.start();
+        } catch (error) {
+          setVoiceRecordingState(false);
+          if (error && error.name === 'InvalidStateError') {
+            state.voiceRecognition.abort();
+            showToast('Voice input was reset. Click the microphone again to start.');
+          } else {
+            showToast('Voice input could not start. Check microphone permission and try again.');
+          }
         }
       });
-    } else {
+    } else if (voiceInputBtnEl) {
       voiceInputBtnEl.style.display = 'none';
     }
   }
